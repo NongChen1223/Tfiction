@@ -1,0 +1,39 @@
+# 依赖目录
+node_modules/
+frontend/node_modules/
+
+# 构建产物
+build/
+frontend/dist/
+*.exe
+*.app
+*.dmg
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# 操作系统
+.DS_Store
+Thumbs.db
+
+# 日志
+*.log
+
+# 环境变量
+.env
+.env.local
+.env.*.local
+
+# 数据目录
+.tfiction/
+
+# Go
+*.sum
+
+# 临时文件
+tmp/
+temp/
