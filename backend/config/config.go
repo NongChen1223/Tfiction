@@ -63,6 +63,11 @@ func LoadConfig() (*Config, error) {
 		}
 	}
 
+	// 如果配置文件中 DataDir 为空，使用默认值
+	if cfg.DataDir == "" {
+		cfg.DataDir = getDefaultDataDir()
+	}
+
 	// 确保数据目录存在
 	if err := os.MkdirAll(cfg.DataDir, 0755); err != nil {
 		return nil, err

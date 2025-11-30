@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { ReadingSettings } from '@types/index'
+import type { ReadingSettings } from '@/types'
 
 interface SettingsStore extends ReadingSettings {
   // 操作方法

@@ -11,7 +11,7 @@ interface SearchPanelProps {
 export default function SearchPanel({ onClose }: SearchPanelProps) {
   const [keyword, setKeyword] = useState('')
   const [caseSensitive, setCaseSensitive] = useState(false)
-  const [searchResults, setSearchResults] = useState<any[]>([])
+  const [searchResults] = useState<any[]>([])
 
   const handleSearch = () => {
     // TODO: 调用后端搜索服务

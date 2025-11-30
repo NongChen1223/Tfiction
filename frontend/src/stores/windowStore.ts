@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { WindowState } from '@types/index'
+import type { WindowState } from '@/types'
 
 interface WindowStore extends WindowState {
   // 操作方法
