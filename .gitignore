@@ -2,6 +2,13 @@
 node_modules/
 frontend/node_modules/
 
+# pnpm
+pnpm-lock.yaml
+*.md5
+
+# Wails 生成文件
+frontend/src/wailsjs/
+
 # 构建产物
 build/
 frontend/dist/

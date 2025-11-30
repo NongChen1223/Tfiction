@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { Novel, Chapter } from '@types/index'
+import type { Novel } from '@/types'
 
 interface NovelState {
   // 状态
