@@ -1,17 +1,22 @@
-import { useNovelStore } from '@stores/novelStore'
-import { useSettingsStore } from '@stores/settingsStore'
+import { useNovelStore } from '@/stores/novelStore'
+import { useSettingsStore } from '@/stores/settingsStore'
+import styles from './Reader.module.css'
 
 /**
- * NovelReader 组件
- * 小说阅读器主界面，显示小说内容
+ * Reader 阅读器页面
+ * 小说阅读的主界面
  */
-export default function NovelReader() {
+export default function Reader() {
   const { currentNovel } = useNovelStore()
   const { fontSize, fontFamily, lineHeight, backgroundColor, textColor, pageWidth } =
     useSettingsStore()
 
   if (!currentNovel) {
-    return null
+    return (
+      <div className={styles.empty}>
+        <p>请先打开一本小说</p>
+      </div>
+    )
   }
 
   // 获取当前章节内容
@@ -22,37 +27,25 @@ export default function NovelReader() {
 
   return (
     <div
-      className="novel-reader"
+      className={styles.reader}
       style={{
-        height: '100%',
-        overflow: 'auto',
         backgroundColor,
         color: textColor,
-        padding: '2rem',
       }}
     >
       <div
-        className="reader-content"
+        className={styles.content}
         style={{
-          maxWidth: pageWidth,
-          margin: '0 auto',
+          maxWidth: `${pageWidth}px`,
           fontSize: `${fontSize}px`,
           fontFamily,
           lineHeight,
         }}
       >
         {currentChapter && (
-          <h2
-            style={{
-              fontSize: `${fontSize * 1.5}px`,
-              marginBottom: '2rem',
-              textAlign: 'center',
-            }}
-          >
-            {currentChapter.title}
-          </h2>
+          <h2 className={styles.chapterTitle}>{currentChapter.title}</h2>
         )}
-        <div style={{ whiteSpace: 'pre-wrap' }}>{chapterContent}</div>
+        <div className={styles.text}>{chapterContent}</div>
       </div>
     </div>
   )
