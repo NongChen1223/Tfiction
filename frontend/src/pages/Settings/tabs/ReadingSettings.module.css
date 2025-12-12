@@ -1,0 +1,202 @@
+/* ReadingSettings 样式 */
+
+.container {
+  padding: var(--spacing-2xl);
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+/* === Section === */
+
+.section {
+  margin-bottom: var(--spacing-2xl);
+}
+
+.sectionTitle {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: rgb(var(--text-primary));
+  margin: 0 0 var(--spacing-lg) 0;
+}
+
+/* === Setting Item === */
+
+.settingItem {
+  margin-bottom: var(--spacing-lg);
+}
+
+/* === Preview Box === */
+
+.previewBox {
+  padding: var(--spacing-xl);
+  background: rgba(var(--bg-secondary), 0.5);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(var(--border-primary), 0.3);
+  border-radius: var(--radius-xl);
+  color: rgb(var(--text-primary));
+  margin: 0 auto;
+}
+
+.previewBox p {
+  margin: 0 0 1em 0;
+}
+
+.previewBox p:last-child {
+  margin-bottom: 0;
+}
+
+/* === Color Picker === */
+
+.colorLabel {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: rgb(var(--text-secondary));
+  margin-bottom: var(--spacing-sm);
+}
+
+.colorPickerWrapper {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  padding: var(--spacing-lg);
+  background: rgba(var(--bg-secondary), 0.3);
+  border: 1px solid rgba(var(--border-primary), 0.2);
+  border-radius: var(--radius-lg);
+  flex: 1;
+}
+
+.colorPickerWrapper .react-colorful {
+  width: 100%;
+  max-width: 180px;
+  height: 140px;
+  border-radius: var(--radius-md);
+  margin: 0 auto;
+}
+
+.colorPickerRow {
+  display: flex;
+  gap: var(--spacing-lg);
+  align-items: stretch;
+}
+
+.colorInfo {
+  display: flex;
+  flex-direction: row;
+  gap: var(--spacing-md);
+  align-items: center;
+  justify-content: center;
+}
+
+.colorPreview {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  border: 2px solid rgba(var(--border-primary), 0.3);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  flex-shrink: 0;
+}
+
+.colorValue {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  color: rgb(var(--text-secondary));
+  background: rgba(var(--bg-tertiary), 0.5);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-md);
+}
+
+/* === Boss Mode === */
+
+.switchLabel {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  cursor: pointer;
+  font-size: 0.9375rem;
+  color: rgb(var(--text-primary));
+}
+
+.switch {
+  position: relative;
+  width: 48px;
+  height: 24px;
+  appearance: none;
+  background: rgba(var(--bg-tertiary), 0.8);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all var(--transition-base);
+  border: 1px solid rgba(var(--border-primary), 0.3);
+}
+
+.switch::before {
+  content: '';
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: white;
+  top: 2px;
+  left: 2px;
+  transition: all var(--transition-base);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.switch:checked {
+  background: linear-gradient(135deg, rgb(var(--color-primary)), rgb(var(--color-primary-light)));
+  border-color: transparent;
+}
+
+.switch:checked::before {
+  left: 26px;
+}
+
+.bossModePreview {
+  margin-top: var(--spacing-xl);
+}
+
+.previewLabel {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: rgb(var(--text-secondary));
+  margin: 0 0 var(--spacing-md) 0;
+}
+
+.bossPreviewBox {
+  position: relative;
+  width: 100%;
+  height: 200px;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: rgba(var(--bg-secondary), 0.5);
+  border: 1px solid rgba(var(--border-primary), 0.3);
+}
+
+.bossPreviewContent {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.125rem;
+  color: rgb(var(--text-primary));
+  background: linear-gradient(135deg, rgba(var(--color-primary), 0.1), rgba(var(--color-primary-light), 0.05));
+}
+
+.bossPreviewOverlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.125rem;
+  color: rgb(var(--text-primary));
+  background: rgba(var(--bg-primary), 1);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition: opacity var(--transition-base);
+}

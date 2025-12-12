@@ -1,0 +1,74 @@
+/* KeyboardSettings 样式 */
+
+.container {
+  padding: var(--spacing-2xl);
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.section {
+  margin-bottom: var(--spacing-2xl);
+}
+
+.sectionTitle {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: rgb(var(--text-primary));
+  margin: 0 0 var(--spacing-lg) 0;
+}
+
+/* === Shortcut List === */
+
+.shortcutList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.shortcutItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: rgba(var(--bg-secondary), 0.5);
+  border: 1px solid rgba(var(--border-primary), 0.3);
+  border-radius: var(--radius-lg);
+  transition: all var(--transition-base);
+}
+
+.shortcutItem:hover {
+  background: rgba(var(--bg-secondary), 0.7);
+  border-color: rgba(var(--color-primary), 0.3);
+}
+
+.shortcutAction {
+  font-size: 0.9375rem;
+  color: rgb(var(--text-primary));
+}
+
+.shortcutKey {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: rgb(var(--color-primary));
+  font-family: var(--font-mono);
+  padding: var(--spacing-xs) var(--spacing-md);
+  background: rgba(var(--color-primary), 0.1);
+  border: 1px solid rgba(var(--color-primary), 0.2);
+  border-radius: var(--radius-md);
+}
+
+/* === Info Box === */
+
+.infoBox {
+  background: rgba(var(--color-primary), 0.05);
+  border: 1px solid rgba(var(--color-primary), 0.2);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-lg);
+}
+
+.infoText {
+  font-size: 0.9375rem;
+  color: rgb(var(--text-primary));
+  margin: 0;
+  line-height: 1.6;
+}

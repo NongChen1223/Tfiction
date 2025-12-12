@@ -1,0 +1,221 @@
+/* Sidebar 组件样式 */
+
+.sidebar {
+  width: 260px;
+  height: 100vh;
+  background: rgba(var(--bg-secondary), 0.6);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-right: 1px solid rgba(var(--border-primary), 0.2);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex-shrink: 0;
+  transition: width var(--transition-base), border-color var(--transition-base);
+}
+
+/* === Header === */
+
+.header {
+  padding: var(--spacing-xl) var(--spacing-lg);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  border-bottom: 1px solid rgba(var(--border-primary), 0.1);
+  padding-top: calc(var(--spacing-xl) + 10px);
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  background: linear-gradient(135deg, rgb(var(--color-primary)), rgb(var(--color-primary-light)));
+  border-radius: var(--radius-lg);
+  color: white;
+  flex-shrink: 0;
+}
+
+.title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, rgb(var(--color-primary)), rgb(var(--color-primary-light)));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin: 0;
+  transition: opacity var(--transition-base);
+}
+
+/* === Navigation === */
+
+.nav {
+  flex: 1;
+  padding: var(--spacing-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  overflow-y: auto;
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-lg);
+  color: rgb(var(--text-secondary));
+  font-size: 0.9375rem;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: all var(--transition-base);
+  white-space: nowrap;
+}
+
+.navItem:hover {
+  background: rgba(var(--color-primary), 0.05);
+  color: rgb(var(--text-primary));
+}
+
+.navItem.active {
+  background: rgba(var(--color-primary), 0.1);
+  border-color: rgba(var(--color-primary), 0.3);
+  color: rgb(var(--color-primary));
+}
+
+.navIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.navLabel {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: opacity var(--transition-base);
+}
+
+/* === Settings Button === */
+
+.settingsButton {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--spacing-md);
+  width: 100%;
+  padding: var(--spacing-md) var(--spacing-lg);
+  margin-top: auto;
+  background: transparent;
+  border: 1px solid rgba(var(--border-primary), 0.2);
+  border-radius: var(--radius-lg);
+  color: rgb(var(--text-secondary));
+  font-size: 0.9375rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.settingsButton:hover {
+  background: rgba(var(--color-primary), 0.05);
+  border-color: rgba(var(--color-primary), 0.3);
+  color: rgb(var(--color-primary));
+}
+
+.settingsIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.settingsLabel {
+  flex: 1;
+  text-align: left;
+}
+
+/* === 响应式设计 === */
+
+/* 当窗口宽度小于1200px时，缩小侧边栏 */
+@media (max-width: 1200px) {
+  .sidebar {
+    width: 80px;
+    border-right-color: transparent;
+  }
+
+  .header {
+    padding: var(--spacing-lg) 0;
+    padding-top: calc(var(--spacing-lg) + 10px);
+    width: 100%;
+    justify-content: center;
+  }
+
+  .logo {
+    width: 48px;
+    height: 48px;
+  }
+
+  .title {
+    display: none;
+  }
+
+  .nav {
+    padding: var(--spacing-lg) 0;
+    width: 100%;
+    align-items: center;
+  }
+
+  .navLabel {
+    display: none;
+  }
+
+  .navItem {
+    justify-content: center;
+    padding: 0;
+    width: 48px;
+    height: 48px;
+  }
+
+  /* 缩小状态下移除选中项的border */
+  .navItem.active {
+    border-color: transparent;
+  }
+
+  /* 设置按钮保持可见，只隐藏文字 */
+  .settingsButton {
+    justify-content: center;
+    padding: 0;
+    border-color: rgba(var(--border-primary), 0.2);
+    width: 48px;
+    height: 48px;
+    margin-top: auto;
+  }
+
+  .settingsLabel {
+    display: none;
+  }
+}
+
+/* === Scrollbar === */
+
+.nav::-webkit-scrollbar {
+  width: 6px;
+}
+
+.nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.nav::-webkit-scrollbar-thumb {
+  background: rgba(var(--text-tertiary), 0.3);
+  border-radius: var(--radius-sm);
+}
+
+.nav::-webkit-scrollbar-thumb:hover {
+  background: rgba(var(--text-tertiary), 0.5);
+}

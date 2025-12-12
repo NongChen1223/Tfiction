@@ -1,0 +1,104 @@
+/* StorageSettings 样式 */
+
+.container {
+  padding: var(--spacing-2xl);
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.section {
+  margin-bottom: var(--spacing-2xl);
+}
+
+.sectionTitle {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: rgb(var(--text-primary));
+  margin: 0 0 var(--spacing-sm) 0;
+}
+
+.sectionDescription {
+  font-size: 0.9375rem;
+  color: rgb(var(--text-secondary));
+  margin: 0 0 var(--spacing-lg) 0;
+}
+
+/* === Path Item === */
+
+.pathItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-lg);
+  padding: var(--spacing-lg);
+  background: rgba(var(--bg-secondary), 0.5);
+  border: 1px solid rgba(var(--border-primary), 0.3);
+  border-radius: var(--radius-lg);
+}
+
+.pathInfo {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  flex: 1;
+  min-width: 0;
+  color: rgb(var(--text-secondary));
+}
+
+.pathText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  flex: 1;
+  min-width: 0;
+}
+
+.pathLabel {
+  font-size: 0.875rem;
+  color: rgb(var(--text-tertiary));
+}
+
+.pathValue {
+  font-size: 0.9375rem;
+  color: rgb(var(--text-primary));
+  font-family: var(--font-mono);
+  word-break: break-all;
+}
+
+/* === Storage Grid === */
+
+.storageGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--spacing-lg);
+}
+
+.storageCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-xl);
+  background: rgba(var(--bg-secondary), 0.5);
+  border: 1px solid rgba(var(--border-primary), 0.3);
+  border-radius: var(--radius-xl);
+  color: rgb(var(--color-primary));
+}
+
+.storageInfo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.storageLabel {
+  font-size: 0.875rem;
+  color: rgb(var(--text-secondary));
+}
+
+.storageValue {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: rgb(var(--text-primary));
+}

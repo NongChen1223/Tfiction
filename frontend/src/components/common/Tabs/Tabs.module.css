@@ -1,0 +1,99 @@
+/* Tabs 组件样式 */
+
+.tabs {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+}
+
+/* === Tab List === */
+
+.tabList {
+  display: flex;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-md);
+  background: rgba(var(--bg-secondary), 0.3);
+  border-bottom: 1px solid rgba(var(--border-primary), 0.2);
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex-shrink: 0;
+}
+
+.tabList::-webkit-scrollbar {
+  height: 4px;
+}
+
+.tabList::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.tabList::-webkit-scrollbar-thumb {
+  background: rgba(var(--text-tertiary), 0.3);
+  border-radius: var(--radius-sm);
+}
+
+/* === Tab Button === */
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-lg);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-lg);
+  color: rgb(var(--text-secondary));
+  font-size: 0.9375rem;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.tab:hover {
+  background: rgba(var(--color-primary), 0.05);
+  color: rgb(var(--text-primary));
+}
+
+.tab.active {
+  background: rgba(var(--color-primary), 0.1);
+  border-color: rgba(var(--color-primary), 0.3);
+  color: rgb(var(--color-primary));
+}
+
+.tabIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.tabLabel {
+  flex-shrink: 0;
+}
+
+/* === Tab Content === */
+
+.tabContent {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.tabContent::-webkit-scrollbar {
+  width: 8px;
+}
+
+.tabContent::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.tabContent::-webkit-scrollbar-thumb {
+  background: rgba(var(--text-tertiary), 0.3);
+  border-radius: var(--radius-sm);
+}
+
+.tabContent::-webkit-scrollbar-thumb:hover {
+  background: rgba(var(--text-tertiary), 0.5);
+}

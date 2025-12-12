@@ -1,4 +1,7 @@
-/* 全局样式重置和基础样式 */
+/* 导入主题变量 */
+@import './styles/variables.css';
+
+/* ====================  全局样式重置 ==================== */
 
 * {
   margin: 0;
@@ -14,13 +17,12 @@ body {
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  color: #333;
-  background-color: #fff;
+  color: rgb(var(--text-primary));
+  background-color: rgb(var(--bg-primary));
+  transition: background-color var(--transition-slow), color var(--transition-slow);
 }
 
 #root {
@@ -29,28 +31,46 @@ body {
   overflow: hidden;
 }
 
-/* 自定义滚动条样式 */
+/* ==================== 自定义滚动条 ==================== */
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.05);
-  border-radius: 4px;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 4px;
-  transition: background 0.2s;
+  background: rgba(100, 120, 150, 0.3);
+  border-radius: var(--radius-full);
+  transition: background var(--transition-base);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.3);
+  background: rgba(100, 120, 150, 0.5);
 }
 
-/* 摸鱼模式样式 */
+/* ==================== 选中文本 ==================== */
+
+::selection {
+  background-color: rgba(var(--color-primary), 0.3);
+  color: inherit;
+}
+
+/* ==================== 搜索高亮 ==================== */
+
+.search-highlight {
+  background-color: #ffeb3b;
+  color: #000;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+}
+
+/* ==================== 摸鱼模式 ==================== */
+
 .stealth-mode {
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
@@ -59,32 +79,44 @@ body {
 .stealth-mode-hidden {
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.3s ease-in-out;
+  transition: opacity var(--transition-slow);
 }
 
 .stealth-mode-visible {
   opacity: 1;
   pointer-events: auto;
-  transition: opacity 0.3s ease-in-out;
+  transition: opacity var(--transition-slow);
 }
 
-/* 阅读器样式 */
+/* ==================== 阅读器内容 ==================== */
+
 .reader-content {
   line-height: 1.8;
   letter-spacing: 0.05em;
   word-spacing: 0.1em;
 }
 
-/* 搜索高亮 */
-.search-highlight {
-  background-color: #ffeb3b;
-  color: #000;
-  padding: 2px 4px;
-  border-radius: 2px;
+/* ==================== Hover Effects ==================== */
+
+.hover-lift {
+  transition: transform var(--transition-slow) cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow var(--transition-slow) ease;
 }
 
-/* 选中文本样式 */
-::selection {
-  background-color: rgba(14, 165, 233, 0.3);
-  color: inherit;
+.hover-lift:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-2xl);
+}
+
+/* ==================== 焦点样式 ==================== */
+
+.input-focus-glow:focus {
+  animation: borderGlow 1.5s ease-in-out infinite;
+  outline: none;
+}
+
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid rgba(var(--color-primary), 0.6);
+  outline-offset: 2px;
 }
