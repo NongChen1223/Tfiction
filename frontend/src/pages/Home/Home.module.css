@@ -1,27 +1,219 @@
-/* Home 首页样式 */
-
-.home {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  background-color: #fafafa;
-}
+/* Home 页面样式 */
 
 .container {
+  display: flex;
+  width: 100%;
+  height: 100vh;
+  background: rgb(var(--bg-primary));
+  overflow: hidden;
+}
+
+/* === Main Content === */
+
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+/* === Header === */
+
+.header {
+  padding: var(--spacing-xl) var(--spacing-2xl);
+  min-height: 80px;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-lg);
+  border-bottom: 1px solid rgba(var(--border-primary), 0.1);
+  background: rgba(var(--bg-secondary), 0.3);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  flex-shrink: 0;
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+
+/* 让header内的交互元素不可拖拽 */
+.header input,
+.header button,
+.header select,
+.header textarea {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+.searchInput {
+  flex: 1;
+  max-width: 500px;
+  min-width: 200px;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* === View Mode Toggle === */
+
+.viewModeToggle {
+  display: flex;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs);
+  background: rgba(var(--bg-tertiary), 0.5);
+  border: 1px solid rgba(var(--border-primary), 0.2);
+  border-radius: var(--radius-lg);
+}
+
+.viewButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-md);
+  color: rgb(var(--text-secondary));
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.viewButton:hover {
+  background: rgba(var(--color-primary), 0.1);
+  color: rgb(var(--color-primary));
+}
+
+.viewButton.active {
+  background: rgb(var(--color-primary));
+  color: white;
+}
+
+/* === Content === */
+
+.content {
+  flex: 1;
+  padding: var(--spacing-2xl);
+  overflow-y: auto;
+}
+
+/* === Books List === */
+
+.booksList {
+  width: 100%;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.booksList.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--spacing-lg);
+}
+
+.booksList.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  max-width: 1200px;
+}
+
+/* === Empty State === */
+
+.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+}
+
+.emptyText {
+  font-size: 1rem;
+  color: rgb(var(--text-tertiary));
   text-align: center;
-  padding: 2rem;
 }
 
-.title {
-  font-size: 2rem;
-  font-weight: 600;
-  color: #333;
-  margin-bottom: 1rem;
+/* === Scrollbar === */
+
+.content::-webkit-scrollbar {
+  width: 8px;
 }
 
-.subtitle {
-  font-size: 1.2rem;
-  color: #666;
+.content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.content::-webkit-scrollbar-thumb {
+  background: rgba(var(--text-tertiary), 0.3);
+  border-radius: var(--radius-sm);
+}
+
+.content::-webkit-scrollbar-thumb:hover {
+  background: rgba(var(--text-tertiary), 0.5);
+}
+
+/* === Animations === */
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* === Responsive === */
+
+@media (max-width: 1400px) {
+  .booksList.grid {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  }
+}
+
+@media (max-width: 1200px) {
+  .booksList.grid {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: var(--spacing-md);
+  }
+}
+
+@media (max-width: 1024px) {
+  .header {
+    padding: var(--spacing-lg) var(--spacing-xl);
+  }
+
+  .booksList.grid {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: var(--spacing-md);
+  }
+
+  .content {
+    padding: var(--spacing-xl);
+  }
+}
+
+@media (max-width: 768px) {
+  .header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .searchInput {
+    max-width: none;
+  }
+
+  .toolbar {
+    justify-content: space-between;
+  }
+
+  .booksList.grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: var(--spacing-sm);
+  }
 }

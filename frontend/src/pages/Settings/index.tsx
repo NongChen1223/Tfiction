@@ -1,16 +1,100 @@
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import {
+  Palette,
+  BookOpen,
+  HardDrive,
+  BarChart3,
+  Keyboard,
+  ArrowLeft,
+} from 'lucide-react'
+import AppearanceSettings from './tabs/AppearanceSettings'
+import ReadingSettings from './tabs/ReadingSettings'
+import StorageSettings from './tabs/StorageSettings'
+import StatisticsSettings from './tabs/StatisticsSettings'
+import KeyboardSettings from './tabs/KeyboardSettings'
 import styles from './Settings.module.css'
+
+interface SettingSection {
+  id: string
+  label: string
+  icon: React.ReactNode
+  component: React.ReactNode
+}
 
 /**
  * Settings 设置页面
- * 用户可以调整阅读设置、应用设置等
+ * 包含外观、阅读、存储、统计、快捷键等设置选项
  */
 export default function Settings() {
+  const navigate = useNavigate()
+  const [activeSection, setActiveSection] = useState('appearance')
+
+  const sections: SettingSection[] = [
+    {
+      id: 'appearance',
+      label: '外观设置',
+      icon: <Palette size={20} />,
+      component: <AppearanceSettings />,
+    },
+    {
+      id: 'reading',
+      label: '阅读设置',
+      icon: <BookOpen size={20} />,
+      component: <ReadingSettings />,
+    },
+    {
+      id: 'storage',
+      label: '存储管理',
+      icon: <HardDrive size={20} />,
+      component: <StorageSettings />,
+    },
+    {
+      id: 'statistics',
+      label: '阅读统计',
+      icon: <BarChart3 size={20} />,
+      component: <StatisticsSettings />,
+    },
+    {
+      id: 'keyboard',
+      label: '快捷键',
+      icon: <Keyboard size={20} />,
+      component: <KeyboardSettings />,
+    },
+  ]
+
+  const currentSection = sections.find((s) => s.id === activeSection)
+
   return (
-    <div className={styles.settings}>
-      <div className={styles.container}>
-        <h1 className={styles.title}>设置</h1>
-        <p className={styles.subtitle}>阅读设置和应用配置</p>
-      </div>
+    <div className={styles.container}>
+      {/* 左侧导航栏 */}
+      <aside className={styles.sidebar}>
+        <nav className={styles.nav}>
+          <button className={styles.backButton} onClick={() => navigate('/home')}>
+            <ArrowLeft size={20} />
+            <span>返回书架</span>
+          </button>
+
+          {sections.map((section) => (
+            <button
+              key={section.id}
+              className={`${styles.navItem} ${activeSection === section.id ? styles.active : ''}`}
+              onClick={() => setActiveSection(section.id)}
+            >
+              <span className={styles.navIcon}>{section.icon}</span>
+              <span className={styles.navLabel}>{section.label}</span>
+            </button>
+          ))}
+        </nav>
+      </aside>
+
+      {/* 右侧内容区域 */}
+      <main className={styles.main}>
+        <header className={styles.header} style={{ '--wails-draggable': 'drag' } as React.CSSProperties}>
+          <h1 className={styles.title}>{currentSection?.label}</h1>
+        </header>
+        <div className={styles.content}>{currentSection?.component}</div>
+      </main>
     </div>
   )
 }

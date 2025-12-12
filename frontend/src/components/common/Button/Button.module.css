@@ -1,0 +1,119 @@
+/* Button 组件样式 */
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-weight: 500;
+  border-radius: var(--radius-xl);
+  transition: all var(--transition-base);
+  cursor: pointer;
+  border: none;
+  outline: none;
+  font-family: var(--font-sans);
+  white-space: nowrap;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.button:focus-visible {
+  outline: 2px solid rgba(var(--color-primary), 0.6);
+  outline-offset: 2px;
+}
+
+/* === Sizes === */
+
+.sm {
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  height: 2rem;
+}
+
+.md {
+  padding: 0.625rem 1.25rem;
+  font-size: 0.9375rem;
+  height: 2.5rem;
+}
+
+.lg {
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  height: 3rem;
+}
+
+/* === Variants === */
+
+.primary {
+  background: linear-gradient(135deg, rgb(var(--color-primary)) 0%, rgb(var(--color-primary-dark)) 100%);
+  color: rgb(var(--text-inverse));
+  box-shadow: 0 4px 12px rgba(var(--color-primary), 0.3);
+}
+
+.primary:hover:not(.disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(var(--color-primary), 0.4);
+}
+
+.primary:active:not(.disabled) {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(var(--color-primary), 0.3);
+}
+
+.secondary {
+  background: rgba(var(--color-primary), 0.1);
+  color: rgb(var(--color-primary));
+  border: 1px solid rgba(var(--color-primary), 0.2);
+}
+
+.secondary:hover:not(.disabled) {
+  background: rgba(var(--color-primary), 0.15);
+  border-color: rgba(var(--color-primary), 0.3);
+}
+
+.ghost {
+  background: transparent;
+  color: rgb(var(--text-secondary));
+}
+
+.ghost:hover:not(.disabled) {
+  background: rgba(255, 255, 255, 0.05);
+  color: rgb(var(--text-primary));
+}
+
+.danger {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+.danger:hover:not(.disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(239, 68, 68, 0.4);
+}
+
+/* === States === */
+
+.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.fullWidth {
+  width: 100%;
+}
+
+/* === Icon === */
+
+.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.content {
+  display: inline-flex;
+  align-items: center;
+}

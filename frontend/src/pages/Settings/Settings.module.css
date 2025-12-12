@@ -1,27 +1,227 @@
-/* Settings 设置页面样式 */
-
-.settings {
-  width: 100%;
-  height: 100%;
-  overflow: auto;
-  background-color: #fafafa;
-}
+/* Settings 页面样式 */
 
 .container {
-  max-width: 800px;
-  margin: 0 auto;
-  padding: 2rem;
+  display: flex;
+  width: 100%;
+  height: 100vh;
+  background: rgb(var(--bg-primary));
+  overflow: hidden;
+}
+
+/* === Sidebar === */
+
+.sidebar {
+  width: 260px;
+  height: 100vh;
+  background: rgba(var(--bg-secondary), 0.6);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-right: 1px solid rgba(var(--border-primary), 0.2);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex-shrink: 0;
+  transition: width var(--transition-base), border-color var(--transition-base);
+}
+
+/* === Navigation === */
+
+.nav {
+  flex: 1;
+  padding: var(--spacing-lg);
+  padding-top: calc(var(--spacing-xl) + 10px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  overflow-y: auto;
+}
+
+.backButton {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  width: 100%;
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: transparent;
+  border: 1px solid rgba(var(--border-primary), 0.3);
+  border-radius: var(--radius-lg);
+  color: rgb(var(--text-secondary));
+  font-size: 0.9375rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-base);
+  margin-bottom: var(--spacing-md);
+}
+
+.backButton:hover {
+  background: rgba(var(--color-primary), 0.05);
+  border-color: rgba(var(--color-primary), 0.3);
+  color: rgb(var(--color-primary));
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-lg);
+  color: rgb(var(--text-secondary));
+  font-size: 0.9375rem;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: all var(--transition-base);
+  white-space: nowrap;
+}
+
+.navItem:hover {
+  background: rgba(var(--color-primary), 0.05);
+  color: rgb(var(--text-primary));
+}
+
+.navItem.active {
+  background: rgba(var(--color-primary), 0.1);
+  border-color: rgba(var(--color-primary), 0.3);
+  color: rgb(var(--color-primary));
+}
+
+.navIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.navLabel {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* === Main Content === */
+
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.header {
+  padding: var(--spacing-xl) var(--spacing-2xl);
+  min-height: 80px;
+  background: rgba(var(--bg-secondary), 0.3);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(var(--border-primary), 0.2);
+  flex-shrink: 0;
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+
+/* 让header内的交互元素不可拖拽 */
+.header button,
+.header input,
+.header select,
+.header textarea {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
 }
 
 .title {
-  font-size: 2rem;
-  font-weight: 600;
-  color: #333;
-  margin-bottom: 1rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: rgb(var(--text-primary));
+  margin: 0;
 }
 
-.subtitle {
-  font-size: 1rem;
-  color: #666;
-  margin-bottom: 2rem;
+.content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.content::-webkit-scrollbar-thumb {
+  background: rgba(var(--text-tertiary), 0.3);
+  border-radius: var(--radius-sm);
+}
+
+.content::-webkit-scrollbar-thumb:hover {
+  background: rgba(var(--text-tertiary), 0.5);
+}
+
+/* === Scrollbar === */
+
+.nav::-webkit-scrollbar {
+  width: 6px;
+}
+
+.nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.nav::-webkit-scrollbar-thumb {
+  background: rgba(var(--text-tertiary), 0.3);
+  border-radius: var(--radius-sm);
+}
+
+.nav::-webkit-scrollbar-thumb:hover {
+  background: rgba(var(--text-tertiary), 0.5);
+}
+
+/* === 响应式设计 === */
+
+/* 当窗口宽度小于1200px时，缩小侧边栏 */
+@media (max-width: 1200px) {
+  .sidebar {
+    width: 80px;
+    border-right-color: transparent;
+  }
+
+  .nav {
+    padding: var(--spacing-lg) 0;
+    padding-top: calc(var(--spacing-lg) + 10px);
+    width: 100%;
+    align-items: center;
+  }
+
+  .backButton {
+    justify-content: center;
+    padding: 0;
+    width: 48px;
+    height: 48px;
+    margin-bottom: var(--spacing-md);
+    border-color: transparent;
+  }
+
+  .backButton span {
+    display: none;
+  }
+
+  .navLabel {
+    display: none;
+  }
+
+  .navItem {
+    justify-content: center;
+    padding: 0;
+    width: 48px;
+    height: 48px;
+  }
+
+  /* 缩小状态下移除选中项的border */
+  .navItem.active {
+    border-color: transparent;
+  }
 }

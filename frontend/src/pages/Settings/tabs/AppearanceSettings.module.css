@@ -1,0 +1,147 @@
+/* AppearanceSettings 样式 */
+
+.container {
+  padding: var(--spacing-2xl);
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+/* === Section === */
+
+.section {
+  margin-bottom: var(--spacing-2xl);
+}
+
+.sectionTitle {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: rgb(var(--text-primary));
+  margin: 0 0 var(--spacing-sm) 0;
+}
+
+.sectionDescription {
+  font-size: 0.9375rem;
+  color: rgb(var(--text-secondary));
+  margin: 0 0 var(--spacing-lg) 0;
+}
+
+/* === Theme Grid === */
+
+.themeGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--spacing-lg);
+}
+
+/* === Theme Card === */
+
+.themeCard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: rgba(var(--bg-secondary), 0.5);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 2px solid rgba(var(--border-primary), 0.3);
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-lg);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  text-align: left;
+}
+
+.themeCard:hover {
+  border-color: rgba(var(--color-primary), 0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(var(--color-primary), 0.15);
+}
+
+.themeCard.active {
+  border-color: rgb(var(--color-primary));
+  box-shadow: 0 8px 20px rgba(var(--color-primary), 0.25);
+}
+
+/* === Theme Preview === */
+
+.themePreview {
+  width: 100%;
+  height: 120px;
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--spacing-md);
+  overflow: hidden;
+  position: relative;
+}
+
+.themeIcon {
+  color: rgba(0, 0, 0, 0.6);
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+}
+
+/* === Theme Info === */
+
+.themeInfo {
+  flex: 1;
+}
+
+.themeName {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: rgb(var(--text-primary));
+  margin: 0 0 var(--spacing-xs) 0;
+}
+
+.themeDescription {
+  font-size: 0.875rem;
+  color: rgb(var(--text-secondary));
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* === Active Indicator === */
+
+.activeIndicator {
+  position: absolute;
+  top: var(--spacing-md);
+  right: var(--spacing-md);
+}
+
+.activeDot {
+  width: 12px;
+  height: 12px;
+  background: rgb(var(--color-primary));
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px rgba(var(--color-primary), 0.2);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 3px rgba(var(--color-primary), 0.2);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(var(--color-primary), 0.1);
+  }
+}
+
+/* === Info Box === */
+
+.infoBox {
+  background: rgba(var(--color-primary), 0.05);
+  border: 1px solid rgba(var(--color-primary), 0.2);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-lg);
+}
+
+.infoText {
+  font-size: 0.9375rem;
+  color: rgb(var(--text-primary));
+  margin: 0 0 var(--spacing-sm) 0;
+  line-height: 1.6;
+}
+
+.infoText:last-child {
+  margin-bottom: 0;
+}

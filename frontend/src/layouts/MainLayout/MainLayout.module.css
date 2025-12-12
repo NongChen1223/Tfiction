@@ -1,33 +1,14 @@
 /* MainLayout 主布局样式 */
 
 .layout {
-  width: 100vw;
+  width: 100%;
   height: 100vh;
-  display: flex;
-  flex-direction: column;
   overflow: hidden;
-  background-color: #ffffff;
-  transition: background-color 0.3s ease;
+  position: relative;
+  transition: opacity var(--transition-base);
 }
 
-/* 摸鱼模式样式 */
+/* 摸鱼模式 - 鼠标离开窗口时隐藏内容 */
 .stealthMode {
-  background-color: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-}
-
-/* 摸鱼模式内容隐藏/显示动画 */
-.stealthMode .content {
-  transition: opacity 0.3s ease-in-out;
-}
-
-.stealthMode .content.hidden {
-  opacity: 0;
-  pointer-events: none;
-}
-
-.stealthMode .content.visible {
-  opacity: 1;
-  pointer-events: auto;
+  opacity: 0.3;
 }

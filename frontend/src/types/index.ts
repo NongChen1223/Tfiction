@@ -55,3 +55,20 @@ export interface WindowState {
   opacity: number
   isMouseInWindow: boolean
 }
+
+// Book 书籍展示类型（用于书架展示）
+export interface Book {
+  id: string
+  title: string
+  author: string
+  cover?: string // 封面图片路径
+  type: 'novel' | 'manga'
+  progress: number // 阅读进度 0-100
+  category: string // 分类标签
+  lastReadTime?: number // 最后阅读时间戳
+  filePath: string
+  format: string
+}
+
+// ViewMode 视图模式类型
+export type ViewMode = 'grid' | 'list'
