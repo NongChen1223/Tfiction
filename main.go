@@ -34,7 +34,7 @@ func main() {
 
 	// 创建 Wails 应用配置
 	err = wails.Run(&options.App{
-		Title:  "Tfiction - 摸鱼小说阅读器",
+		Title:  "Tfiction - 阅读器",
 		Width:  1200,
 		Height: 800,
 		AssetServer: &assetserver.Options{
@@ -70,7 +70,7 @@ func main() {
 			WindowIsTranslucent:  true,
 			About: &mac.AboutInfo{
 				Title:   "Tfiction",
-				Message: "一款支持多格式、跨平台的摸鱼小说阅读器",
+				Message: "一款支持多格式、跨平台的阅读器",
 			},
 		},
 	})
