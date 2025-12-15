@@ -1,142 +1,152 @@
-/* ==================== Theme Variables ==================== */
+/* ==================== 主题变量配置 ==================== */
 
 :root {
-  /* === Color Palette === */
+  /* === 窗口尺寸 === */
+  --window-min-width: 600px;      /* 窗口最小宽度（与 Go 配置保持一致） */
+  --window-min-height: 500px;      /* 窗口最小高度（与 Go 配置保持一致） */
+  --window-default-width: 1000px;  /* 窗口默认宽度 */
+  --window-default-height: 700px;  /* 窗口默认高度 */
 
-  /* Primary (Purple) */
-  --color-primary: 147 51 234;
-  --color-primary-light: 168 85 247;
-  --color-primary-dark: 126 34 206;
+  /* === 侧边栏尺寸 === */
+  --sidebar-width: 250px;          /* 侧边栏默认宽度 */
+  --sidebar-collapsed-width: 80px; /* 侧边栏收缩后宽度（只显示图标） */
 
-  /* Background Colors - Light Theme */
-  --bg-primary: 255 255 255;
-  --bg-secondary: 249 250 251;
-  --bg-tertiary: 243 244 246;
-  --bg-elevated: 255 255 255;
+  /* === 调色板 === */
 
-  /* Text Colors - Light Theme */
-  --text-primary: 17 24 39;
-  --text-secondary: 75 85 99;
-  --text-tertiary: 156 163 175;
-  --text-inverse: 255 255 255;
+  /* 主色调（紫色系）*/
+  --color-primary: 147 51 234;        /* 主紫色 #9333EA */
+  --color-primary-light: 168 85 247;  /* 浅紫色 #A855F7（用于渐变、高亮） */
+  --color-primary-dark: 126 34 206;   /* 深紫色 #7E22CE（用于悬停、按下状态） */
 
-  /* Border Colors - Light Theme */
-  --border-primary: 229 231 235;
-  --border-secondary: 243 244 246;
-  --border-focus: 147 51 234;
+  /* 背景颜色 - 浅色主题 */
+  --bg-primary: 255 255 255;      /* 主背景色（最外层背景，纯白色） */
+  --bg-secondary: 249 250 251;    /* 次级背景色（卡片、面板背景，浅灰色） */
+  --bg-tertiary: 243 244 246;     /* 三级背景色（按钮、输入框背景，更深的灰色） */
+  --bg-elevated: 255 255 255;     /* 悬浮元素背景（下拉菜单、弹出层，纯白色） */
 
-  /* === Shadows === */
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
-  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1);
-  --shadow-2xl: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+  /* 文字颜色 - 浅色主题 */
+  --text-primary: 17 24 39;       /* 主文字颜色（标题、正文，深色） */
+  --text-secondary: 75 85 99;     /* 次级文字颜色（副标题、说明文字，中灰色） */
+  --text-tertiary: 156 163 175;   /* 三级文字颜色（辅助信息、占位符，浅灰色） */
+  --text-inverse: 255 255 255;    /* 反色文字（深色背景上的文字，白色） */
 
-  /* === Spacing === */
-  --spacing-xs: 0.25rem;
-  --spacing-sm: 0.5rem;
-  --spacing-md: 1rem;
-  --spacing-lg: 1.5rem;
-  --spacing-xl: 2rem;
-  --spacing-2xl: 3rem;
+  /* 边框颜色 - 浅色主题 */
+  --border-primary: 229 231 235;  /* 主边框颜色（分割线、卡片边框，浅灰色） */
+  --border-secondary: 243 244 246;/* 次级边框颜色（更浅的分割线，极浅灰色） */
+  --border-focus: 147 51 234;     /* 聚焦边框颜色（输入框聚焦时，紫色） */
 
-  /* === Border Radius === */
-  --radius-sm: 0.25rem;
-  --radius-md: 0.5rem;
-  --radius-lg: 0.75rem;
-  --radius-xl: 1rem;
-  --radius-2xl: 1.5rem;
-  --radius-full: 9999px;
+  /* === 阴影 === */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);      /* 超小阴影（轻微立体感） */
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);    /* 小阴影（按钮、卡片） */
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);  /* 中等阴影（悬浮卡片） */
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1);  /* 大阴影（弹出层） */
+  --shadow-2xl: 0 25px 50px -12px rgb(0 0 0 / 0.25);/* 超大阴影（模态框） */
 
-  /* === Transitions === */
-  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  /* === 间距 === */
+  --spacing-xs: 0.25rem;   /* 超小间距（4px，图标间距） */
+  --spacing-sm: 0.5rem;    /* 小间距（8px，按钮内边距） */
+  --spacing-md: 1rem;      /* 中等间距（16px，卡片间距） */
+  --spacing-lg: 1.5rem;    /* 大间距（24px，区块间距） */
+  --spacing-xl: 2rem;      /* 超大间距（32px，页面边距） */
+  --spacing-2xl: 3rem;     /* 巨大间距（48px，大区块边距） */
 
-  /* === Typography === */
-  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
-  --font-serif: 'Georgia', 'Times New Roman', serif;
-  --font-mono: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Mono', monospace;
+  /* === 圆角 === */
+  --radius-sm: 0.25rem;    /* 小圆角（4px，按钮、输入框） */
+  --radius-md: 0.5rem;     /* 中等圆角（8px，卡片） */
+  --radius-lg: 0.75rem;    /* 大圆角（12px，面板） */
+  --radius-xl: 1rem;       /* 超大圆角（16px，大卡片） */
+  --radius-2xl: 1.5rem;    /* 巨大圆角（24px，特殊卡片） */
+  --radius-full: 9999px;   /* 完全圆角（圆形按钮、头像） */
 
-  /* === Glass Effect Colors - Light Theme === */
-  --glass-bg: rgba(255, 255, 255, 0.7);
-  --glass-border: rgba(0, 0, 0, 0.1);
-  --glass-shadow: rgba(0, 0, 0, 0.1);
+  /* === 动画过渡 === */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);  /* 快速过渡（悬停效果） */
+  --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);  /* 基础过渡（标准动画） */
+  --transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);  /* 慢速过渡（复杂动画） */
 
-  /* === Overlay === */
-  --overlay-light: rgba(0, 0, 0, 0.5);
-  --overlay-dark: rgba(0, 0, 0, 0.8);
+  /* === 字体 === */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;  /* 无衬线字体（界面默认） */
+  --font-serif: 'Georgia', 'Times New Roman', serif;     /* 衬线字体（阅读模式） */
+  --font-mono: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Mono', monospace;  /* 等宽字体（代码、数字） */
+
+  /* === 玻璃态效果颜色 - 浅色主题 === */
+  --glass-bg: rgba(255, 255, 255, 0.7);    /* 玻璃背景（半透明白色） */
+  --glass-border: rgba(0, 0, 0, 0.1);      /* 玻璃边框（浅黑色） */
+  --glass-shadow: rgba(0, 0, 0, 0.1);      /* 玻璃阴影（浅黑色） */
+
+  /* === 遮罩层 === */
+  --overlay-light: rgba(0, 0, 0, 0.5);     /* 浅色遮罩（模态框背景） */
+  --overlay-dark: rgba(0, 0, 0, 0.8);      /* 深色遮罩（强调模态框） */
 }
 
-/* ==================== Dark Theme ==================== */
+/* ==================== 暗色主题 ==================== */
 
 [data-theme='dark'] {
-  /* Background Colors - Dark Theme */
-  --bg-primary: 10 14 20;
-  --bg-secondary: 15 20 30;
-  --bg-tertiary: 20 25 35;
-  --bg-elevated: 15 20 30;
+  /* 背景颜色 - 暗色主题 */
+  --bg-primary: 10 14 20;       /* 主背景色（深蓝黑色） */
+  --bg-secondary: 15 20 30;     /* 次级背景色（稍亮的深蓝黑） */
+  --bg-tertiary: 20 25 35;      /* 三级背景色（更亮的深蓝黑） */
+  --bg-elevated: 15 20 30;      /* 悬浮元素背景（与次级背景相同） */
 
-  /* Text Colors - Dark Theme */
-  --text-primary: 224 224 224;
-  --text-secondary: 156 163 175;
-  --text-tertiary: 107 114 128;
-  --text-inverse: 17 24 39;
+  /* 文字颜色 - 暗色主题 */
+  --text-primary: 224 224 224;      /* 主文字颜色（浅灰白色） */
+  --text-secondary: 156 163 175;    /* 次级文字颜色（中灰色） */
+  --text-tertiary: 107 114 128;     /* 三级文字颜色（深灰色） */
+  --text-inverse: 17 24 39;         /* 反色文字（浅色背景上的深色文字） */
 
-  /* Border Colors - Dark Theme */
-  --border-primary: 255 255 255 / 0.1;
-  --border-secondary: 255 255 255 / 0.05;
-  --border-focus: 147 51 234;
+  /* 边框颜色 - 暗色主题 */
+  --border-primary: 255 255 255 / 0.1;   /* 主边框颜色（10%白色） */
+  --border-secondary: 255 255 255 / 0.05;/* 次级边框颜色（5%白色） */
+  --border-focus: 147 51 234;            /* 聚焦边框颜色（紫色） */
 
-  /* Shadows - Dark Theme */
+  /* 阴影 - 暗色主题（更深更明显） */
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
   --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.4);
   --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.5);
   --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.6);
   --shadow-2xl: 0 25px 50px -12px rgb(0 0 0 / 0.7);
 
-  /* Glass Effect Colors - Dark Theme */
-  --glass-bg: rgba(15, 20, 30, 0.9);
-  --glass-border: rgba(100, 120, 150, 0.1);
-  --glass-shadow: rgba(0, 0, 0, 0.5);
+  /* 玻璃态效果颜色 - 暗色主题 */
+  --glass-bg: rgba(15, 20, 30, 0.9);       /* 玻璃背景（半透明深蓝黑） */
+  --glass-border: rgba(100, 120, 150, 0.1);/* 玻璃边框（浅蓝灰色） */
+  --glass-shadow: rgba(0, 0, 0, 0.5);      /* 玻璃阴影（深黑色） */
 }
 
-/* ==================== Sepia Theme (护眼模式) ==================== */
+/* ==================== 护眼主题（豆沙绿） ==================== */
 
 [data-theme='sepia'] {
-  /* Background Colors - 豆沙绿主题 */
-  --bg-primary: 225 220 205;
-  --bg-secondary: 215 210 195;
-  --bg-tertiary: 205 200 185;
-  --bg-elevated: 225 220 205;
+  /* 背景颜色 - 护眼主题 */
+  --bg-primary: 225 220 205;      /* 主背景色（米黄色） */
+  --bg-secondary: 215 210 195;    /* 次级背景色（淡黄色） */
+  --bg-tertiary: 205 200 185;     /* 三级背景色（更深的淡黄色） */
+  --bg-elevated: 225 220 205;     /* 悬浮元素背景（与主背景相同） */
 
-  /* Text Colors - Sepia Theme */
-  --text-primary: 60 60 50;
-  --text-secondary: 100 100 85;
-  --text-tertiary: 140 135 120;
-  --text-inverse: 255 255 255;
+  /* 文字颜色 - 护眼主题 */
+  --text-primary: 60 60 50;       /* 主文字颜色（深褐色） */
+  --text-secondary: 100 100 85;   /* 次级文字颜色（中褐色） */
+  --text-tertiary: 140 135 120;   /* 三级文字颜色（浅褐色） */
+  --text-inverse: 255 255 255;    /* 反色文字（白色） */
 
-  /* Border Colors - Sepia Theme */
-  --border-primary: 180 175 160;
-  --border-secondary: 190 185 170;
-  --border-focus: 147 51 234;
+  /* 边框颜色 - 护眼主题 */
+  --border-primary: 180 175 160;  /* 主边框颜色（淡褐色） */
+  --border-secondary: 190 185 170;/* 次级边框颜色（浅褐色） */
+  --border-focus: 147 51 234;     /* 聚焦边框颜色（紫色） */
 
-  /* Shadows - Sepia Theme */
+  /* 阴影 - 护眼主题（较浅） */
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
   --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.08);
   --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
   --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1);
   --shadow-2xl: 0 25px 50px -12px rgb(0 0 0 / 0.15);
 
-  /* Glass Effect Colors - Sepia Theme */
-  --glass-bg: rgba(215, 210, 195, 0.9);
-  --glass-border: rgba(180, 175, 160, 0.3);
-  --glass-shadow: rgba(0, 0, 0, 0.1);
+  /* 玻璃态效果颜色 - 护眼主题 */
+  --glass-bg: rgba(215, 210, 195, 0.9);    /* 玻璃背景（半透明淡黄色） */
+  --glass-border: rgba(180, 175, 160, 0.3);/* 玻璃边框（淡褐色） */
+  --glass-shadow: rgba(0, 0, 0, 0.1);      /* 玻璃阴影（浅黑色） */
 }
 
-/* ==================== Utility CSS Functions ==================== */
+/* ==================== 工具类样式 ==================== */
 
-/* Generate RGB color from CSS variables */
+/* 从 CSS 变量生成 RGB 颜色 */
 .bg-primary {
   background-color: rgb(var(--bg-primary));
 }
@@ -161,24 +171,25 @@
   color: rgb(var(--text-tertiary));
 }
 
-/* Glass Morphism Effect */
+/* 玻璃态效果 */
 .glass {
   background: var(--glass-bg);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);           /* 背景模糊20px */
+  -webkit-backdrop-filter: blur(20px);   /* Safari兼容 */
   border: 1px solid var(--glass-border);
   box-shadow: var(--shadow-lg);
 }
 
 .glass-dark {
   background: var(--glass-bg);
-  backdrop-filter: blur(40px);
+  backdrop-filter: blur(40px);           /* 更强的模糊效果 */
   -webkit-backdrop-filter: blur(40px);
   border: 1px solid var(--glass-border);
 }
 
-/* ==================== Global Animations ==================== */
+/* ==================== 全局动画 ==================== */
 
+/* 淡入动画（从下往上淡入） */
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -190,6 +201,7 @@
   }
 }
 
+/* 从左滑入动画 */
 @keyframes slideIn {
   from {
     transform: translateX(-20px);
@@ -201,6 +213,7 @@
   }
 }
 
+/* 从右滑入动画 */
 @keyframes slideInRight {
   from {
     transform: translateX(20px);
@@ -212,17 +225,19 @@
   }
 }
 
+/* 缩放淡入动画 */
 @keyframes scaleIn {
   from {
-    transform: scale(0.95);
+    transform: scale(0.95);  /* 从95%大小开始 */
     opacity: 0;
   }
   to {
-    transform: scale(1);
+    transform: scale(1);     /* 恢复到100%大小 */
     opacity: 1;
   }
 }
 
+/* 边框发光动画（用于输入框聚焦） */
 @keyframes borderGlow {
   0%, 100% {
     border-color: rgba(var(--color-primary), 0.5);
@@ -234,6 +249,7 @@
   }
 }
 
+/* 动画工具类 */
 .animate-fade-in {
   animation: fadeIn 0.4s ease-out;
 }

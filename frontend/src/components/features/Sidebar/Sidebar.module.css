@@ -1,7 +1,7 @@
 /* Sidebar 组件样式 */
 
 .sidebar {
-  width: 260px;
+  width: var(--sidebar-width);
   height: 100vh;
   background: rgba(var(--bg-secondary), 0.6);
   backdrop-filter: blur(20px);
@@ -141,67 +141,85 @@
 
 /* === 响应式设计 === */
 
-/* 当窗口宽度小于1200px时，缩小侧边栏 */
-@media (max-width: 1200px) {
+/*
+ * 小屏幕侧边栏收缩（窗口宽度 ≤ 1200px）
+ * 效果：
+ * - 侧边栏从 260px 缩小到 80px（只显示图标）
+ * - 隐藏所有文字标签（Logo标题、导航标签、设置按钮文字）
+ * - 保留所有图标，居中对齐
+ * - 移除侧边栏右边框，视觉更简洁
+ * - 移除选中项的边框，只保留背景色高亮
+ *
+ * 触发时机：
+ * - 小屏笔记本电脑
+ * - 窗口缩小到一定程度
+ * - 配合主内容区域使用，节省屏幕空间
+ *
+ * 交互变化：
+ * - 鼠标悬停仍有高亮效果
+ * - 点击功能完全保留
+ * - 只是隐藏了文字，保留了图标识别
+ */
+@media (max-width: 1000px) {
   .sidebar {
-    width: 80px;
-    border-right-color: transparent;
+    width: var(--sidebar-collapsed-width);  /* 使用全局变量：收缩后宽度 */
+    border-right-color: transparent;  /* 隐藏右边框 */
   }
 
   .header {
-    padding: var(--spacing-lg) 0;
-    padding-top: calc(var(--spacing-lg) + 10px);
+    padding: var(--spacing-lg) 0;  /* 左右内边距改为0 */
+    padding-top: calc(var(--spacing-lg) + 10px);  /* 顶部留出拖拽区域 */
     width: 100%;
-    justify-content: center;
+    justify-content: center;  /* Logo 居中对齐 */
   }
 
   .logo {
     width: 48px;
-    height: 48px;
+    height: 48px;  /* Logo 保持原大小 */
   }
 
   .title {
-    display: none;
+    display: none;  /* 隐藏 "Tfiction" 文字 */
   }
 
   .nav {
-    padding: var(--spacing-lg) 0;
+    padding: var(--spacing-lg) 0;  /* 左右内边距改为0 */
     width: 100%;
-    align-items: center;
+    align-items: center;  /* 所有导航项居中 */
   }
 
   .navLabel {
-    display: none;
+    display: none;  /* 隐藏导航项文字（全部书籍、书架、收藏等） */
   }
 
   .navItem {
-    justify-content: center;
+    justify-content: center;  /* 图标居中 */
     padding: 0;
-    width: 48px;
+    width: 48px;  /* 固定宽高，变成正方形按钮 */
     height: 48px;
   }
 
-  /* 缩小状态下移除选中项的border */
+  /* 缩小状态下移除选中项的边框，只保留背景色 */
   .navItem.active {
     border-color: transparent;
   }
 
   /* 设置按钮保持可见，只隐藏文字 */
   .settingsButton {
-    justify-content: center;
+    justify-content: center;  /* 图标居中 */
     padding: 0;
     border-color: rgba(var(--border-primary), 0.2);
-    width: 48px;
+    width: 48px;  /* 与导航按钮同样大小 */
     height: 48px;
-    margin-top: auto;
+    margin-top: auto;  /* 仍然保持在底部 */
   }
 
   .settingsLabel {
-    display: none;
+    display: none;  /* 隐藏"设置"文字 */
   }
 }
 
-/* === Scrollbar === */
+/* === 滚动条样式 === */
 
 .nav::-webkit-scrollbar {
   width: 6px;

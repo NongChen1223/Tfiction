@@ -34,9 +34,11 @@ func main() {
 
 	// 创建 Wails 应用配置
 	err = wails.Run(&options.App{
-		Title:  "Tfiction - 阅读器",
-		Width:  1200,
-		Height: 800,
+		Title:     "Tfiction - 阅读器",
+		Width:     1000,
+		Height:    700,
+		MinWidth:  600, // 窗口最小宽度（与 CSS 变量 --window-min-width 保持一致）
+		MinHeight: 500, // 窗口最小高度（与 CSS 变量 --window-min-height 保持一致）
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},

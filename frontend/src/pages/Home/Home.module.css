@@ -24,6 +24,7 @@
   padding: var(--spacing-xl) var(--spacing-2xl);
   min-height: 80px;
   display: flex;
+  flex-wrap: nowrap;
   align-items: center;
   gap: var(--spacing-lg);
   border-bottom: 1px solid rgba(var(--border-primary), 0.1);
@@ -46,8 +47,9 @@
 
 .searchInput {
   flex: 1;
-  max-width: 500px;
-  min-width: 200px;
+  min-width: 150px;
+  border: 1px solid rgb(var(--color-primary));
+  border-radius: 15px;
 }
 
 .toolbar {
@@ -168,52 +170,49 @@
   }
 }
 
-/* === Responsive === */
+/* === 响应式设计 === */
 
+/*
+ * 大屏幕（窗口宽度 ≤ 1400px）
+ * 效果：书籍卡片最小宽度从 220px 缩小到 200px
+ * 场景：普通笔记本电脑全屏，每行显示约 5-6 本书
+ */
 @media (max-width: 1400px) {
   .booksList.grid {
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   }
 }
 
+/*
+ * 中等屏幕（窗口宽度 ≤ 1200px）
+ * 效果：书籍卡片继续缩小到 180px，卡片间距减小
+ * 场景：小屏笔记本或窗口缩小状态，侧边栏也会收缩为图标
+ */
 @media (max-width: 1200px) {
   .booksList.grid {
     grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-    gap: var(--spacing-md);
+    gap: var(--spacing-md);  /* 间距从 24px 减小到 16px */
   }
 }
 
+/*
+ * 平板电脑（窗口宽度 ≤ 1024px）
+ * 效果：减少页面内边距，书籍卡片缩小到 160px
+ * 场景：iPad 横屏模式，显示更紧凑
+ */
 @media (max-width: 1024px) {
   .header {
-    padding: var(--spacing-lg) var(--spacing-xl);
+    padding: var(--spacing-lg) var(--spacing-xl);  /* 从 32px 减小到 24px */
   }
 
   .booksList.grid {
     grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-    gap: var(--spacing-md);
+    gap: var(--spacing-md);  /* 保持 16px 间距 */
   }
 
   .content {
-    padding: var(--spacing-xl);
+    padding: var(--spacing-xl);  /* 从 48px 减小到 32px */
   }
 }
 
-@media (max-width: 768px) {
-  .header {
-    flex-direction: column;
-    align-items: stretch;
-  }
 
-  .searchInput {
-    max-width: none;
-  }
-
-  .toolbar {
-    justify-content: space-between;
-  }
-
-  .booksList.grid {
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-    gap: var(--spacing-sm);
-  }
-}

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Tooltip } from 'antd'
 import {
   Palette,
   BookOpen,
@@ -8,6 +9,7 @@ import {
   Keyboard,
   ArrowLeft,
 } from 'lucide-react'
+import { useMediaQuery } from '@/hooks/useMediaQuery'
 import AppearanceSettings from './tabs/AppearanceSettings'
 import ReadingSettings from './tabs/ReadingSettings'
 import StorageSettings from './tabs/StorageSettings'
@@ -29,6 +31,8 @@ interface SettingSection {
 export default function Settings() {
   const navigate = useNavigate()
   const [activeSection, setActiveSection] = useState('appearance')
+  // 检测是否处于收缩状态（窗口宽度 ≤ 1200px）
+  const isCollapsed = useMediaQuery('(max-width: 1200px)')
 
   const sections: SettingSection[] = [
     {
@@ -70,21 +74,41 @@ export default function Settings() {
       {/* 左侧导航栏 */}
       <aside className={styles.sidebar}>
         <nav className={styles.nav}>
-          <button className={styles.backButton} onClick={() => navigate('/home')}>
-            <ArrowLeft size={20} />
-            <span>返回书架</span>
-          </button>
-
-          {sections.map((section) => (
-            <button
-              key={section.id}
-              className={`${styles.navItem} ${activeSection === section.id ? styles.active : ''}`}
-              onClick={() => setActiveSection(section.id)}
-            >
-              <span className={styles.navIcon}>{section.icon}</span>
-              <span className={styles.navLabel}>{section.label}</span>
+          {isCollapsed ? (
+            <Tooltip title="返回书架" placement="right" mouseEnterDelay={0.3}>
+              <button className={styles.backButton} onClick={() => navigate('/home')}>
+                <ArrowLeft size={20} />
+                <span>返回书架</span>
+              </button>
+            </Tooltip>
+          ) : (
+            <button className={styles.backButton} onClick={() => navigate('/home')}>
+              <ArrowLeft size={20} />
+              <span>返回书架</span>
             </button>
-          ))}
+          )}
+
+          {sections.map((section) => {
+            const button = (
+              <button
+                key={section.id}
+                className={`${styles.navItem} ${activeSection === section.id ? styles.active : ''}`}
+                onClick={() => setActiveSection(section.id)}
+              >
+                <span className={styles.navIcon}>{section.icon}</span>
+                <span className={styles.navLabel}>{section.label}</span>
+              </button>
+            )
+
+            // 只在收缩状态下显示 Tooltip
+            return isCollapsed ? (
+              <Tooltip key={section.id} title={section.label} placement="right" mouseEnterDelay={0.3}>
+                {button}
+              </Tooltip>
+            ) : (
+              button
+            )
+          })}
         </nav>
       </aside>
 

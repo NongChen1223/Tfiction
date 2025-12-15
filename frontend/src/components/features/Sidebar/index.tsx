@@ -1,5 +1,7 @@
-import { BookOpen, Clock, FileText, Image, Heart, Settings } from 'lucide-react'
+import { BookOpen, Clock, FileText, Image, Settings } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { Tooltip } from 'antd'
+import { useMediaQuery } from '@/hooks/useMediaQuery'
 import styles from './Sidebar.module.css'
 
 export interface Category {
@@ -19,7 +21,6 @@ const defaultCategories: Category[] = [
   { id: 'recent', label: '最近阅读', icon: <Clock size={20} /> },
   { id: 'novel', label: '小说', icon: <FileText size={20} /> },
   { id: 'manga', label: '漫画', icon: <Image size={20} /> },
-  { id: 'favorites', label: '收藏', icon: <Heart size={20} /> },
 ]
 
 /**
@@ -32,6 +33,8 @@ export default function Sidebar({
   onSelectCategory,
 }: SidebarProps) {
   const navigate = useNavigate()
+  // 检测是否处于收缩状态（窗口宽度 ≤ 1000px）
+  const isCollapsed = useMediaQuery('(max-width: 1000px)')
 
   return (
     <aside className={styles.sidebar}>
@@ -43,25 +46,47 @@ export default function Sidebar({
       </div>
 
       <nav className={styles.nav}>
-        {categories.map((category) => (
-          <button
-            key={category.id}
-            className={`${styles.navItem} ${
-              selectedCategory === category.id ? styles.active : ''
-            }`}
-            onClick={() => onSelectCategory(category.id)}
-          >
-            <span className={styles.navIcon}>{category.icon}</span>
-            <span className={styles.navLabel}>{category.label}</span>
-          </button>
-        ))}
+        {categories.map((category) => {
+          const button = (
+            <button
+              key={category.id}
+              className={`${styles.navItem} ${
+                selectedCategory === category.id ? styles.active : ''
+              }`}
+              onClick={() => onSelectCategory(category.id)}
+            >
+              <span className={styles.navIcon}>{category.icon}</span>
+              <span className={styles.navLabel}>{category.label}</span>
+            </button>
+          )
 
-        <button className={styles.settingsButton} onClick={() => navigate('/settings')}>
-          <span className={styles.settingsIcon}>
-            <Settings size={20} />
-          </span>
-          <span className={styles.settingsLabel}>设置</span>
-        </button>
+          // 只在收缩状态下显示 Tooltip
+          return isCollapsed ? (
+            <Tooltip key={category.id} title={category.label} placement="right" mouseEnterDelay={0.3}>
+              {button}
+            </Tooltip>
+          ) : (
+            button
+          )
+        })}
+
+        {isCollapsed ? (
+          <Tooltip title="设置" placement="right" mouseEnterDelay={0.3}>
+            <button className={styles.settingsButton} onClick={() => navigate('/settings')}>
+              <span className={styles.settingsIcon}>
+                <Settings size={20} />
+              </span>
+              <span className={styles.settingsLabel}>设置</span>
+            </button>
+          </Tooltip>
+        ) : (
+          <button className={styles.settingsButton} onClick={() => navigate('/settings')}>
+            <span className={styles.settingsIcon}>
+              <Settings size={20} />
+            </span>
+            <span className={styles.settingsLabel}>设置</span>
+          </button>
+        )}
       </nav>
     </aside>
   )

@@ -60,9 +60,6 @@ export default function Home() {
         // 最近阅读：7天内
         const sevenDaysAgo = Date.now() - 7 * 86400000
         if (!book.lastReadTime || book.lastReadTime < sevenDaysAgo) return false
-      } else if (selectedCategory === 'favorites') {
-        // TODO: 实现收藏功能
-        return false
       } else if (selectedCategory !== book.type && selectedCategory !== book.category) {
         return false
       }
