@@ -13,21 +13,21 @@ export default function AppearanceSettings() {
     {
       id: 'light' as const,
       name: '白天模式',
-      description: '浅色背景，适合光线充足的环境',
+      description: '白色+蓝色主题，适合光线充足的环境',
       icon: <Sun size={32} />,
-      preview: 'linear-gradient(135deg, #ffffff, #f9fafb)',
+      preview: 'linear-gradient(135deg, #f8f9fa, #e1e8f0)',
     },
     {
       id: 'dark' as const,
       name: '夜间模式',
-      description: '深色背景，保护眼睛，适合夜间阅读',
+      description: '深色背景+紫色主题，保护眼睛，适合夜间阅读',
       icon: <Moon size={32} />,
       preview: 'linear-gradient(135deg, #0a0e14, #0f141e)',
     },
     {
       id: 'sepia' as const,
       name: '护眼模式',
-      description: '豆沙绿背景，长时间阅读更舒适',
+      description: '豆沙绿背景+蓝色主题，长时间阅读更舒适',
       icon: <Leaf size={32} />,
       preview: 'linear-gradient(135deg, #e1dccd, #d7d2c3)',
     },
@@ -71,6 +71,9 @@ export default function AppearanceSettings() {
         <div className={styles.infoBox}>
           <p className={styles.infoText}>
             💡 主题设置会自动保存，下次打开时自动应用
+          </p>
+          <p className={styles.infoText}>
+            💡 白天模式和护眼模式使用蓝色主题，夜间模式使用紫色主题
           </p>
           <p className={styles.infoText}>
             💡 护眼模式使用豆沙绿配色，适合长时间阅读

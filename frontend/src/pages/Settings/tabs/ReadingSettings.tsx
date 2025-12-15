@@ -1,7 +1,6 @@
 import { useSettingsStore } from '@/stores/settingsStore'
-import Select from '@/components/common/Select'
-import Slider from '@/components/common/Slider'
-import { HexColorPicker } from 'react-colorful'
+import { Select, Slider, ColorPicker, Switch } from 'antd'
+import type { Color } from 'antd/es/color-picker'
 import styles from './ReadingSettings.module.css'
 
 /**
@@ -41,8 +40,9 @@ export default function ReadingSettings() {
         <h2 className={styles.sectionTitle}>字体设置</h2>
 
         <div className={styles.settingItem}>
+          <label className={styles.label}>字体系列</label>
           <Select
-            label="字体系列"
+            style={{ width: '100%' }}
             options={fontOptions}
             value={fontFamily}
             onChange={setFontFamily}
@@ -50,15 +50,14 @@ export default function ReadingSettings() {
         </div>
 
         <div className={styles.settingItem}>
+          <label className={styles.label}>字体大小：{fontSize}px</label>
           <Slider
-            label="字体大小"
             min={12}
             max={32}
             step={1}
             value={fontSize}
             onChange={setFontSize}
-            showValue
-            unit="px"
+            tooltip={{ formatter: (value) => `${value}px` }}
           />
         </div>
       </section>
@@ -67,28 +66,26 @@ export default function ReadingSettings() {
         <h2 className={styles.sectionTitle}>排版设置</h2>
 
         <div className={styles.settingItem}>
+          <label className={styles.label}>行高：{lineHeight.toFixed(1)}倍</label>
           <Slider
-            label="行高"
             min={1.0}
             max={3.0}
             step={0.1}
             value={lineHeight}
             onChange={setLineHeight}
-            showValue
-            unit="倍"
+            tooltip={{ formatter: (value) => `${value?.toFixed(1)}倍` }}
           />
         </div>
 
         <div className={styles.settingItem}>
+          <label className={styles.label}>页面宽度：{pageWidth}px</label>
           <Slider
-            label="页面宽度"
             min={400}
             max={1200}
             step={50}
             value={pageWidth}
             onChange={setPageWidth}
-            showValue
-            unit="px"
+            tooltip={{ formatter: (value) => `${value}px` }}
           />
         </div>
       </section>
@@ -96,23 +93,25 @@ export default function ReadingSettings() {
       <section className={styles.section}>
         <h2 className={styles.sectionTitle}>颜色设置</h2>
 
-        <div className={styles.colorPickerRow}>
-          <div className={styles.colorPickerWrapper}>
-            <label className={styles.colorLabel}>背景颜色</label>
-            <HexColorPicker color={backgroundColor} onChange={setBackgroundColor} />
-            <div className={styles.colorInfo}>
-              <div className={styles.colorPreview} style={{ backgroundColor }} />
-              <span className={styles.colorValue}>{backgroundColor}</span>
-            </div>
+        <div className={styles.colorRow}>
+          <div className={styles.colorItem}>
+            <label className={styles.label}>背景颜色</label>
+            <ColorPicker
+              value={backgroundColor}
+              onChange={(color: Color) => setBackgroundColor(color.toHexString())}
+              showText
+              size="large"
+            />
           </div>
 
-          <div className={styles.colorPickerWrapper}>
-            <label className={styles.colorLabel}>文字颜色</label>
-            <HexColorPicker color={textColor} onChange={setTextColor} />
-            <div className={styles.colorInfo}>
-              <div className={styles.colorPreview} style={{ backgroundColor: textColor }} />
-              <span className={styles.colorValue}>{textColor}</span>
-            </div>
+          <div className={styles.colorItem}>
+            <label className={styles.label}>文字颜色</label>
+            <ColorPicker
+              value={textColor}
+              onChange={(color: Color) => setTextColor(color.toHexString())}
+              showText
+              size="large"
+            />
           </div>
         </div>
       </section>
@@ -148,25 +147,20 @@ export default function ReadingSettings() {
 
         <div className={styles.settingItem}>
           <label className={styles.switchLabel}>
-            <input
-              type="checkbox"
-              checked={bossMode}
-              onChange={(e) => setBossMode(e.target.checked)}
-              className={styles.switch}
-            />
             <span>启用老板模式</span>
+            <Switch checked={bossMode} onChange={setBossMode} />
           </label>
         </div>
 
         <div className={styles.settingItem}>
+          <label className={styles.label}>透明度：{bossOpacity.toFixed(2)}</label>
           <Slider
-            label="透明度"
             min={0}
             max={1}
             step={0.05}
             value={bossOpacity}
             onChange={setBossOpacity}
-            showValue
+            tooltip={{ formatter: (value) => value?.toFixed(2) }}
           />
         </div>
 
