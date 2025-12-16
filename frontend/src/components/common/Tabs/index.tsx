@@ -1,5 +1,5 @@
 import { ReactNode, useState } from 'react'
-import styles from './Tabs.module.css'
+import styles from './Tabs.module.scss'
 
 export interface Tab {
   id: string

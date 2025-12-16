@@ -15,7 +15,7 @@ import ReadingSettings from './tabs/ReadingSettings'
 import StorageSettings from './tabs/StorageSettings'
 import StatisticsSettings from './tabs/StatisticsSettings'
 import KeyboardSettings from './tabs/KeyboardSettings'
-import styles from './Settings.module.css'
+import styles from './Settings.module.scss'
 
 interface SettingSection {
   id: string

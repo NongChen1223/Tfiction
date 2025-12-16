@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { ChevronDown, Check } from 'lucide-react'
-import styles from './Select.module.css'
+import styles from './Select.module.scss'
 
 export interface SelectOption {
   value: string

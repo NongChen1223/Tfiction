@@ -1,6 +1,6 @@
 import { Sun, Moon, Leaf } from 'lucide-react'
 import { useThemeStore } from '@/stores/themeStore'
-import styles from './AppearanceSettings.module.css'
+import styles from './AppearanceSettings.module.scss'
 
 /**
  * 外观设置选项卡

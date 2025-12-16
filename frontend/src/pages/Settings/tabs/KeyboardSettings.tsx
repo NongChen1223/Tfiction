@@ -1,4 +1,4 @@
-import styles from './KeyboardSettings.module.css'
+import styles from './KeyboardSettings.module.scss'
 
 /**
  * 快捷键设置选项卡

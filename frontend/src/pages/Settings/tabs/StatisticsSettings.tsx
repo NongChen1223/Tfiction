@@ -1,5 +1,5 @@
 import { Clock, TrendingUp, BookOpen, Award } from 'lucide-react'
-import styles from './StatisticsSettings.module.css'
+import styles from './StatisticsSettings.module.scss'
 
 /**
  * 阅读统计选项卡

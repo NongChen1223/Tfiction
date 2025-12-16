@@ -1,7 +1,7 @@
 import { useSettingsStore } from '@/stores/settingsStore'
 import { Select, Slider, ColorPicker, Switch } from 'antd'
 import type { Color } from 'antd/es/color-picker'
-import styles from './ReadingSettings.module.css'
+import styles from './ReadingSettings.module.scss'
 
 /**
  * 阅读设置选项卡

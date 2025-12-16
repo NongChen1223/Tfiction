@@ -5,7 +5,7 @@ import Sidebar from '@/components/features/Sidebar'
 import BookCard from '@/components/features/BookCard'
 import Input from '@/components/common/Input'
 import Button from '@/components/common/Button'
-import styles from './Home.module.css'
+import styles from './Home.module.scss'
 
 // 模拟书籍数据
 const mockBooks: Book[] = [

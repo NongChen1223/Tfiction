@@ -1,6 +1,6 @@
 import { Outlet } from 'react-router-dom'
 import { useWindowStore } from '@/stores/windowStore'
-import styles from './MainLayout.module.css'
+import styles from './MainLayout.module.scss'
 
 /**
  * MainLayout 主布局组件

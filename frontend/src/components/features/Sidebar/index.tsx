@@ -2,7 +2,7 @@ import { BookOpen, Clock, FileText, Image, Settings } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Tooltip } from 'antd'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
-import styles from './Sidebar.module.css'
+import styles from './Sidebar.module.scss'
 
 export interface Category {
   id: string

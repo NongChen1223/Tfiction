@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom/client'
 import { ConfigProvider, theme as antdTheme } from 'antd'
 import { useThemeStore, initTheme } from './stores/themeStore'
 import App from './App'
-import './index.css'
+import './index.scss'
 
 // 初始化主题
 initTheme()

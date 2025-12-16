@@ -1,7 +1,7 @@
 import type { Book, ViewMode } from '@/types'
 import { BookOpen, Eye, EyeOff, Edit2, Trash2 } from 'lucide-react'
 import Badge from '@/components/common/Badge'
-import styles from './BookCard.module.css'
+import styles from './BookCard.module.scss'
 
 export interface BookCardProps {
   book: Book

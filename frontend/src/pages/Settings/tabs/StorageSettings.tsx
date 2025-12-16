@@ -1,6 +1,6 @@
 import { Folder, HardDrive } from 'lucide-react'
 import Button from '@/components/common/Button'
-import styles from './StorageSettings.module.css'
+import styles from './StorageSettings.module.scss'
 
 /**
  * 存储管理选项卡

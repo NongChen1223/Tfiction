@@ -1,5 +1,5 @@
 import { ReactNode } from 'react'
-import styles from './Badge.module.css'
+import styles from './Badge.module.scss'
 
 export interface BadgeProps {
   variant?: 'primary' | 'secondary' | 'success' | 'warning' | 'danger' | 'info'

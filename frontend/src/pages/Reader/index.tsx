@@ -1,6 +1,6 @@
 import { useNovelStore } from '@/stores/novelStore'
 import { useSettingsStore } from '@/stores/settingsStore'
-import styles from './Reader.module.css'
+import styles from './Reader.module.scss'
 
 /**
  * Reader 阅读器页面
