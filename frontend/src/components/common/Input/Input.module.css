@@ -21,11 +21,14 @@
   border-radius: var(--radius-lg);
   transition: all var(--transition-base);
   overflow: hidden;
+  outline: none;
+  box-shadow: none;
 }
 
 .inputWrapper:focus-within {
   border-color: rgb(var(--color-primary));
-  box-shadow: 0 0 0 3px rgba(var(--color-primary), 0.1);
+  outline: none;
+  box-shadow: none;
 }
 
 .container.error .inputWrapper {
@@ -33,7 +36,7 @@
 }
 
 .container.error .inputWrapper:focus-within {
-  box-shadow: 0 0 0 3px rgba(var(--color-danger), 0.1);
+  border-color: rgb(var(--color-danger));
 }
 
 .input {
