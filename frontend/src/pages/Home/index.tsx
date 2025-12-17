@@ -1,11 +1,13 @@
 import { useState } from 'react'
-import { Search, Grid, List, Plus } from 'lucide-react'
-import type { Book, ViewMode } from '@/types'
+import { Search, Grid, List, Plus, ArrowUpDown, Clock, Maximize2, SortAsc } from 'lucide-react'
+import { Popover } from 'antd'
+import type { Book, ViewMode, SortMode } from '@/types'
 import Sidebar from '@/components/features/Sidebar'
 import BookCard from '@/components/features/BookCard'
 import Input from '@/components/common/Input'
 import Button from '@/components/common/Button'
 import ImportModal from '@/components/features/ImportModal'
+import SelectFilesModal from '@/components/features/SelectFilesModal'
 import styles from './Home.module.scss'
 
 // 模拟书籍数据
@@ -154,10 +156,15 @@ export default function Home() {
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
   const [searchQuery, setSearchQuery] = useState('')
+  const [sortMode, setSortMode] = useState<SortMode>('time')
+  const [sortPopoverOpen, setSortPopoverOpen] = useState(false)
   const [importModalOpen, setImportModalOpen] = useState(false)
+  const [selectFilesModalOpen, setSelectFilesModalOpen] = useState(false)
+  const [targetDirectory, setTargetDirectory] = useState<Book | null>(null)
+  const [books, setBooks] = useState<Book[]>(mockBooks)
 
   // 过滤书籍
-  const filteredBooks = mockBooks.filter((book) => {
+  const filteredBooks = books.filter((book) => {
     // 分类过滤
     if (selectedCategory === 'recent') {
       // 最近阅读：7天内
@@ -175,6 +182,25 @@ export default function Home() {
     }
 
     return true
+  })
+
+  // 排序书籍
+  const sortedBooks = [...filteredBooks].sort((a, b) => {
+    switch (sortMode) {
+      case 'time':
+        // 按最后阅读时间降序（最近的在前）
+        return (b.lastReadTime || 0) - (a.lastReadTime || 0)
+      case 'size':
+        // 按文件大小降序（大的在前）
+        const aSize = a.isDirectory ? (a.totalFiles || 0) : (a.fileSize || 0)
+        const bSize = b.isDirectory ? (b.totalFiles || 0) : (b.fileSize || 0)
+        return bSize - aSize
+      case 'name':
+        // 按名字字母顺序
+        return a.title.localeCompare(b.title, 'zh-CN')
+      default:
+        return 0
+    }
   })
 
   const handleImport = () => {
@@ -197,9 +223,82 @@ export default function Home() {
   }
 
   const handleImportToDirectory = (book: Book) => {
-    // TODO: 实现导入文件到目录功能
-    console.log('Import to directory:', book)
+    // 打开文件选择弹窗，选择要添加到此目录的单文件
+    setTargetDirectory(book)
+    setSelectFilesModalOpen(true)
   }
+
+  const handleSelectFiles = (selectedFileIds: string[]) => {
+    if (!targetDirectory) return
+
+    // 找到要添加的文件
+    const filesToAdd = books.filter(
+      (book) => selectedFileIds.includes(book.id) && !book.isDirectory
+    )
+
+    // 更新目标目录，将选中的文件添加进去
+    setBooks((prevBooks) =>
+      prevBooks.map((book) => {
+        if (book.id === targetDirectory.id && book.isDirectory) {
+          // 将单文件转换为 BookFile 格式
+          const newFiles = filesToAdd.map((file, index) => ({
+            id: file.id,
+            title: file.title,
+            filePath: file.filePath || '',
+            format: file.format || '',
+            fileSize: file.fileSize || 0,
+            progress: file.progress || 0,
+            lastReadTime: file.lastReadTime,
+            order: (book.files?.length || 0) + index + 1,
+          }))
+
+          return {
+            ...book,
+            files: [...(book.files || []), ...newFiles],
+            totalFiles: (book.totalFiles || 0) + newFiles.length,
+          }
+        }
+        return book
+      })
+    )
+
+    // 从书架中移除已添加的单文件（可选，根据需求决定）
+    // 如果希望保留原文件，注释掉下面这段
+    setBooks((prevBooks) =>
+      prevBooks.filter((book) => !selectedFileIds.includes(book.id))
+    )
+  }
+
+  // 获取可选择的单文件列表（排除目录）
+  const availableSingleFiles = books.filter((book) => !book.isDirectory)
+
+  // 排序选项配置
+  const sortOptions = [
+    { value: 'time' as SortMode, label: '按时间排序', icon: <Clock size={16} /> },
+    { value: 'size' as SortMode, label: '按大小排序', icon: <Maximize2 size={16} /> },
+    { value: 'name' as SortMode, label: '按名称排序', icon: <SortAsc size={16} /> },
+  ]
+
+  const handleSortChange = (mode: SortMode) => {
+    setSortMode(mode)
+    setSortPopoverOpen(false)
+  }
+
+  // 排序 Popover 内容
+  const sortContent = (
+    <div className={styles.sortMenu}>
+      {sortOptions.map((option) => (
+        <button
+          key={option.value}
+          className={`${styles.sortMenuItem} ${sortMode === option.value ? styles.active : ''}`}
+          onClick={() => handleSortChange(option.value)}
+        >
+          <span className={styles.sortMenuIcon}>{option.icon}</span>
+          <span className={styles.sortMenuLabel}>{option.label}</span>
+        </button>
+      ))}
+    </div>
+  )
 
   const handleOpenBook = (book: Book) => {
     // TODO: 打开阅读器
@@ -254,6 +353,22 @@ export default function Home() {
               </button>
             </div>
 
+            <Popover
+              content={sortContent}
+              trigger="click"
+              open={sortPopoverOpen}
+              onOpenChange={setSortPopoverOpen}
+              placement="bottomRight"
+            >
+              <button
+                className={`${styles.viewButton} ${sortPopoverOpen ? styles.active : ''}`}
+                aria-label="排序"
+                title="排序"
+              >
+                <ArrowUpDown size={20} />
+              </button>
+            </Popover>
+
             <Button icon={<Plus size={20} />} onClick={handleImport}>
               导入文件
             </Button>
@@ -261,9 +376,9 @@ export default function Home() {
         </header>
 
         <div className={styles.content}>
-          {filteredBooks.length > 0 ? (
+          {sortedBooks.length > 0 ? (
             <div className={`${styles.booksList} ${styles[viewMode]}`}>
-              {filteredBooks.map((book) => (
+              {sortedBooks.map((book) => (
                 <BookCard
                   key={book.id}
                   book={book}
@@ -291,6 +406,14 @@ export default function Home() {
         onClose={() => setImportModalOpen(false)}
         onCreateDirectory={handleCreateDirectory}
         onImportFile={handleImportFile}
+      />
+
+      <SelectFilesModal
+        open={selectFilesModalOpen}
+        onClose={() => setSelectFilesModalOpen(false)}
+        onConfirm={handleSelectFiles}
+        availableFiles={availableSingleFiles}
+        targetDirectoryName={targetDirectory?.title || ''}
       />
     </div>
   )
