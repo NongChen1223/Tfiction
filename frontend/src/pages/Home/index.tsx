@@ -5,42 +5,145 @@ import Sidebar from '@/components/features/Sidebar'
 import BookCard from '@/components/features/BookCard'
 import Input from '@/components/common/Input'
 import Button from '@/components/common/Button'
+import ImportModal from '@/components/features/ImportModal'
 import styles from './Home.module.scss'
 
 // 模拟书籍数据
 const mockBooks: Book[] = [
+  // 单文件 - 小说
   {
     id: '1',
-    title: '三体',
-    author: '刘慈欣',
-    type: 'novel',
-    progress: 65,
-    category: '科幻',
-    lastReadTime: Date.now() - 86400000,
-    filePath: '/path/to/threebody.txt',
-    format: 'txt',
-  },
-  {
-    id: '2',
-    title: '流浪地球',
-    author: '刘慈欣',
-    type: 'novel',
-    progress: 100,
-    category: '科幻',
-    lastReadTime: Date.now() - 172800000,
-    filePath: '/path/to/wandering.txt',
-    format: 'txt',
-  },
-  {
-    id: '3',
     title: '球状闪电',
     author: '刘慈欣',
     type: 'novel',
-    progress: 32,
     category: '科幻',
-    lastReadTime: Date.now() - 259200000,
+    isDirectory: false,
     filePath: '/path/to/lightning.txt',
     format: 'txt',
+    progress: 32,
+    fileSize: 1024000,
+    lastReadTime: Date.now() - 86400000,
+    createdAt: Date.now() - 259200000,
+  },
+  // 目录 - 小说系列
+  {
+    id: '2',
+    title: '三体系列',
+    author: '刘慈欣',
+    type: 'novel',
+    category: '科幻',
+    isDirectory: true,
+    totalFiles: 3,
+    lastReadTime: Date.now() - 172800000,
+    lastReadFileId: 'file-1',
+    createdAt: Date.now() - 2592000000,
+    files: [
+      {
+        id: 'file-1',
+        title: '三体I：地球往事',
+        filePath: '/path/to/threebody1.txt',
+        format: 'txt',
+        fileSize: 2048000,
+        progress: 65,
+        lastReadTime: Date.now() - 172800000,
+        order: 1,
+      },
+      {
+        id: 'file-2',
+        title: '三体II：黑暗森林',
+        filePath: '/path/to/threebody2.txt',
+        format: 'txt',
+        fileSize: 2560000,
+        progress: 0,
+        order: 2,
+      },
+      {
+        id: 'file-3',
+        title: '三体III：死神永生',
+        filePath: '/path/to/threebody3.txt',
+        format: 'txt',
+        fileSize: 2304000,
+        progress: 0,
+        order: 3,
+      },
+    ],
+  },
+  // 目录 - 漫画系列
+  {
+    id: '3',
+    title: '海贼王',
+    author: '尾田荣一郎',
+    type: 'manga',
+    category: '漫画',
+    isDirectory: true,
+    totalFiles: 5,
+    lastReadTime: Date.now() - 3600000,
+    lastReadFileId: 'manga-2',
+    createdAt: Date.now() - 5184000000,
+    files: [
+      {
+        id: 'manga-1',
+        title: '第1话',
+        filePath: '/path/to/onepiece/001.jpg',
+        format: 'jpg',
+        fileSize: 512000,
+        progress: 100,
+        lastReadTime: Date.now() - 7200000,
+        order: 1,
+      },
+      {
+        id: 'manga-2',
+        title: '第2话',
+        filePath: '/path/to/onepiece/002.jpg',
+        format: 'jpg',
+        fileSize: 524288,
+        progress: 50,
+        lastReadTime: Date.now() - 3600000,
+        order: 2,
+      },
+      {
+        id: 'manga-3',
+        title: '第3话',
+        filePath: '/path/to/onepiece/003.jpg',
+        format: 'jpg',
+        fileSize: 498000,
+        progress: 0,
+        order: 3,
+      },
+      {
+        id: 'manga-4',
+        title: '第4话',
+        filePath: '/path/to/onepiece/004.jpg',
+        format: 'jpg',
+        fileSize: 510000,
+        progress: 0,
+        order: 4,
+      },
+      {
+        id: 'manga-5',
+        title: '第5话',
+        filePath: '/path/to/onepiece/005.jpg',
+        format: 'jpg',
+        fileSize: 505000,
+        progress: 0,
+        order: 5,
+      },
+    ],
+  },
+  // 单文件 - 漫画
+  {
+    id: '4',
+    title: '进击的巨人 短篇',
+    author: '谏山创',
+    type: 'manga',
+    category: '漫画',
+    isDirectory: false,
+    filePath: '/path/to/attack-titan-short.pdf',
+    format: 'pdf',
+    progress: 100,
+    fileSize: 15360000,
+    lastReadTime: Date.now() - 604800000,
+    createdAt: Date.now() - 7776000000,
   },
 ]
 
@@ -51,18 +154,15 @@ export default function Home() {
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
   const [searchQuery, setSearchQuery] = useState('')
+  const [importModalOpen, setImportModalOpen] = useState(false)
 
   // 过滤书籍
   const filteredBooks = mockBooks.filter((book) => {
     // 分类过滤
-    if (selectedCategory !== 'all') {
-      if (selectedCategory === 'recent') {
-        // 最近阅读：7天内
-        const sevenDaysAgo = Date.now() - 7 * 86400000
-        if (!book.lastReadTime || book.lastReadTime < sevenDaysAgo) return false
-      } else if (selectedCategory !== book.type && selectedCategory !== book.category) {
-        return false
-      }
+    if (selectedCategory === 'recent') {
+      // 最近阅读：7天内
+      const sevenDaysAgo = Date.now() - 7 * 86400000
+      if (!book.lastReadTime || book.lastReadTime < sevenDaysAgo) return false
     }
 
     // 搜索过滤
@@ -78,8 +178,27 @@ export default function Home() {
   })
 
   const handleImport = () => {
-    // TODO: 实现导入功能
-    console.log('Import book')
+    setImportModalOpen(true)
+  }
+
+  const handleCreateDirectory = (name: string) => {
+    // TODO: 实现创建目录功能
+    console.log('Create directory:', name)
+  }
+
+  const handleImportFile = () => {
+    // TODO: 实现导入单文件功能
+    console.log('Import single file')
+  }
+
+  const handleQuickRead = (book: Book) => {
+    // TODO: 实现目录快速阅读功能
+    console.log('Quick read:', book)
+  }
+
+  const handleImportToDirectory = (book: Book) => {
+    // TODO: 实现导入文件到目录功能
+    console.log('Import to directory:', book)
   }
 
   const handleOpenBook = (book: Book) => {
@@ -136,7 +255,7 @@ export default function Home() {
             </div>
 
             <Button icon={<Plus size={20} />} onClick={handleImport}>
-              导入书籍
+              导入文件
             </Button>
           </div>
         </header>
@@ -152,18 +271,27 @@ export default function Home() {
                   onOpen={handleOpenBook}
                   onEdit={handleEditBook}
                   onDelete={handleDeleteBook}
+                  onQuickRead={handleQuickRead}
+                  onImportToDirectory={handleImportToDirectory}
                 />
               ))}
             </div>
           ) : (
             <div className={styles.empty}>
               <p className={styles.emptyText}>
-                {searchQuery ? '没有找到匹配的书籍' : '还没有书籍，点击导入按钮添加'}
+                {searchQuery ? '没有找到匹配的书籍' : '还没有书籍，点击导入文件按钮添加'}
               </p>
             </div>
           )}
         </div>
       </main>
+
+      <ImportModal
+        open={importModalOpen}
+        onClose={() => setImportModalOpen(false)}
+        onCreateDirectory={handleCreateDirectory}
+        onImportFile={handleImportFile}
+      />
     </div>
   )
 }

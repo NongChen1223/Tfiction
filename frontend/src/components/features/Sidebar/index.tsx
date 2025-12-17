@@ -1,4 +1,4 @@
-import { BookOpen, Clock, FileText, Image, Settings } from 'lucide-react'
+import { BookOpen, Clock, Settings } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Tooltip } from 'antd'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
@@ -19,14 +19,8 @@ export interface SidebarProps {
 const defaultCategories: Category[] = [
   { id: 'all', label: '全部', icon: <BookOpen size={20} /> },
   { id: 'recent', label: '最近阅读', icon: <Clock size={20} /> },
-  { id: 'novel', label: '小说', icon: <FileText size={20} /> },
-  { id: 'manga', label: '漫画', icon: <Image size={20} /> },
 ]
 
-/**
- * Sidebar 侧边栏组件
- * 展示分类导航和设置入口
- */
 export default function Sidebar({
   categories = defaultCategories,
   selectedCategory,

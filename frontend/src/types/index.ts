@@ -56,19 +56,48 @@ export interface WindowState {
   isMouseInWindow: boolean
 }
 
+// BookFile 目录内的单个文件
+export interface BookFile {
+  id: string
+  title: string
+  filePath: string // 文件路径
+  format: string // 文件格式
+  fileSize: number // 文件大小（字节）
+  progress: number // 阅读进度 0-100
+  currentPage?: number // 当前页码
+  lastReadTime?: number // 最后阅读时间戳
+  order: number // 排序序号
+}
+
 // Book 书籍展示类型（用于书架展示）
+// 支持两种模式：单文件和目录
 export interface Book {
   id: string
   title: string
   author: string
   cover?: string // 封面图片路径
   type: 'novel' | 'manga'
-  progress: number // 阅读进度 0-100
   category: string // 分类标签
   lastReadTime?: number // 最后阅读时间戳
-  filePath: string
-  format: string
+  createdAt: number // 创建时间
+
+  // 区分单文件还是目录
+  isDirectory: boolean
+
+  // === 单文件模式 (isDirectory = false) ===
+  filePath?: string // 文件路径
+  format?: string // 文件格式
+  fileSize?: number // 文件大小
+  progress?: number // 阅读进度 0-100
+
+  // === 目录模式 (isDirectory = true) ===
+  files?: BookFile[] // 包含的文件数组
+  totalFiles?: number // 文件总数
+  lastReadFileId?: string // 最后阅读的文件ID
 }
 
 // ViewMode 视图模式类型
 export type ViewMode = 'grid' | 'list'
+
+// SortMode 排序模式类型
+export type SortMode = 'time' | 'size' | 'name'
