@@ -7,6 +7,7 @@ import BookCard from '@/components/features/BookCard'
 import Input from '@/components/common/Input'
 import Button from '@/components/common/Button'
 import ImportModal from '@/components/features/ImportModal'
+import AddToDirectoryModal from '@/components/features/AddToDirectoryModal'
 import SelectFilesModal from '@/components/features/SelectFilesModal'
 import styles from './Home.module.scss'
 
@@ -159,6 +160,7 @@ export default function Home() {
   const [sortMode, setSortMode] = useState<SortMode>('time')
   const [sortPopoverOpen, setSortPopoverOpen] = useState(false)
   const [importModalOpen, setImportModalOpen] = useState(false)
+  const [addToDirectoryModalOpen, setAddToDirectoryModalOpen] = useState(false)
   const [selectFilesModalOpen, setSelectFilesModalOpen] = useState(false)
   const [targetDirectory, setTargetDirectory] = useState<Book | null>(null)
   const [books, setBooks] = useState<Book[]>(mockBooks)
@@ -223,9 +225,19 @@ export default function Home() {
   }
 
   const handleImportToDirectory = (book: Book) => {
-    // 打开文件选择弹窗，选择要添加到此目录的单文件
+    // 打开添加文件选择弹窗
     setTargetDirectory(book)
+    setAddToDirectoryModalOpen(true)
+  }
+
+  const handleAddExistingFiles = () => {
+    // 打开从书架选择文件的弹窗
     setSelectFilesModalOpen(true)
+  }
+
+  const handleImportNewFiles = () => {
+    // TODO: 实现从本地导入新文件到目录
+    console.log('Import new files to directory:', targetDirectory)
   }
 
   const handleSelectFiles = (selectedFileIds: string[]) => {
@@ -406,6 +418,14 @@ export default function Home() {
         onClose={() => setImportModalOpen(false)}
         onCreateDirectory={handleCreateDirectory}
         onImportFile={handleImportFile}
+      />
+
+      <AddToDirectoryModal
+        open={addToDirectoryModalOpen}
+        onClose={() => setAddToDirectoryModalOpen(false)}
+        onAddExisting={handleAddExistingFiles}
+        onImportNew={handleImportNewFiles}
+        directoryName={targetDirectory?.title || ''}
       />
 
       <SelectFilesModal
