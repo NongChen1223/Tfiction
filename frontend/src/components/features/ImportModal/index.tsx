@@ -1,101 +1,117 @@
 import { useState } from 'react'
 import { Modal, Input } from 'antd'
-import { FolderPlus, FileText } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import styles from './ImportModal.module.scss'
+
+export interface ModalOption {
+  key: string
+  icon: React.ReactElement
+  title: string
+  description: string
+  onClick: (inputValue?: string) => void // 支持传入输入值
+  needsInput?: boolean // 是否需要输入（如创建目录需要输入名称）
+  inputPlaceholder?: string // 输入框提示文本
+  inputLabel?: string // 输入框标签
+}
 
 export interface ImportModalProps {
   open: boolean
+  title: string
+  options: ModalOption[]
   onClose: () => void
-  onCreateDirectory: (name: string) => void
-  onImportFile: () => void
 }
 
 /**
- * ImportModal 导入文件弹窗
- * 提供两个选项：创建目录 和 导入单文件
+ * ImportModal 通用选择弹窗
+ * 支持显示多个选项卡片，可配置是否需要输入
  */
 export default function ImportModal({
   open,
+  title,
+  options,
   onClose,
-  onCreateDirectory,
-  onImportFile,
 }: ImportModalProps) {
-  const [showNameInput, setShowNameInput] = useState(false)
-  const [directoryName, setDirectoryName] = useState('')
+  const [showInput, setShowInput] = useState(false)
+  const [inputValue, setInputValue] = useState('')
+  const [currentOption, setCurrentOption] = useState<ModalOption | null>(null)
 
-  const handleCreateDirectory = () => {
-    setShowNameInput(true)
-  }
-
-  const handleConfirmCreate = () => {
-    if (directoryName.trim()) {
-      onCreateDirectory(directoryName.trim())
-      setDirectoryName('')
-      setShowNameInput(false)
+  const handleOptionClick = (option: ModalOption) => {
+    if (option.needsInput) {
+      setCurrentOption(option)
+      setShowInput(true)
+    } else {
+      option.onClick()
       onClose()
     }
   }
 
-  const handleImportFile = () => {
-    onImportFile()
-    onClose()
+  const handleConfirm = () => {
+    if (currentOption && inputValue.trim()) {
+      currentOption.onClick(inputValue.trim())
+      setInputValue('')
+      setShowInput(false)
+      setCurrentOption(null)
+      onClose()
+    }
   }
 
   const handleCancel = () => {
-    setShowNameInput(false)
-    setDirectoryName('')
+    setShowInput(false)
+    setInputValue('')
+    setCurrentOption(null)
     onClose()
+  }
+
+  const handleBack = () => {
+    setShowInput(false)
+    setInputValue('')
+    setCurrentOption(null)
   }
 
   return (
     <Modal
-      title="导入文件"
+      title={title}
       open={open}
       onCancel={handleCancel}
       footer={null}
       width={480}
       centered
     >
-      {!showNameInput ? (
+      {!showInput ? (
         <div className={styles.options}>
-          <button className={styles.optionCard} onClick={handleCreateDirectory}>
-            <div className={styles.iconWrapper}>
-              <FolderPlus size={48} />
-            </div>
-            <h3 className={styles.optionTitle}>创建目录</h3>
-            <p className={styles.optionDesc}>创建新目录管理文件</p>
-          </button>
-
-          <button className={styles.optionCard} onClick={handleImportFile}>
-            <div className={styles.iconWrapper}>
-              <FileText size={48} />
-            </div>
-            <h3 className={styles.optionTitle}>导入单文件</h3>
-            <p className={styles.optionDesc}>支持 TXT、PDF、EPUB、MOBI 等格式</p>
-          </button>
+          {options.map((option) => (
+            <button
+              key={option.key}
+              className={styles.optionCard}
+              onClick={() => handleOptionClick(option)}
+            >
+              <div className={styles.iconWrapper}>{option.icon}</div>
+              <h3 className={styles.optionTitle}>{option.title}</h3>
+              <p className={styles.optionDesc}>{option.description}</p>
+            </button>
+          ))}
         </div>
       ) : (
         <div className={styles.nameInput}>
-          <p className={styles.inputLabel}>请输入目录名称：</p>
+          <p className={styles.inputLabel}>
+            {currentOption?.inputLabel || '请输入目录名称：'}
+          </p>
           <Input
-            placeholder="例如：三体系列、海贼王等"
-            value={directoryName}
-            onChange={(e) => setDirectoryName(e.target.value)}
-            onPressEnter={handleConfirmCreate}
+            placeholder={currentOption?.inputPlaceholder || '例如：三体系列、海贼王等'}
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onPressEnter={handleConfirm}
             autoFocus
             size="large"
           />
           <div className={styles.buttonGroup}>
-            <button
-              className={styles.cancelButton}
-              onClick={() => setShowNameInput(false)}
-            >
+            <button className={styles.cancelButton} onClick={handleBack}>
               取消
             </button>
             <button
               className={styles.confirmButton}
-              onClick={handleConfirmCreate}
-              disabled={!directoryName.trim()}
+              onClick={handleConfirm}
+              disabled={!inputValue.trim()}
             >
               确定创建
             </button>

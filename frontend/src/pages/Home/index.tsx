@@ -1,13 +1,12 @@
 import { useState } from 'react'
-import { Search, Grid, List, Plus, ArrowUpDown, Clock, Maximize2, SortAsc } from 'lucide-react'
+import { Search, Grid, List, Plus, ArrowUpDown, Clock, Maximize2, SortAsc, FolderPlus, FileText, FolderInput, FilePlus } from 'lucide-react'
 import { Popover } from 'antd'
 import type { Book, ViewMode, SortMode } from '@/types'
 import Sidebar from '@/components/features/Sidebar'
 import BookCard from '@/components/features/BookCard'
 import Input from '@/components/common/Input'
 import Button from '@/components/common/Button'
-import ImportModal from '@/components/features/ImportModal'
-import AddToDirectoryModal from '@/components/features/AddToDirectoryModal'
+import ImportModal, { type ModalOption } from '@/components/features/ImportModal'
 import SelectFilesModal from '@/components/features/SelectFilesModal'
 import styles from './Home.module.scss'
 
@@ -160,7 +159,10 @@ export default function Home() {
   const [sortMode, setSortMode] = useState<SortMode>('time')
   const [sortPopoverOpen, setSortPopoverOpen] = useState(false)
   const [importModalOpen, setImportModalOpen] = useState(false)
-  const [addToDirectoryModalOpen, setAddToDirectoryModalOpen] = useState(false)
+  const [importModalConfig, setImportModalConfig] = useState<{
+    title: string
+    options: ModalOption[]
+  }>({ title: '', options: [] })
   const [selectFilesModalOpen, setSelectFilesModalOpen] = useState(false)
   const [targetDirectory, setTargetDirectory] = useState<Book | null>(null)
   const [books, setBooks] = useState<Book[]>(mockBooks)
@@ -192,11 +194,12 @@ export default function Home() {
       case 'time':
         // 按最后阅读时间降序（最近的在前）
         return (b.lastReadTime || 0) - (a.lastReadTime || 0)
-      case 'size':
+      case 'size': {
         // 按文件大小降序（大的在前）
         const aSize = a.isDirectory ? (a.totalFiles || 0) : (a.fileSize || 0)
         const bSize = b.isDirectory ? (b.totalFiles || 0) : (b.fileSize || 0)
         return bSize - aSize
+      }
       case 'name':
         // 按名字字母顺序
         return a.title.localeCompare(b.title, 'zh-CN')
@@ -206,6 +209,29 @@ export default function Home() {
   })
 
   const handleImport = () => {
+    // 主界面导入文件：创建目录 或 导入单文件
+    setImportModalConfig({
+      title: '导入文件',
+      options: [
+        {
+          key: 'create-directory',
+          icon: <FolderPlus size={48} />,
+          title: '创建目录',
+          description: '创建新目录管理文件',
+          needsInput: true,
+          inputLabel: '请输入目录名称：',
+          inputPlaceholder: '例如：三体系列、海贼王等',
+          onClick: (name) => handleCreateDirectory(name!),
+        },
+        {
+          key: 'import-file',
+          icon: <FileText size={48} />,
+          title: '导入单文件',
+          description: '支持 TXT、PDF、EPUB、MOBI 等格式',
+          onClick: handleImportFile,
+        },
+      ],
+    })
     setImportModalOpen(true)
   }
 
@@ -225,9 +251,28 @@ export default function Home() {
   }
 
   const handleImportToDirectory = (book: Book) => {
-    // 打开添加文件选择弹窗
+    // 目录导入文件：添加已有文件 或 导入新文件
     setTargetDirectory(book)
-    setAddToDirectoryModalOpen(true)
+    setImportModalConfig({
+      title: `添加文件到「${book.title}」`,
+      options: [
+        {
+          key: 'add-existing',
+          icon: <FolderInput size={48} />,
+          title: '添加已有文件',
+          description: '从书架中选择已有的文件',
+          onClick: handleAddExistingFiles,
+        },
+        {
+          key: 'import-new',
+          icon: <FilePlus size={48} />,
+          title: '导入新文件',
+          description: '从本地导入新的文件',
+          onClick: handleImportNewFiles,
+        },
+      ],
+    })
+    setImportModalOpen(true)
   }
 
   const handleAddExistingFiles = () => {
@@ -415,17 +460,9 @@ export default function Home() {
 
       <ImportModal
         open={importModalOpen}
+        title={importModalConfig.title}
+        options={importModalConfig.options}
         onClose={() => setImportModalOpen(false)}
-        onCreateDirectory={handleCreateDirectory}
-        onImportFile={handleImportFile}
-      />
-
-      <AddToDirectoryModal
-        open={addToDirectoryModalOpen}
-        onClose={() => setAddToDirectoryModalOpen(false)}
-        onAddExisting={handleAddExistingFiles}
-        onImportNew={handleImportNewFiles}
-        directoryName={targetDirectory?.title || ''}
       />
 
       <SelectFilesModal
