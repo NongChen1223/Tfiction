@@ -380,7 +380,7 @@ export default function Home() {
       />
 
       <main className={styles.main}>
-        <header className={styles.header} style={{ '--wails-draggable': 'drag' } as React.CSSProperties}>
+        <header className={styles.header}>
           <Input
             icon={<Search size={20} />}
             placeholder="搜索书名或作者..."
