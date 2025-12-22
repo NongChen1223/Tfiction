@@ -34,17 +34,20 @@ func main() {
 
 	// 创建 Wails 应用配置
 	err = wails.Run(&options.App{
-		Title:     "Tfiction - 阅读器",
-		Width:     1000,
-		Height:    700,
-		MinWidth:  600, // 窗口最小宽度（与 CSS 变量 --window-min-width 保持一致）
-		MinHeight: 500, // 窗口最小高度（与 CSS 变量 --window-min-height 保持一致）
+		Title:     "Tfiction - 阅读器", // 窗口标题栏显示的文字
+		Width:     1000,             // 窗口初始宽度（像素）
+		Height:    700,              // 窗口初始高度（像素）
+		MinWidth:  600,              // 窗口最小宽度，用户不能缩小到比这更窄
+		MinHeight: 500,              // 窗口最小高度，用户不能缩小到比这更矮
+		// 资源服务器配置
 		AssetServer: &assetserver.Options{
-			Assets: assets,
+			Assets: assets, // 前端静态资源（HTML/CSS/JS），来自 embed.FS
 		},
-		BackgroundColour: &options.RGBA{R: 255, G: 255, B: 255, A: 255},
-		OnStartup:        appInstance.Startup,
-		OnShutdown:       appInstance.Shutdown,
+		// 窗口背景色
+		BackgroundColour: &options.RGBA{R: 255, G: 255, B: 255, A: 255}, // 纯白色（RGBA）
+		// 生命周期回调
+		OnStartup:  appInstance.Startup,  // 应用启动时执行的函数
+		OnShutdown: appInstance.Shutdown, // 应用关闭时执行的函数
 		Bind: []interface{}{
 			appInstance,
 			novelService,
