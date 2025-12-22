@@ -373,14 +373,14 @@ export default function Home() {
   }
 
   return (
-    <div className={styles.container}>
+      <div className={styles.container}>
       <Sidebar
         selectedCategory={selectedCategory}
         onSelectCategory={setSelectedCategory}
       />
 
       <main className={styles.main}>
-        <header className={styles.header}>
+        <header className={styles.header} >
           <Input
             icon={<Search size={20} />}
             placeholder="搜索书名或作者..."

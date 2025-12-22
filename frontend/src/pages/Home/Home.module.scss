@@ -32,8 +32,8 @@
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   flex-shrink: 0;
-  -webkit-app-region: drag;
-   app-region: drag;
+  --wails-draggable: drag;
+  app-region: drag;
 }
 
 /* 让header内的交互元素不可拖拽 */

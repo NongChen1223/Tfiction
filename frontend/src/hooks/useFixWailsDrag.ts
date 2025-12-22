@@ -1,25 +1,15 @@
 import { useEffect } from 'react'
 
 /**
- * 修复 Wails 窗口拖拽失效的 Hook
+ * 修复 Wails 窗口拖拽在隐藏后重新显示时失效的问题
  *
- * 问题描述：
- * - 在 Wails 应用中，当窗口被隐藏（最小化、切换到其他应用等）后再显示
- * - CSS 的 -webkit-app-region: drag 属性会失效
- * - 导致用户无法拖动窗口
+ * 问题：当窗口隐藏后再显示，Chromium 渲染引擎不会正确刷新拖拽区域
+ * 解决方案：监听窗口可见性变化，强制刷新拖拽区域的 CSS 属性
  *
- * 解决方案：
- * - 监听窗口焦点事件（focus）
- * - 监听文档可见性变化（visibilitychange）
- * - 在窗口重新获得焦点或变为可见时，强制刷新拖拽区域的 CSS
- *
- * 工作原理：
- * 1. 通过移除并重新添加 className，触发浏览器重新计算样式
- * 2. 使用 requestAnimationFrame 确保样式更新在下一帧生效
- * 3. 延迟执行以避免过于频繁的刷新
- *
- * @example
+ * 使用方法：
  * ```tsx
+ * import { useFixWailsDrag } from './hooks/useFixWailsDrag'
+ *
  * function App() {
  *   useFixWailsDrag()
  *   return <div>...</div>
@@ -28,95 +18,104 @@ import { useEffect } from 'react'
  */
 export function useFixWailsDrag() {
   useEffect(() => {
-    let rafId: number | null = null
-    let timeoutId: number | null = null
-
     /**
-     * 刷新拖拽区域样式
-     * 通过强制重新渲染来修复 app-region 失效问题
+     * 刷新拖拽区域
+     * 通过重新设置 app-region 属性来强制 Chromium 重新识别拖拽区域
      */
     const refreshDraggableRegions = () => {
-      // 取消之前的请求
-      if (rafId !== null) {
-        cancelAnimationFrame(rafId)
-      }
+      // 查找所有可能的拖拽区域元素
+      const selectors = [
+        '[class*="header"]',
+        '[class*="Header"]',
+        '.header',
+        'header'
+      ]
 
-      rafId = requestAnimationFrame(() => {
-        // 方法 1: 刷新所有带 header class 的元素（拖拽区域通常在 header）
-        const headers = document.querySelectorAll('[class*="header"]')
-        headers.forEach((element) => {
-          if (element instanceof HTMLElement) {
-            const className = element.className
-            element.className = ''
-            // 强制浏览器重新计算样式
-            void element.offsetHeight
-            element.className = className
-          }
-        })
+      const elements = new Set<HTMLElement>()
 
-        // 方法 2: 刷新所有带 data-wails-drag 属性的元素
-        const draggableElements = document.querySelectorAll('[data-wails-drag="true"]')
-        draggableElements.forEach((element) => {
-          if (element instanceof HTMLElement) {
-            const className = element.className
-            element.className = ''
-            void element.offsetHeight
-            element.className = className
-          }
-        })
-
-        rafId = null
+      // 收集所有匹配的元素
+      selectors.forEach(selector => {
+        try {
+          document.querySelectorAll(selector).forEach(el => {
+            if (el instanceof HTMLElement) {
+              elements.add(el)
+            }
+          })
+        } catch (e) {
+          // 忽略无效选择器
+        }
       })
-    }
 
-    /**
-     * 延迟刷新（避免过于频繁）
-     */
-    const debouncedRefresh = () => {
-      if (timeoutId !== null) {
-        clearTimeout(timeoutId)
-      }
-      timeoutId = window.setTimeout(refreshDraggableRegions, 50)
+      // 对每个元素刷新拖拽属性
+      elements.forEach(element => {
+        const currentStyle = window.getComputedStyle(element)
+        const hasAppRegion =
+          currentStyle.getPropertyValue('--wails-draggable') === 'drag' ||
+          currentStyle.getPropertyValue('app-region') === 'drag'
+
+        if (hasAppRegion ||
+            element.classList.contains('header') ||
+            element.tagName.toLowerCase() === 'header') {
+
+          // 先设置为 no-drag
+          element.style.setProperty('--wails-draggable', 'no-drag')
+          element.style.setProperty('app-region', 'no-drag')
+
+          // 强制重排
+          void element.offsetHeight
+
+          // 恢复为 drag
+          element.style.setProperty('--wails-draggable', 'drag')
+          element.style.setProperty('app-region', 'drag')
+
+          // 延迟清除 inline style，让 CSS 类样式接管
+          setTimeout(() => {
+            element.style.removeProperty('--wails-draggable')
+            element.style.removeProperty('app-region')
+          }, 10)
+        }
+      })
+
+      console.log('[DragFix] Refreshed drag regions')
     }
 
     // 监听窗口焦点事件
     const handleFocus = () => {
-      debouncedRefresh()
+      console.log('[DragFix] Window focused, refreshing...')
+      setTimeout(refreshDraggableRegions, 100)
     }
 
     // 监听可见性变化
     const handleVisibilityChange = () => {
       if (!document.hidden) {
-        // 窗口从隐藏变为可见
-        debouncedRefresh()
+        console.log('[DragFix] Window visible, refreshing...')
+        setTimeout(refreshDraggableRegions, 100)
       }
     }
 
-    // 监听窗口激活（macOS 特有）
-    const handleWindowActivate = () => {
-      debouncedRefresh()
+    // 监听页面显示事件（从后台返回）
+    const handlePageShow = () => {
+      console.log('[DragFix] Page show, refreshing...')
+      setTimeout(refreshDraggableRegions, 100)
     }
 
     // 添加事件监听
     window.addEventListener('focus', handleFocus)
     document.addEventListener('visibilitychange', handleVisibilityChange)
-    window.addEventListener('activate', handleWindowActivate)
+    window.addEventListener('pageshow', handlePageShow)
 
     // 首次加载时也刷新一次
-    refreshDraggableRegions()
+    setTimeout(refreshDraggableRegions, 200)
+
+    console.log('[DragFix] Hook initialized')
 
     // 清理
     return () => {
       window.removeEventListener('focus', handleFocus)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
-      window.removeEventListener('activate', handleWindowActivate)
+      window.removeEventListener('pageshow', handlePageShow)
 
-      if (rafId !== null) {
-        cancelAnimationFrame(rafId)
-      }
-      if (timeoutId !== null) {
-        clearTimeout(timeoutId)
-      }
+      console.log('[DragFix] Hook cleaned up')
     }
   }, [])
 }
