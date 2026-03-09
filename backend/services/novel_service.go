@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/nongchen1223/tfiction/backend/models"
@@ -63,7 +64,7 @@ func (s *NovelService) OpenNovel(filePath string) (*models.Novel, error) {
 
 	// 创建小说对象
 	novel := &models.Novel{
-		Title:    filepath.Base(filePath),
+		Title:    strings.TrimSuffix(filepath.Base(filePath), filepath.Ext(filePath)),
 		FilePath: filePath,
 		Format:   ext,
 		Size:     fileInfo.Size(),
@@ -119,6 +120,47 @@ func (s *NovelService) GetChapterContent(filePath string, chapterIndex int) (str
 	return novel.Content[chapter.StartPos:chapter.EndPos], nil
 }
 
+// SetCurrentChapter 设置当前章节
+func (s *NovelService) SetCurrentChapter(filePath string, chapterIndex int) error {
+	novel, exists := s.novels[filePath]
+	if !exists {
+		return fmt.Errorf("小说未打开")
+	}
+
+	if chapterIndex < 0 || chapterIndex >= len(novel.Chapters) {
+		return fmt.Errorf("章节索引越界")
+	}
+
+	novel.CurrentChapter = chapterIndex
+	return nil
+}
+
+// SaveReadingProgress 保存阅读进度
+func (s *NovelService) SaveReadingProgress(filePath string, chapterIndex int, position int, progress float64) error {
+	novel, exists := s.novels[filePath]
+	if !exists {
+		return fmt.Errorf("小说未打开")
+	}
+
+	novel.CurrentChapter = chapterIndex
+	novel.ReadProgress = progress
+	novel.LastReadTime = getCurrentTimestamp()
+
+	// TODO: 持久化保存到文件
+
+	return nil
+}
+
+// GetReadingProgress 获取阅读进度
+func (s *NovelService) GetReadingProgress(filePath string) (int, int, float64, error) {
+	novel, exists := s.novels[filePath]
+	if !exists {
+		return 0, 0, 0, fmt.Errorf("小说未打开")
+	}
+
+	return novel.CurrentChapter, 0, novel.ReadProgress, nil
+}
+
 // parseNovelContent 解析小说内容
 // 根据不同格式进行解析，提取章节信息
 func (s *NovelService) parseNovelContent(novel *models.Novel) error {
@@ -138,35 +180,83 @@ func (s *NovelService) parseNovelContent(novel *models.Novel) error {
 // parseTxtNovel 解析 TXT 格式小说
 // 使用常见的章节标题模式进行识别
 func (s *NovelService) parseTxtNovel(novel *models.Novel) error {
-	// 简单的章节识别逻辑
-	// 识别类似 "第X章"、"Chapter X" 等模式
-	lines := strings.Split(novel.Content, "\n")
-	chapters := []models.Chapter{}
-	currentChapter := models.Chapter{
-		Title:    "正文",
-		StartPos: 0,
+	// 多种章节标题匹配模式
+	patterns := []string{
+		`^第[0-9零一二三四五六七八九十百千]+[章节回]`,
+		`^Chapter\s+\d+`,
+		`^\d+\.\s+`,
+		`^【第.+?】`,
+		`^（第.+?）`,
+		`^\[第.+?\]`,
 	}
 
-	for i, line := range lines {
+	// 预编译正则表达式
+	regexps := make([]*regexp.Regexp, len(patterns))
+	for i, pattern := range patterns {
+		regexps[i] = regexp.MustCompile(pattern)
+	}
+
+	chapters := []models.Chapter{}
+	currentStartPos := 0
+	chapterIndex := 0
+
+	// 逐行扫描
+	lines := strings.Split(novel.Content, "\n")
+	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		// 简单的章节标题识别
-		if strings.HasPrefix(line, "第") && (strings.Contains(line, "章") || strings.Contains(line, "节")) {
-			if currentChapter.Title != "" {
-				currentChapter.EndPos = i
-				chapters = append(chapters, currentChapter)
+		if line == "" {
+			continue
+		}
+
+		// 检查是否是章节标题
+		isChapter := false
+		for _, re := range regexps {
+			if re.MatchString(line) {
+				isChapter = true
+				break
 			}
-			currentChapter = models.Chapter{
-				Title:    line,
-				StartPos: i,
-				Index:    len(chapters),
+		}
+
+		if isChapter {
+			// 找到章节标题，记录上一章的结束位置
+			if currentStartPos > 0 {
+				currentEndPos := strings.Index(novel.Content[currentStartPos:], line)
+				if currentEndPos > 0 {
+					currentEndPos += currentStartPos
+					if len(chapters) > 0 {
+						chapters[len(chapters)-1].EndPos = currentEndPos
+						chapters[len(chapters)-1].WordCount = currentEndPos - chapters[len(chapters)-1].StartPos
+					}
+				}
 			}
+
+			// 添加新章节
+			chapterTitle := strings.TrimSpace(line)
+			chapters = append(chapters, models.Chapter{
+				Title:    chapterTitle,
+				StartPos: strings.Index(novel.Content, line),
+				EndPos:   len(novel.Content), // 临时设置为文件末尾
+				Index:    chapterIndex,
+			})
+
+			currentStartPos = chapters[len(chapters)-1].StartPos
+			chapterIndex++
 		}
 	}
 
-	// 添加最后一章
-	if currentChapter.Title != "" {
-		currentChapter.EndPos = len(novel.Content)
-		chapters = append(chapters, currentChapter)
+	// 如果没有找到章节，则将整个文件作为一个章节
+	if len(chapters) == 0 {
+		chapters = append(chapters, models.Chapter{
+			Title:    "正文",
+			StartPos: 0,
+			EndPos:   len(novel.Content),
+			Index:    0,
+		})
+	} else {
+		// 修正最后一章的结束位置
+		lastChapter := &chapters[len(chapters)-1]
+		lastChapter.EndPos = len(novel.Content)
+		lastChapter.WordCount = lastChapter.EndPos - lastChapter.StartPos
 	}
 
 	novel.Chapters = chapters
@@ -192,4 +282,10 @@ func (s *NovelService) parsePdfNovel(novel *models.Novel) error {
 func (s *NovelService) ConvertFormat(sourcePath, targetFormat string) (string, error) {
 	// TODO: 实现格式转换逻辑
 	return "", fmt.Errorf("格式转换功能即将支持")
+}
+
+// getCurrentTimestamp 获取当前时间戳
+func getCurrentTimestamp() int64 {
+	// TODO: 实现时间戳获取
+	return 0
 }
