@@ -29,6 +29,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: var(--spacing-md);
   padding: var(--spacing-md) var(--spacing-lg);
   background: rgba(var(--bg-secondary), 0.5);
   border: 1px solid rgba(var(--border-primary), 0.3);
@@ -46,7 +47,18 @@
   color: rgb(var(--text-primary));
 }
 
-.shortcutKey {
+.shortcutInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.shortcutDescription {
+  font-size: 0.8125rem;
+  color: rgb(var(--text-secondary));
+}
+
+.shortcutKeyButton {
   font-size: 0.875rem;
   font-weight: 600;
   color: rgb(var(--color-primary));
@@ -55,6 +67,19 @@
   background: rgba(var(--color-primary), 0.1);
   border: 1px solid rgba(var(--color-primary), 0.2);
   border-radius: var(--radius-md);
+  cursor: pointer;
+  min-width: 160px;
+  transition: all var(--transition-base);
+}
+
+.shortcutKeyButton:hover {
+  background: rgba(var(--color-primary), 0.16);
+}
+
+.recording {
+  color: rgb(var(--text-inverse));
+  background: rgb(var(--color-primary));
+  border-color: transparent;
 }
 
 /* === Info Box === */
@@ -69,6 +94,23 @@
 .infoText {
   font-size: 0.9375rem;
   color: rgb(var(--text-primary));
-  margin: 0;
+  margin: 0 0 var(--spacing-sm) 0;
   line-height: 1.6;
+}
+
+.errorText {
+  margin: var(--spacing-sm) 0 0;
+  color: #d14343;
+  font-size: 0.875rem;
+}
+
+.resetButton {
+  margin-top: var(--spacing-md);
+  min-height: 38px;
+  padding: 0 var(--spacing-lg);
+  border: none;
+  border-radius: var(--radius-md);
+  background: rgb(var(--color-primary));
+  color: rgb(var(--text-inverse));
+  cursor: pointer;
 }

@@ -15,6 +15,9 @@ export default function ReadingSettings() {
     pageWidth,
     backgroundColor,
     textColor,
+    bossModeType,
+    bossRevealDelay,
+    bossHideDelay,
     bossMode,
     bossOpacity,
     setFontSize,
@@ -23,6 +26,9 @@ export default function ReadingSettings() {
     setPageWidth,
     setBackgroundColor,
     setTextColor,
+    setBossModeType,
+    setBossRevealDelay,
+    setBossHideDelay,
     setBossMode,
     setBossOpacity,
   } = useSettingsStore()
@@ -32,6 +38,10 @@ export default function ReadingSettings() {
     { value: 'serif', label: '衬线字体（宋体）' },
     { value: 'sans', label: '无衬线字体（黑体）' },
     { value: 'mono', label: '等宽字体' },
+  ]
+  const bossModeOptions = [
+    { value: 'basic', label: '基础隐身：保留内容，隐藏控件' },
+    { value: 'full', label: '完全隐身：移出后内容也淡出' },
   ]
 
   return (
@@ -155,7 +165,7 @@ export default function ReadingSettings() {
         <div className={styles.settingItem}>
           <label className={styles.label}>透明度：{bossOpacity.toFixed(2)}</label>
           <Slider
-            min={0}
+            min={0.05}
             max={1}
             step={0.05}
             value={bossOpacity}
@@ -164,15 +174,51 @@ export default function ReadingSettings() {
           />
         </div>
 
+        <div className={styles.settingItem}>
+          <label className={styles.label}>隐身级别</label>
+          <Select
+            style={{ width: '100%' }}
+            options={bossModeOptions}
+            value={bossModeType}
+            onChange={setBossModeType}
+          />
+        </div>
+
+        <div className={styles.settingItem}>
+          <label className={styles.label}>唤出延迟：{bossRevealDelay}ms</label>
+          <Slider
+            min={0}
+            max={400}
+            step={20}
+            value={bossRevealDelay}
+            onChange={setBossRevealDelay}
+            tooltip={{ formatter: (value) => `${value}ms` }}
+          />
+        </div>
+
+        <div className={styles.settingItem}>
+          <label className={styles.label}>隐藏延迟：{bossHideDelay}ms</label>
+          <Slider
+            min={80}
+            max={1200}
+            step={40}
+            value={bossHideDelay}
+            onChange={setBossHideDelay}
+            tooltip={{ formatter: (value) => `${value}ms` }}
+          />
+        </div>
+
         <div className={styles.bossModePreview}>
           <p className={styles.previewLabel}>老板模式预览效果：</p>
           <div className={styles.bossPreviewBox}>
             <div className={styles.bossPreviewContent}>正常内容显示</div>
             <div
-              className={styles.bossPreviewOverlay}
+              className={`${styles.bossPreviewOverlay} ${
+                bossModeType === 'full' ? styles.fullMode : ''
+              }`}
               style={{ opacity: bossMode ? bossOpacity : 0 }}
             >
-              看起来像是在工作...
+              {bossModeType === 'full' ? '移出后几乎完全隐藏' : '保持可见，但更隐蔽'}
             </div>
           </div>
         </div>

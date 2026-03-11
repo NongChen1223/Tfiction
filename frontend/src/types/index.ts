@@ -38,7 +38,20 @@ export interface ReadingSettings {
   textColor: string
   pageWidth: number
   theme: 'light' | 'dark' | 'sepia'
+  bossModeType: 'basic' | 'full'
+  bossRevealDelay: number
+  bossHideDelay: number
 }
+
+export type ShortcutAction =
+  | 'toggleBossMode'
+  | 'quickHide'
+  | 'openSearch'
+  | 'prevChapter'
+  | 'nextChapter'
+  | 'goHome'
+
+export type ShortcutMap = Record<ShortcutAction, string>
 
 // AppConfig 应用配置类型
 export interface AppConfig {

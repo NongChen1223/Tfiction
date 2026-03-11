@@ -59,6 +59,9 @@
   border-bottom: 1px solid rgba(var(--border-primary), 0.35);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+  transition:
+    opacity var(--transition-base),
+    transform var(--transition-base);
 }
 
 .toolbarLeft,
@@ -135,6 +138,12 @@
 .opacitySlider {
   width: 92px;
   accent-color: rgb(var(--color-primary));
+}
+
+.chromeHidden {
+  opacity: 0;
+  transform: translateY(-10px);
+  pointer-events: none;
 }
 
 .sidebar,
@@ -280,6 +289,16 @@
   margin: 0 auto;
   padding: min(6vh, 56px) clamp(24px, 5vw, 72px);
   overflow-y: auto;
+  transition:
+    opacity var(--transition-slow),
+    filter var(--transition-slow),
+    transform var(--transition-slow);
+}
+
+.contentConcealed {
+  opacity: 0.08;
+  filter: blur(2px);
+  transform: scale(0.995);
 }
 
 .chapterTitle {
@@ -320,6 +339,9 @@
   border-top: 1px solid rgba(var(--border-primary), 0.35);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+  transition:
+    opacity var(--transition-base),
+    transform var(--transition-base);
 }
 
 .progressBar {
@@ -347,6 +369,106 @@
   margin-top: var(--spacing-sm);
   color: rgb(var(--text-secondary));
   font-size: 0.78rem;
+}
+
+.concealedHint {
+  position: absolute;
+  right: 20px;
+  bottom: 80px;
+  padding: 0.55rem 0.9rem;
+  border-radius: var(--radius-full);
+  background: rgba(var(--bg-elevated), 0.74);
+  color: rgb(var(--text-secondary));
+  font-size: 0.75rem;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(var(--border-primary), 0.35);
+  box-shadow: var(--shadow-md);
+}
+
+.bossPanel {
+  position: fixed;
+  z-index: 30;
+  width: 240px;
+  padding: var(--spacing-md);
+  border-radius: var(--radius-xl);
+  background: rgba(var(--bg-elevated), 0.88);
+  border: 1px solid rgba(var(--border-primary), 0.32);
+  box-shadow: var(--shadow-xl);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  animation: scaleIn 0.18s ease-out;
+}
+
+.bossPanelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--spacing-md);
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: rgb(var(--text-primary));
+}
+
+.panelCloseButton {
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: var(--radius-full);
+  background: transparent;
+  cursor: pointer;
+  color: rgb(var(--text-secondary));
+}
+
+.bossPanelSection {
+  margin-bottom: var(--spacing-md);
+}
+
+.bossPanelLabel {
+  display: block;
+  margin-bottom: 6px;
+  color: rgb(var(--text-secondary));
+  font-size: 0.76rem;
+}
+
+.segmented {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+}
+
+.segmentButton,
+.panelActionButton {
+  min-height: 34px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: rgba(var(--bg-secondary), 0.92);
+  color: rgb(var(--text-primary));
+  cursor: pointer;
+  transition:
+    background-color var(--transition-base),
+    transform var(--transition-base);
+
+  &:hover {
+    background: rgba(var(--color-primary), 0.12);
+    transform: translateY(-1px);
+  }
+}
+
+.segmentActive {
+  background: rgb(var(--color-primary));
+  color: rgb(var(--text-inverse));
+}
+
+.panelSlider {
+  width: 100%;
+  accent-color: rgb(var(--color-primary));
+}
+
+.bossPanelActions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
 }
 
 @media (max-width: 960px) {

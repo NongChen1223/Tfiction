@@ -124,3 +124,8 @@
   -webkit-backdrop-filter: blur(10px);
   transition: opacity var(--transition-base);
 }
+
+.fullMode {
+  background: rgba(var(--bg-primary), 0.98);
+  color: rgb(var(--text-secondary));
+}

@@ -1,10 +1,12 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { ReadingSettings } from '@/types'
+import type { ReadingSettings, ShortcutAction, ShortcutMap } from '@/types'
+import { DEFAULT_SHORTCUTS } from '@/utils/shortcuts'
 
 interface SettingsState extends ReadingSettings {
   bossMode: boolean
   bossOpacity: number
+  keyboardShortcuts: ShortcutMap
   setFontSize: (size: number) => void
   setFontFamily: (family: string) => void
   setLineHeight: (height: number) => void
@@ -12,8 +14,13 @@ interface SettingsState extends ReadingSettings {
   setTextColor: (color: string) => void
   setPageWidth: (width: number) => void
   setTheme: (theme: 'light' | 'dark' | 'sepia') => void
+  setBossModeType: (bossModeType: 'basic' | 'full') => void
+  setBossRevealDelay: (delay: number) => void
+  setBossHideDelay: (delay: number) => void
   setBossMode: (enabled: boolean) => void
   setBossOpacity: (opacity: number) => void
+  setKeyboardShortcut: (action: ShortcutAction, shortcut: string) => void
+  resetKeyboardShortcuts: () => void
   resetSettings: () => void
 }
 
@@ -25,6 +32,9 @@ const defaultSettings: ReadingSettings = {
   textColor: '#333333',
   pageWidth: 800,
   theme: 'light',
+  bossModeType: 'basic',
+  bossRevealDelay: 80,
+  bossHideDelay: 260,
 }
 
 const defaultBossSettings = {
@@ -42,6 +52,7 @@ export const useSettingsStore = create<SettingsState>()(
     (set) => ({
       ...defaultSettings,
       ...defaultBossSettings,
+      keyboardShortcuts: DEFAULT_SHORTCUTS,
 
       setFontSize: (fontSize) => set({ fontSize }),
       setFontFamily: (fontFamily) => set({ fontFamily }),
@@ -50,10 +61,26 @@ export const useSettingsStore = create<SettingsState>()(
       setTextColor: (textColor) => set({ textColor }),
       setPageWidth: (pageWidth) => set({ pageWidth }),
       setTheme: (theme) => set({ theme }),
+      setBossModeType: (bossModeType) => set({ bossModeType }),
+      setBossRevealDelay: (bossRevealDelay) => set({ bossRevealDelay }),
+      setBossHideDelay: (bossHideDelay) => set({ bossHideDelay }),
       setBossMode: (bossMode) => set({ bossMode }),
       setBossOpacity: (bossOpacity) => set({ bossOpacity }),
+      setKeyboardShortcut: (action, shortcut) =>
+        set((state) => ({
+          keyboardShortcuts: {
+            ...state.keyboardShortcuts,
+            [action]: shortcut,
+          },
+        })),
+      resetKeyboardShortcuts: () => set({ keyboardShortcuts: DEFAULT_SHORTCUTS }),
 
-      resetSettings: () => set({ ...defaultSettings, ...defaultBossSettings }),
+      resetSettings: () =>
+        set({
+          ...defaultSettings,
+          ...defaultBossSettings,
+          keyboardShortcuts: DEFAULT_SHORTCUTS,
+        }),
     }),
     {
       name: 'tfiction-settings',
