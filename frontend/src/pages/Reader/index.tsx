@@ -19,6 +19,7 @@ import {
 import { EventsOn } from '@/wailsjs/runtime/runtime'
 import { saveReadingProgress, setCurrentChapter } from '@/services/novelBridge'
 import { useBossMode } from '@/hooks/useBossMode'
+import { useClickOutside } from '@/hooks/useClickOutside'
 import {
   buildHighlightedHtml,
   calculateProgressFromPosition,
@@ -71,6 +72,7 @@ export default function Reader() {
 
   const contentRef = useRef<HTMLDivElement>(null)
   const saveTimerRef = useRef<number | null>(null)
+  const bossPanelRef = useRef<HTMLDivElement>(null)
   const bossMode = useBossMode({
     isStealthMode,
     bossModeType,
@@ -89,6 +91,10 @@ export default function Reader() {
       ? Math.min(opacity, 0.04)
       : opacity
     : 1
+
+  useClickOutside(bossPanelRef, isStealthMode && bossMode.isPanelOpen, () => {
+    bossMode.closePanel()
+  })
 
   const loadChapterContent = async (
     novelFilePath: string,
@@ -584,6 +590,7 @@ export default function Reader() {
 
       {isStealthMode && bossMode.isPanelOpen && (
         <div
+          ref={bossPanelRef}
           className={styles.bossPanel}
           style={{
             left: `${Math.min(bossMode.panelPosition.x, window.innerWidth - 260)}px`,

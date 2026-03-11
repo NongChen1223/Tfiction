@@ -1,12 +1,14 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ShortcutAction } from '@/types'
 import { useSettingsStore } from '@/stores/settingsStore'
+import { useClickOutside } from '@/hooks/useClickOutside'
 import {
   DEFAULT_SHORTCUTS,
   SHORTCUT_META,
-  eventToShortcut,
+  buildShortcutFromKeys,
   getDuplicateShortcutAction,
-  isShortcutRecorderEvent,
+  hasNonModifierKey,
+  normalizeKeyName,
 } from '@/utils/shortcuts'
 import styles from './KeyboardSettings.module.scss'
 
@@ -16,7 +18,90 @@ import styles from './KeyboardSettings.module.scss'
 export default function KeyboardSettings() {
   const { keyboardShortcuts, setKeyboardShortcut, resetKeyboardShortcuts } = useSettingsStore()
   const [recordingAction, setRecordingAction] = useState<ShortcutAction | null>(null)
+  const [recordingShortcut, setRecordingShortcut] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
+  const buttonRefs = useRef<Partial<Record<ShortcutAction, HTMLButtonElement | null>>>({})
+  const activeButtonRef = useRef<HTMLButtonElement>(null)
+  const pressedKeysRef = useRef<Set<string>>(new Set())
+
+  useEffect(() => {
+    activeButtonRef.current = recordingAction
+      ? buttonRefs.current[recordingAction] || null
+      : null
+  }, [recordingAction])
+
+  useClickOutside(activeButtonRef, Boolean(recordingAction), () => {
+    setRecordingAction(null)
+    setRecordingShortcut('')
+    setErrorMessage('')
+    pressedKeysRef.current.clear()
+  })
+
+  useEffect(() => {
+    if (!recordingAction) {
+      return
+    }
+
+    const clearRecordingState = () => {
+      setRecordingAction(null)
+      setRecordingShortcut('')
+      setErrorMessage('')
+      pressedKeysRef.current.clear()
+    }
+
+    const handleWindowKeyDown = (event: KeyboardEvent) => {
+      event.preventDefault()
+      event.stopPropagation()
+
+      const normalizedKey = normalizeKeyName(event.key)
+
+      if (normalizedKey === 'Backspace' || normalizedKey === 'Delete') {
+        setKeyboardShortcut(recordingAction, DEFAULT_SHORTCUTS[recordingAction])
+        clearRecordingState()
+        return
+      }
+
+      pressedKeysRef.current.add(normalizedKey)
+      setRecordingShortcut(buildShortcutFromKeys(pressedKeysRef.current))
+    }
+
+    const handleWindowKeyUp = (event: KeyboardEvent) => {
+      event.preventDefault()
+      event.stopPropagation()
+
+      const normalizedKey = normalizeKeyName(event.key)
+      const currentShortcut = buildShortcutFromKeys(pressedKeysRef.current)
+
+      if (hasNonModifierKey(currentShortcut) && !['Ctrl', 'Shift', 'Alt', 'Meta'].includes(normalizedKey)) {
+        const duplicateAction = getDuplicateShortcutAction(
+          keyboardShortcuts,
+          recordingAction,
+          currentShortcut
+        )
+
+        if (duplicateAction) {
+          setErrorMessage(
+            `快捷键 ${currentShortcut} 已被「${SHORTCUT_META[duplicateAction].action}」占用`
+          )
+        } else {
+          setKeyboardShortcut(recordingAction, currentShortcut)
+          clearRecordingState()
+          return
+        }
+      }
+
+      pressedKeysRef.current.delete(normalizedKey)
+      setRecordingShortcut(buildShortcutFromKeys(pressedKeysRef.current))
+    }
+
+    window.addEventListener('keydown', handleWindowKeyDown, true)
+    window.addEventListener('keyup', handleWindowKeyUp, true)
+
+    return () => {
+      window.removeEventListener('keydown', handleWindowKeyDown, true)
+      window.removeEventListener('keyup', handleWindowKeyUp, true)
+    }
+  }, [keyboardShortcuts, recordingAction, setKeyboardShortcut])
 
   const groupedShortcuts = useMemo(() => {
     return (Object.keys(SHORTCUT_META) as ShortcutAction[]).reduce(
@@ -45,46 +130,6 @@ export default function KeyboardSettings() {
     )
   }, [keyboardShortcuts])
 
-  const handleShortcutRecord = (
-    event: React.KeyboardEvent<HTMLButtonElement>,
-    action: ShortcutAction
-  ) => {
-    event.preventDefault()
-    event.stopPropagation()
-    setErrorMessage('')
-
-    if (event.key === 'Backspace' || event.key === 'Delete') {
-      setKeyboardShortcut(action, DEFAULT_SHORTCUTS[action])
-      setRecordingAction(null)
-      return
-    }
-
-    if (!isShortcutRecorderEvent(event)) {
-      return
-    }
-
-    const shortcut = eventToShortcut(event)
-    if (!shortcut) {
-      return
-    }
-
-    const duplicateAction = getDuplicateShortcutAction(
-      keyboardShortcuts,
-      action,
-      shortcut
-    )
-
-    if (duplicateAction) {
-      setErrorMessage(
-        `快捷键 ${shortcut} 已被「${SHORTCUT_META[duplicateAction].action}」占用`
-      )
-      return
-    }
-
-    setKeyboardShortcut(action, shortcut)
-    setRecordingAction(null)
-  }
-
   return (
     <div className={styles.container}>
       {Object.entries(groupedShortcuts).map(([category, items]) => (
@@ -98,17 +143,32 @@ export default function KeyboardSettings() {
                   <span className={styles.shortcutDescription}>{shortcut.description}</span>
                 </div>
                 <button
+                  ref={(node) => {
+                    buttonRefs.current[shortcut.actionId] = node
+                  }}
                   type="button"
                   className={`${styles.shortcutKeyButton} ${
                     recordingAction === shortcut.actionId ? styles.recording : ''
                   }`}
                   onClick={() => {
+                    if (recordingAction === shortcut.actionId) {
+                      setRecordingAction(null)
+                      setRecordingShortcut('')
+                      setErrorMessage('')
+                      pressedKeysRef.current.clear()
+                      return
+                    }
+
                     setRecordingAction(shortcut.actionId)
+                    setRecordingShortcut('')
                     setErrorMessage('')
+                    pressedKeysRef.current.clear()
+                    buttonRefs.current[shortcut.actionId]?.focus()
                   }}
-                  onKeyDown={(event) => handleShortcutRecord(event, shortcut.actionId)}
                 >
-                  {recordingAction === shortcut.actionId ? '按下新组合键' : shortcut.key}
+                  {recordingAction === shortcut.actionId
+                    ? recordingShortcut || '按下新组合键'
+                    : shortcut.key}
                 </button>
               </div>
             ))}

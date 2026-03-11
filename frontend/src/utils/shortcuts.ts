@@ -101,7 +101,27 @@ export function isShortcutRecorderEvent(
   event: KeyboardEvent | React.KeyboardEvent<HTMLElement>
 ) {
   const shortcut = eventToShortcut(event)
-  return Boolean(shortcut)
+  return hasNonModifierKey(shortcut)
+}
+
+export function hasNonModifierKey(shortcut: string) {
+  if (!shortcut) {
+    return false
+  }
+
+  const parts = normalizeShortcut(shortcut)
+    .split('+')
+    .filter(Boolean)
+
+  return parts.some((part) => !isModifierKey(part))
+}
+
+export function normalizeKeyName(key: string) {
+  return normalizeEventKey(key)
+}
+
+export function buildShortcutFromKeys(keys: Iterable<string>) {
+  return normalizeShortcut(Array.from(keys).join('+'))
 }
 
 function normalizeKeyToken(token: string) {

@@ -1,5 +1,6 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef } from 'react'
 import { ChevronDown, Check } from 'lucide-react'
+import { useClickOutside } from '@/hooks/useClickOutside'
 import styles from './Select.module.scss'
 
 export interface SelectOption {
@@ -34,22 +35,7 @@ export default function Select({
   const containerRef = useRef<HTMLDivElement>(null)
 
   const selectedOption = options.find((opt) => opt.value === value)
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setIsOpen(false)
-      }
-    }
-
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside)
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
-    }
-  }, [isOpen])
+  useClickOutside(containerRef, isOpen, () => setIsOpen(false))
 
   const handleSelect = (optionValue: string) => {
     onChange?.(optionValue)
