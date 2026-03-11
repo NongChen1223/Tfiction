@@ -7,21 +7,26 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
+	"unicode"
 
 	"github.com/nongchen1223/tfiction/backend/models"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // NovelService 小说服务
 type NovelService struct {
-	ctx          context.Context
-	novels       map[string]*models.Novel // 小说缓存，key 为文件路径
-	currentNovel *models.Novel            // 当前打开的小说
+	ctx             context.Context
+	novels          map[string]*models.Novel // 小说缓存，key 为文件路径
+	currentNovel    *models.Novel            // 当前打开的小说
+	progressService *ProgressService
 }
 
 // NewNovelService 创建小说服务实例
-func NewNovelService() *NovelService {
+func NewNovelService(progressService *ProgressService) *NovelService {
 	return &NovelService{
-		novels: make(map[string]*models.Novel),
+		novels:          make(map[string]*models.Novel),
+		progressService: progressService,
 	}
 }
 
@@ -41,6 +46,25 @@ func (s *NovelService) Cleanup() {
 // @param filePath 文件路径
 // @return 小说信息和错误
 func (s *NovelService) OpenNovel(filePath string) (*models.Novel, error) {
+	if filePath == "" {
+		selectedFile, err := runtime.OpenFileDialog(s.ctx, runtime.OpenDialogOptions{
+			Title: "选择小说文件",
+			Filters: []runtime.FileFilter{
+				{
+					DisplayName: "支持的文件",
+					Pattern:     "*.txt;*.epub;*.pdf;*.mobi;*.azw3",
+				},
+			},
+		})
+		if err != nil {
+			return nil, fmt.Errorf("打开文件选择器失败: %w", err)
+		}
+		if selectedFile == "" {
+			return nil, fmt.Errorf("未选择文件")
+		}
+		filePath = selectedFile
+	}
+
 	// 检查文件是否存在
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
 		return nil, fmt.Errorf("文件不存在: %s", filePath)
@@ -48,6 +72,7 @@ func (s *NovelService) OpenNovel(filePath string) (*models.Novel, error) {
 
 	// 检查是否已在缓存中
 	if novel, exists := s.novels[filePath]; exists {
+		s.applySavedProgress(novel)
 		s.currentNovel = novel
 		return novel, nil
 	}
@@ -75,6 +100,8 @@ func (s *NovelService) OpenNovel(filePath string) (*models.Novel, error) {
 	if err := s.parseNovelContent(novel); err != nil {
 		return nil, fmt.Errorf("解析小说内容失败: %w", err)
 	}
+
+	s.applySavedProgress(novel)
 
 	// 缓存小说
 	s.novels[filePath] = novel
@@ -117,7 +144,7 @@ func (s *NovelService) GetChapterContent(filePath string, chapterIndex int) (str
 	}
 
 	chapter := novel.Chapters[chapterIndex]
-	return novel.Content[chapter.StartPos:chapter.EndPos], nil
+	return sliceByRuneRange(novel.Content, chapter.StartPos, chapter.EndPos), nil
 }
 
 // SetCurrentChapter 设置当前章节
@@ -132,6 +159,9 @@ func (s *NovelService) SetCurrentChapter(filePath string, chapterIndex int) erro
 	}
 
 	novel.CurrentChapter = chapterIndex
+	if s.progressService != nil {
+		return s.progressService.SaveProgress(filePath, chapterIndex, 0, novel.ReadProgress)
+	}
 	return nil
 }
 
@@ -146,7 +176,9 @@ func (s *NovelService) SaveReadingProgress(filePath string, chapterIndex int, po
 	novel.ReadProgress = progress
 	novel.LastReadTime = getCurrentTimestamp()
 
-	// TODO: 持久化保存到文件
+	if s.progressService != nil {
+		return s.progressService.SaveProgress(filePath, chapterIndex, position, progress)
+	}
 
 	return nil
 }
@@ -158,7 +190,14 @@ func (s *NovelService) GetReadingProgress(filePath string) (int, int, float64, e
 		return 0, 0, 0, fmt.Errorf("小说未打开")
 	}
 
-	return novel.CurrentChapter, 0, novel.ReadProgress, nil
+	position := 0
+	if s.progressService != nil {
+		if entry := s.progressService.GetProgress(filePath); entry != nil {
+			position = entry.Position
+		}
+	}
+
+	return novel.CurrentChapter, position, novel.ReadProgress, nil
 }
 
 // parseNovelContent 解析小说内容
@@ -197,51 +236,45 @@ func (s *NovelService) parseTxtNovel(novel *models.Novel) error {
 	}
 
 	chapters := []models.Chapter{}
-	currentStartPos := 0
+	currentOffset := 0
 	chapterIndex := 0
 
-	// 逐行扫描
-	lines := strings.Split(novel.Content, "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
+	for _, rawLine := range strings.SplitAfter(novel.Content, "\n") {
+		lineWithoutBreak := strings.TrimRight(rawLine, "\r\n")
+		trimmedLine := strings.TrimSpace(lineWithoutBreak)
+		lineLength := runeLen(rawLine)
+
+		if trimmedLine == "" {
+			currentOffset += lineLength
 			continue
 		}
 
 		// 检查是否是章节标题
 		isChapter := false
 		for _, re := range regexps {
-			if re.MatchString(line) {
+			if re.MatchString(trimmedLine) {
 				isChapter = true
 				break
 			}
 		}
 
 		if isChapter {
-			// 找到章节标题，记录上一章的结束位置
-			if currentStartPos > 0 {
-				currentEndPos := strings.Index(novel.Content[currentStartPos:], line)
-				if currentEndPos > 0 {
-					currentEndPos += currentStartPos
-					if len(chapters) > 0 {
-						chapters[len(chapters)-1].EndPos = currentEndPos
-						chapters[len(chapters)-1].WordCount = currentEndPos - chapters[len(chapters)-1].StartPos
-					}
-				}
+			startPos := currentOffset + leadingWhitespaceCount(lineWithoutBreak)
+			if len(chapters) > 0 {
+				chapters[len(chapters)-1].EndPos = startPos
+				chapters[len(chapters)-1].WordCount = chapters[len(chapters)-1].EndPos - chapters[len(chapters)-1].StartPos
 			}
 
-			// 添加新章节
-			chapterTitle := strings.TrimSpace(line)
 			chapters = append(chapters, models.Chapter{
-				Title:    chapterTitle,
-				StartPos: strings.Index(novel.Content, line),
-				EndPos:   len(novel.Content), // 临时设置为文件末尾
+				Title:    trimmedLine,
+				StartPos: startPos,
+				EndPos:   runeLen(novel.Content), // 临时设置为全文末尾
 				Index:    chapterIndex,
 			})
-
-			currentStartPos = chapters[len(chapters)-1].StartPos
 			chapterIndex++
 		}
+
+		currentOffset += lineLength
 	}
 
 	// 如果没有找到章节，则将整个文件作为一个章节
@@ -249,13 +282,14 @@ func (s *NovelService) parseTxtNovel(novel *models.Novel) error {
 		chapters = append(chapters, models.Chapter{
 			Title:    "正文",
 			StartPos: 0,
-			EndPos:   len(novel.Content),
+			EndPos:   runeLen(novel.Content),
 			Index:    0,
+			WordCount: runeLen(novel.Content),
 		})
 	} else {
 		// 修正最后一章的结束位置
 		lastChapter := &chapters[len(chapters)-1]
-		lastChapter.EndPos = len(novel.Content)
+		lastChapter.EndPos = runeLen(novel.Content)
 		lastChapter.WordCount = lastChapter.EndPos - lastChapter.StartPos
 	}
 
@@ -286,6 +320,66 @@ func (s *NovelService) ConvertFormat(sourcePath, targetFormat string) (string, e
 
 // getCurrentTimestamp 获取当前时间戳
 func getCurrentTimestamp() int64 {
-	// TODO: 实现时间戳获取
-	return 0
+	return time.Now().Unix()
+}
+
+func (s *NovelService) applySavedProgress(novel *models.Novel) {
+	if s.progressService == nil {
+		return
+	}
+
+	entry := s.progressService.GetProgress(novel.FilePath)
+	if entry == nil {
+		return
+	}
+
+	novel.CurrentChapter = clampInt(entry.CurrentChapter, 0, maxInt(len(novel.Chapters)-1, 0))
+	novel.ReadProgress = entry.Progress
+	novel.LastReadTime = entry.LastReadTime
+}
+
+func sliceByRuneRange(content string, start, end int) string {
+	runes := []rune(content)
+	if start < 0 {
+		start = 0
+	}
+	if end > len(runes) {
+		end = len(runes)
+	}
+	if start > end {
+		start = end
+	}
+	return string(runes[start:end])
+}
+
+func runeLen(content string) int {
+	return len([]rune(content))
+}
+
+func leadingWhitespaceCount(content string) int {
+	count := 0
+	for _, char := range content {
+		if !unicode.IsSpace(char) {
+			break
+		}
+		count++
+	}
+	return count
+}
+
+func clampInt(value, min, max int) int {
+	if value < min {
+		return min
+	}
+	if value > max {
+		return max
+	}
+	return value
+}
+
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }

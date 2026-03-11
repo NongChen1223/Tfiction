@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/nongchen1223/tfiction/backend/models"
 )
@@ -51,34 +52,29 @@ func (s *SearchService) SearchInNovel(content, keyword string, caseSensitive boo
 		searchKeyword = strings.ToLower(keyword)
 	}
 
-	// 查找所有匹配位置
 	position := 0
-	for {
+	for position < len(searchContent) {
 		index := strings.Index(searchContent[position:], searchKeyword)
 		if index == -1 {
 			break
 		}
 
-		actualPosition := position + index
-		// 获取上下文（前后各50个字符）
-		contextStart := actualPosition - 50
-		if contextStart < 0 {
-			contextStart = 0
-		}
-		contextEnd := actualPosition + len(keyword) + 50
-		if contextEnd > len(content) {
-			contextEnd = len(content)
-		}
+		actualBytePosition := position + index
+		actualPosition := utf8.RuneCountInString(content[:actualBytePosition])
+		keywordLength := utf8.RuneCountInString(keyword)
+
+		contextStart := maxInt(actualPosition-50, 0)
+		contextEnd := minInt(actualPosition+keywordLength+50, utf8.RuneCountInString(content))
 
 		result := models.SearchResult{
 			Position: actualPosition,
-			Context:  content[contextStart:contextEnd],
+			Context:  sliceByRuneRange(content, contextStart, contextEnd),
 			Keyword:  keyword,
 			Line:     s.getLineNumber(content, actualPosition),
 		}
 		results = append(results, result)
 
-		position = actualPosition + len(keyword)
+		position = actualBytePosition + len(searchKeyword)
 	}
 
 	s.searchResults = results
@@ -117,13 +113,14 @@ func (s *SearchService) HighlightKeyword(content, keyword, highlightTag string) 
 
 // getLineNumber 获取指定位置的行号
 func (s *SearchService) getLineNumber(content string, position int) int {
-	if position > len(content) {
-		position = len(content)
+	runes := []rune(content)
+	if position > len(runes) {
+		position = len(runes)
 	}
 
 	line := 1
 	for i := 0; i < position; i++ {
-		if content[i] == '\n' {
+		if runes[i] == '\n' {
 			line++
 		}
 	}
@@ -142,13 +139,25 @@ func (s *SearchService) SearchInChapter(novel *models.Novel, chapterIndex int, k
 	}
 
 	chapter := novel.Chapters[chapterIndex]
-	chapterContent := novel.Content[chapter.StartPos:chapter.EndPos]
+	chapterContent := sliceByRuneRange(novel.Content, chapter.StartPos, chapter.EndPos)
+	results := s.SearchInNovel(chapterContent, keyword, caseSensitive)
 
-	return s.SearchInNovel(chapterContent, keyword, caseSensitive)
+	for index := range results {
+		results[index].Position += chapter.StartPos
+	}
+
+	return results
 }
 
 // GetSearchStatistics 获取搜索统计信息
 // @return 匹配数量
 func (s *SearchService) GetSearchStatistics() int {
 	return len(s.searchResults)
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

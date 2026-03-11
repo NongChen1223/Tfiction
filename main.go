@@ -25,10 +25,10 @@ func main() {
 	}
 
 	// 初始化服务
-	novelService := services.NewNovelService()
+	progressService := services.NewProgressService()
+	novelService := services.NewNovelService(progressService)
 	windowService := services.NewWindowService()
 	searchService := services.NewSearchService()
-	progressService := services.NewProgressService()
 
 	// 创建应用实例
 	appInstance := app.NewApp(cfg, novelService, windowService, searchService, progressService)

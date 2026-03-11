@@ -49,6 +49,15 @@ export default function BookCard({
     e.stopPropagation()
     onDelete?.(book)
   }
+  const directoryProgress =
+    book.isDirectory && book.files && book.files.length > 0
+      ? Math.round(
+          book.files.reduce((total, file) => total + (file.progress || 0), 0) /
+            book.files.length
+        )
+      : 0
+  const progressValue = book.isDirectory ? directoryProgress : book.progress || 0
+  const readAction = book.isDirectory ? handleQuickRead : handleOpen
 
   const cardClasses = [styles.card, styles[viewMode]].filter(Boolean).join(' ')
 
@@ -85,10 +94,10 @@ export default function BookCard({
               <div className={styles.listProgressTrack}>
                 <div
                   className={styles.listProgressFill}
-                  style={{ width: `${book.progress}%` }}
+                  style={{ width: `${progressValue}%` }}
                 />
               </div>
-              <span className={styles.listProgressText}>{book.progress}%</span>
+              <span className={styles.listProgressText}>{progressValue}%</span>
             </div>
           </div>
 
@@ -101,7 +110,7 @@ export default function BookCard({
             <div className={styles.actions}>
               <button
                 className={styles.iconButton}
-                onClick={handleOpen}
+                onClick={readAction}
                 aria-label="阅读"
                 title="阅读"
               >
@@ -158,10 +167,10 @@ export default function BookCard({
                   cx="18"
                   cy="18"
                   r="16"
-                  strokeDasharray={`${book.progress}, 100`}
+                  strokeDasharray={`${progressValue}, 100`}
                 />
               </svg>
-              <span className={styles.progressText}>{book.progress}%</span>
+              <span className={styles.progressText}>{progressValue}%</span>
             </div>
           )}
 

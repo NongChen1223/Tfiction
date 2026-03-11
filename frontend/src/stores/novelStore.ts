@@ -9,6 +9,7 @@ interface NovelState {
 
   // 操作方法
   setCurrentNovel: (novel: Novel | null) => void
+  patchCurrentNovel: (updater: (novel: Novel) => Novel) => void
   addNovel: (novel: Novel) => void
   removeNovel: (filePath: string) => void
   updateReadProgress: (filePath: string, progress: number) => void
@@ -30,12 +31,28 @@ export const useNovelStore = create<NovelState>((set) => ({
     set({ currentNovel: novel })
   },
 
+  patchCurrentNovel: (updater) => {
+    set((state) => {
+      if (!state.currentNovel) {
+        return state
+      }
+
+      return {
+        currentNovel: updater(state.currentNovel),
+      }
+    })
+  },
+
   // 添加小说到列表
   addNovel: (novel) => {
     set((state) => {
       const exists = state.novels.find((n) => n.filePath === novel.filePath)
       if (exists) {
-        return state
+        return {
+          novels: state.novels.map((item) =>
+            item.filePath === novel.filePath ? { ...item, ...novel } : item
+          ),
+        }
       }
       return {
         novels: [...state.novels, novel],
@@ -60,7 +77,11 @@ export const useNovelStore = create<NovelState>((set) => ({
       ),
       currentNovel:
         state.currentNovel?.filePath === filePath
-          ? { ...state.currentNovel, readProgress: progress }
+          ? {
+              ...state.currentNovel,
+              readProgress: progress,
+              lastReadTime: Date.now(),
+            }
           : state.currentNovel,
     }))
   },

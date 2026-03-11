@@ -6,11 +6,20 @@
 
 - 🚀 **跨平台支持**：支持 Windows、macOS 多平台运行
 - 📚 **多格式支持**：支持 TXT、EPUB、PDF、MOBI、AZW3 等多种格式
-- 👁️ **摸鱼模式**：背景透明、鼠标悬停显示/隐藏，助你职场摸鱼
-- 🔍 **全文搜索**：支持关键字搜索，快速定位内容
+- 👁️ **摸鱼模式**：阅读页支持一键切换摸鱼模式，并可实时调节透明度
+- 🔍 **全文搜索**：支持全文搜索、结果侧栏浏览、章节内跳转和阅读区高亮
 - 🎨 **自定义主题**：支持亮色、暗色、护眼色等多种主题
-- 💾 **阅读进度**：自动保存阅读进度，随时继续阅读
-- 🪟 **窗口置顶**：支持窗口置顶功能
+- 💾 **阅读进度**：滚动时自动保存阅读进度，重新打开后恢复章节和进度
+- 🪟 **窗口置顶**：支持窗口置顶和阅读态摸鱼切换
+- 🗂️ **真实书架**：首页书架已接入本地持久化，可导入单文件、创建目录、移动文件
+
+## 当前已打通的主流程
+
+1. 首页导入本地小说文件
+2. 自动解析章节并进入阅读页
+3. 阅读过程中自动保存章节与总进度
+4. 返回书架后显示最近阅读时间与进度
+5. 重新打开同一文件时恢复上次阅读状态
 
 ## 技术栈
 
@@ -24,7 +33,7 @@
 - **TypeScript**: 5.5+
 - **构建工具**: Vite 5.3+
 - **状态管理**: Zustand 4.5+
-- **样式方案**: TailwindCSS 3.4+
+- **样式方案**: SCSS Modules + CSS Variables
 - **兼容目标**: ES2015+（支持更多浏览器版本）
 
 ### 开发工具
@@ -102,6 +111,18 @@ cd frontend
 npm run dev
 ```
 
+### 3.1 常用校验命令
+
+```bash
+# 前端类型检查
+cd frontend
+npm run type-check
+
+# 后端校验（项目内缓存，避免系统目录权限问题）
+cd ..
+GOCACHE=$(pwd)/.gocache go test ./...
+```
+
 ### 4. 构建项目
 
 #### 构建所有平台（当前平台）
@@ -168,9 +189,10 @@ GO_Tfiction/
 │   ├── config/               # 配置管理
 │   │   └── config.go         # 配置加载和解析
 │   ├── services/             # 业务服务层
-│   │   ├── novel_service.go  # 小说管理服务（打开、解析、格式转换）
+│   │   ├── novel_service.go  # 小说管理服务（选择文件、解析章节、恢复进度）
 │   │   ├── window_service.go # 窗口管理服务（置顶、透明度、摸鱼模式）
-│   │   └── search_service.go # 搜索服务（全文搜索、关键字高亮）
+│   │   ├── search_service.go # 搜索服务（全文搜索、关键字定位）
+│   │   └── progress_service.go # 阅读进度持久化服务
 │   ├── models/               # 数据模型
 │   │   └── models.go         # 小说、章节、搜索结果等模型定义
 │   └── utils/                # 工具函数
@@ -178,22 +200,22 @@ GO_Tfiction/
 ├── frontend/                   # React 前端代码
 │   ├── src/
 │   │   ├── components/       # React 组件
-│   │   │   ├── NovelReader.tsx    # 小说阅读器组件
-│   │   │   ├── Toolbar.tsx        # 工具栏组件
-│   │   │   ├── Sidebar.tsx        # 侧边栏（章节列表）
-│   │   │   └── SearchPanel.tsx    # 搜索面板
+│   │   │   ├── features/BookCard  # 书籍卡片
+│   │   │   ├── features/Sidebar   # 书架侧边栏
+│   │   │   └── common/            # 通用输入、按钮、选择器等
 │   │   ├── stores/           # Zustand 状态管理
-│   │   │   ├── novelStore.ts      # 小说状态管理
+│   │   │   ├── novelStore.ts      # 当前阅读小说状态
+│   │   │   ├── libraryStore.ts    # 书架与目录持久化
 │   │   │   ├── windowStore.ts     # 窗口状态管理
 │   │   │   └── settingsStore.ts   # 阅读设置管理
 │   │   ├── hooks/            # 自定义 React Hooks
 │   │   ├── types/            # TypeScript 类型定义
 │   │   │   └── index.ts           # 公共类型定义
-│   │   ├── utils/            # 工具函数
+│   │   ├── utils/novel.ts    # Wails 模型转换与阅读辅助函数
 │   │   ├── assets/           # 静态资源
 │   │   ├── App.tsx           # 应用主组件
 │   │   ├── main.tsx          # 应用入口
-│   │   └── index.css         # 全局样式
+│   │   └── index.scss        # 全局样式
 │   ├── package.json          # 前端依赖配置
 │   ├── tsconfig.json         # TypeScript 配置
 │   ├── vite.config.ts        # Vite 构建配置
@@ -239,6 +261,7 @@ GO_Tfiction/
 2. **前端组件**：在 `frontend/src/components/` 创建新组件
 3. **状态管理**：在 `frontend/src/stores/` 创建新 store
 4. **类型定义**：在 `frontend/src/types/` 添加类型定义
+5. **模型转换**：涉及 Wails 返回结构时，统一走 `frontend/src/utils/novel.ts`
 
 ### 调试方法
 
