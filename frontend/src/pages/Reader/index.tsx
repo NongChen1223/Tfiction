@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import type { SearchResult } from '@/types'
 import { useNovelStore } from '@/stores/novelStore'
 import { useSettingsStore } from '@/stores/settingsStore'
@@ -41,6 +41,7 @@ function isPickerCancelled(error: unknown) {
  */
 export default function Reader() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { currentNovel, setCurrentNovel, patchCurrentNovel, addNovel, updateReadProgress } =
     useNovelStore()
   const {
@@ -91,6 +92,9 @@ export default function Reader() {
       ? Math.min(opacity, 0.04)
       : opacity
     : 1
+  const shouldActivateBossMode = Boolean(
+    (location.state as { activateBossMode?: boolean } | null)?.activateBossMode
+  )
 
   useClickOutside(bossPanelRef, isStealthMode && bossMode.isPanelOpen, () => {
     bossMode.closePanel()
@@ -299,6 +303,22 @@ export default function Reader() {
       'keep'
     )
   }, [currentNovel?.filePath, currentNovel?.currentChapter])
+
+  useEffect(() => {
+    if (!currentNovel || !shouldActivateBossMode || isStealthMode) {
+      return
+    }
+
+    void handleToggleStealthMode()
+    navigate(location.pathname, { replace: true, state: null })
+  }, [
+    currentNovel,
+    handleToggleStealthMode,
+    isStealthMode,
+    location.pathname,
+    navigate,
+    shouldActivateBossMode,
+  ])
 
   useEffect(() => {
     const offStealthMode = EventsOn('window:stealthMode', (enabled: boolean) => {

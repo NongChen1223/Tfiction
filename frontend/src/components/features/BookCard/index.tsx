@@ -7,6 +7,7 @@ export interface BookCardProps {
   book: Book
   viewMode?: ViewMode
   onOpen?: (book: Book) => void
+  onOpenInBossMode?: (book: Book) => void
   onEdit?: (book: Book) => void
   onDelete?: (book: Book) => void
   onQuickRead?: (book: Book) => void // 目录快速阅读
@@ -22,6 +23,7 @@ export default function BookCard({
   book,
   viewMode = 'grid',
   onOpen,
+  onOpenInBossMode,
   onEdit,
   onDelete,
   onQuickRead,
@@ -30,8 +32,7 @@ export default function BookCard({
   const handleOpen = () => onOpen?.(book)
   const handleBossMode = (e: React.MouseEvent) => {
     e.stopPropagation()
-    // TODO: 实现老板模式
-    console.log('Boss mode:', book)
+    onOpenInBossMode?.(book)
   }
   const handleQuickRead = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -116,6 +117,16 @@ export default function BookCard({
               >
                 <Eye size={16} />
               </button>
+              {!book.isDirectory && (
+                <button
+                  className={styles.iconButton}
+                  onClick={handleBossMode}
+                  aria-label="老板模式阅读"
+                  title="老板模式阅读"
+                >
+                  <EyeOff size={16} />
+                </button>
+              )}
               <button
                 className={styles.iconButton}
                 onClick={handleEdit}

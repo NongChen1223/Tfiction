@@ -14,7 +14,7 @@ import {
   FolderInput,
   FilePlus,
 } from 'lucide-react'
-import { Popover } from 'antd'
+import { Popover, message } from 'antd'
 import { OpenNovel } from '@/wailsjs/go/services/NovelService'
 import type { Book, SortMode, ViewMode } from '@/types'
 import Sidebar from '@/components/features/Sidebar'
@@ -32,11 +32,16 @@ function isPickerCancelled(error: unknown) {
   return error instanceof Error && error.message.includes('未选择文件')
 }
 
+function resolveDirectoryReadTarget(book: Book) {
+  return book.files?.find((file) => file.id === book.lastReadFileId) || book.files?.[0] || null
+}
+
 /**
  * Home 页面 - 书架/图书馆视图
  */
 export default function Home() {
   const navigate = useNavigate()
+  const [messageApi, messageContextHolder] = message.useMessage()
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
   const [searchQuery, setSearchQuery] = useState('')
@@ -121,7 +126,10 @@ export default function Home() {
     </div>
   )
 
-  const openNovelAndEnterReader = async (filePath = '') => {
+  const openNovelAndEnterReader = async (
+    filePath = '',
+    options?: { activateBossMode?: boolean }
+  ) => {
     const existingBook = books.find((book) => book.filePath === filePath)
     const openedNovel = await OpenNovel(filePath)
     const normalizedNovel = normalizeNovel(openedNovel)
@@ -130,7 +138,9 @@ export default function Home() {
     setCurrentNovel(normalizedNovel)
     addNovel(normalizedNovel)
     upsertBook(shelfBook)
-    navigate('/reader')
+    navigate('/reader', {
+      state: options?.activateBossMode ? { activateBossMode: true } : null,
+    })
 
     return shelfBook
   }
@@ -173,18 +183,19 @@ export default function Home() {
   const handleImportFile = async () => {
     try {
       await openNovelAndEnterReader()
+      messageApi.success('文件已导入并打开')
     } catch (error) {
       if (!isPickerCancelled(error)) {
         console.error('导入文件失败:', error)
+        messageApi.error(error instanceof Error ? error.message : '导入文件失败')
       }
     }
   }
 
   const handleQuickRead = async (book: Book) => {
-    const targetFile =
-      book.files?.find((file) => file.id === book.lastReadFileId) || book.files?.[0]
+    const targetFile = resolveDirectoryReadTarget(book)
     if (!targetFile?.filePath) {
-      window.alert('当前目录还没有可阅读的文件')
+      messageApi.warning('当前目录还没有可阅读的文件')
       return
     }
 
@@ -192,6 +203,7 @@ export default function Home() {
       await openNovelAndEnterReader(targetFile.filePath)
     } catch (error) {
       console.error('打开目录失败:', error)
+      messageApi.error(error instanceof Error ? error.message : '打开目录失败')
     }
   }
 
@@ -228,9 +240,11 @@ export default function Home() {
       const importedBook = await openNovelAndEnterReader()
       addImportedFileToDirectory(targetDirectory.id, importedBook)
       removeBook(importedBook.id)
+      messageApi.success(`已导入到「${targetDirectory.title}」并打开阅读`)
     } catch (error) {
       if (!isPickerCancelled(error)) {
         console.error('导入目录文件失败:', error)
+        messageApi.error(error instanceof Error ? error.message : '导入目录文件失败')
       }
     }
   }
@@ -257,6 +271,23 @@ export default function Home() {
       await openNovelAndEnterReader(book.filePath)
     } catch (error) {
       console.error('打开书籍失败:', error)
+      messageApi.error(error instanceof Error ? error.message : '打开书籍失败')
+    }
+  }
+
+  const handleOpenBookInBossMode = async (book: Book) => {
+    const targetFile = book.isDirectory ? resolveDirectoryReadTarget(book)?.filePath : book.filePath
+    if (!targetFile) {
+      messageApi.warning('当前条目还没有可阅读的文件')
+      return
+    }
+
+    try {
+      await openNovelAndEnterReader(targetFile, { activateBossMode: true })
+      messageApi.success('已进入老板模式阅读')
+    } catch (error) {
+      console.error('老板模式打开失败:', error)
+      messageApi.error(error instanceof Error ? error.message : '老板模式打开失败')
     }
   }
 
@@ -280,6 +311,7 @@ export default function Home() {
 
   return (
     <div className={styles.container}>
+      {messageContextHolder}
       <Sidebar
         selectedCategory={selectedCategory}
         onSelectCategory={setSelectedCategory}
@@ -347,6 +379,7 @@ export default function Home() {
                   book={book}
                   viewMode={viewMode}
                   onOpen={handleOpenBook}
+                  onOpenInBossMode={handleOpenBookInBossMode}
                   onEdit={handleEditBook}
                   onDelete={handleDeleteBook}
                   onQuickRead={handleQuickRead}

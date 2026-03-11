@@ -1,9 +1,14 @@
 package services
 
 import (
+	"archive/zip"
 	"context"
+	"encoding/xml"
 	"fmt"
+	stdhtml "html"
+	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -12,6 +17,7 @@ import (
 
 	"github.com/nongchen1223/tfiction/backend/models"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
+	xhtml "golang.org/x/net/html"
 )
 
 // NovelService 小说服务
@@ -280,10 +286,10 @@ func (s *NovelService) parseTxtNovel(novel *models.Novel) error {
 	// 如果没有找到章节，则将整个文件作为一个章节
 	if len(chapters) == 0 {
 		chapters = append(chapters, models.Chapter{
-			Title:    "正文",
-			StartPos: 0,
-			EndPos:   runeLen(novel.Content),
-			Index:    0,
+			Title:     "正文",
+			StartPos:  0,
+			EndPos:    runeLen(novel.Content),
+			Index:     0,
 			WordCount: runeLen(novel.Content),
 		})
 	} else {
@@ -298,9 +304,122 @@ func (s *NovelService) parseTxtNovel(novel *models.Novel) error {
 }
 
 // parseEpubNovel 解析 EPUB 格式小说
-// TODO: 实现 EPUB 解析逻辑
 func (s *NovelService) parseEpubNovel(novel *models.Novel) error {
-	return fmt.Errorf("EPUB 格式暂不支持，即将支持")
+	reader, err := zip.OpenReader(novel.FilePath)
+	if err != nil {
+		return fmt.Errorf("打开 EPUB 文件失败: %w", err)
+	}
+	defer reader.Close()
+
+	fileMap := make(map[string]*zip.File, len(reader.File))
+	for _, file := range reader.File {
+		fileMap[normalizeZipPath(file.Name)] = file
+	}
+
+	containerPath, err := readEpubContainerPath(fileMap)
+	if err != nil {
+		return err
+	}
+
+	opfData, err := readZipFileText(fileMap, containerPath)
+	if err != nil {
+		return fmt.Errorf("读取 EPUB 元数据失败: %w", err)
+	}
+
+	var pkg epubPackage
+	if err := xml.Unmarshal([]byte(opfData), &pkg); err != nil {
+		return fmt.Errorf("解析 EPUB 元数据失败: %w", err)
+	}
+
+	if strings.TrimSpace(pkg.Metadata.Title) != "" {
+		novel.Title = strings.TrimSpace(pkg.Metadata.Title)
+	}
+
+	manifest := make(map[string]epubManifestItem, len(pkg.Manifest.Items))
+	for _, item := range pkg.Manifest.Items {
+		manifest[item.ID] = item
+	}
+
+	opfDir := path.Dir(containerPath)
+	if opfDir == "." {
+		opfDir = ""
+	}
+
+	var contentBuilder strings.Builder
+	chapters := make([]models.Chapter, 0, len(pkg.Spine.ItemRefs))
+	currentOffset := 0
+
+	appendChapter := func(rawTitle, rawText string, fallbackIndex int) {
+		chapterText := normalizeEpubText(rawText)
+		if chapterText == "" {
+			return
+		}
+
+		chapterTitle := strings.TrimSpace(rawTitle)
+		if chapterTitle == "" {
+			chapterTitle = fmt.Sprintf("第%d章", fallbackIndex)
+		}
+
+		if contentBuilder.Len() > 0 {
+			contentBuilder.WriteString("\n\n")
+			currentOffset += runeLen("\n\n")
+		}
+
+		chapterBody := chapterTitle + "\n\n" + chapterText
+		startPos := currentOffset
+		contentBuilder.WriteString(chapterBody)
+		currentOffset += runeLen(chapterBody)
+
+		chapters = append(chapters, models.Chapter{
+			Index:     len(chapters),
+			Title:     chapterTitle,
+			StartPos:  startPos,
+			EndPos:    currentOffset,
+			WordCount: runeLen(chapterBody),
+		})
+	}
+
+	for index, itemRef := range pkg.Spine.ItemRefs {
+		item, exists := manifest[itemRef.IDRef]
+		if !exists || !isSupportedEpubItem(item.MediaType) {
+			continue
+		}
+
+		chapterPath := normalizeZipPath(path.Join(opfDir, item.Href))
+		chapterMarkup, err := readZipFileText(fileMap, chapterPath)
+		if err != nil {
+			continue
+		}
+
+		chapterTitle, chapterText := extractEpubChapterText(chapterMarkup)
+		appendChapter(chapterTitle, chapterText, index+1)
+	}
+
+	// 有些 EPUB 的 spine 不规范，这里退回到 manifest 级别兜底提取正文。
+	if len(chapters) == 0 {
+		for _, item := range pkg.Manifest.Items {
+			if !isSupportedEpubItem(item.MediaType) {
+				continue
+			}
+
+			chapterPath := normalizeZipPath(path.Join(opfDir, item.Href))
+			chapterMarkup, err := readZipFileText(fileMap, chapterPath)
+			if err != nil {
+				continue
+			}
+
+			chapterTitle, chapterText := extractEpubChapterText(chapterMarkup)
+			appendChapter(chapterTitle, chapterText, len(chapters)+1)
+		}
+	}
+
+	if len(chapters) == 0 {
+		return fmt.Errorf("未从 EPUB 中提取到可阅读正文")
+	}
+
+	novel.Content = contentBuilder.String()
+	novel.Chapters = chapters
+	return nil
 }
 
 // parsePdfNovel 解析 PDF 格式小说
@@ -382,4 +501,193 @@ func maxInt(a, b int) int {
 		return a
 	}
 	return b
+}
+
+type epubContainer struct {
+	RootFiles []struct {
+		FullPath string `xml:"full-path,attr"`
+	} `xml:"rootfiles>rootfile"`
+}
+
+type epubPackage struct {
+	Metadata struct {
+		Title string `xml:"title"`
+	} `xml:"metadata"`
+	Manifest struct {
+		Items []epubManifestItem `xml:"item"`
+	} `xml:"manifest"`
+	Spine struct {
+		ItemRefs []struct {
+			IDRef string `xml:"idref,attr"`
+		} `xml:"itemref"`
+	} `xml:"spine"`
+}
+
+type epubManifestItem struct {
+	ID        string `xml:"id,attr"`
+	Href      string `xml:"href,attr"`
+	MediaType string `xml:"media-type,attr"`
+}
+
+func readEpubContainerPath(fileMap map[string]*zip.File) (string, error) {
+	containerXML, err := readZipFileText(fileMap, "META-INF/container.xml")
+	if err != nil {
+		return "", fmt.Errorf("读取 EPUB 容器信息失败: %w", err)
+	}
+
+	var container epubContainer
+	if err := xml.Unmarshal([]byte(containerXML), &container); err != nil {
+		return "", fmt.Errorf("解析 EPUB 容器信息失败: %w", err)
+	}
+
+	if len(container.RootFiles) == 0 || strings.TrimSpace(container.RootFiles[0].FullPath) == "" {
+		return "", fmt.Errorf("EPUB 缺少 OPF 路径信息")
+	}
+
+	return normalizeZipPath(container.RootFiles[0].FullPath), nil
+}
+
+func readZipFileText(fileMap map[string]*zip.File, filePath string) (string, error) {
+	file, exists := fileMap[normalizeZipPath(filePath)]
+	if !exists {
+		return "", fmt.Errorf("文件不存在: %s", filePath)
+	}
+
+	reader, err := file.Open()
+	if err != nil {
+		return "", err
+	}
+	defer reader.Close()
+
+	content, err := io.ReadAll(reader)
+	if err != nil {
+		return "", err
+	}
+
+	return string(content), nil
+}
+
+func normalizeZipPath(filePath string) string {
+	return strings.TrimPrefix(path.Clean(strings.ReplaceAll(filePath, "\\", "/")), "./")
+}
+
+func extractEpubChapterText(markup string) (string, string) {
+	doc, err := xhtml.Parse(strings.NewReader(markup))
+	if err != nil {
+		return "", normalizeEpubText(stripHTMLTags(markup))
+	}
+
+	title := ""
+	var builder strings.Builder
+	var walk func(*xhtml.Node, bool)
+	lastCharWasNewline := false
+
+	walk = func(node *xhtml.Node, skip bool) {
+		if node == nil {
+			return
+		}
+
+		nextSkip := skip
+		if node.Type == xhtml.ElementNode {
+			tag := strings.ToLower(node.Data)
+			if tag == "script" || tag == "style" || tag == "head" {
+				nextSkip = true
+			}
+			if isEpubBlockTag(tag) && builder.Len() > 0 && !lastCharWasNewline {
+				builder.WriteString("\n")
+				lastCharWasNewline = true
+			}
+		}
+
+		if !nextSkip && node.Type == xhtml.TextNode {
+			text := strings.TrimSpace(stdhtml.UnescapeString(node.Data))
+			if text != "" {
+				if builder.Len() > 0 && !lastCharWasNewline {
+					builder.WriteString(" ")
+				}
+				builder.WriteString(text)
+				lastCharWasNewline = false
+			}
+		}
+
+		if title == "" && node.Type == xhtml.ElementNode {
+			tag := strings.ToLower(node.Data)
+			if tag == "title" || tag == "h1" || tag == "h2" {
+				text := strings.TrimSpace(extractNodeText(node))
+				if text != "" {
+					title = text
+				}
+			}
+		}
+
+		for child := node.FirstChild; child != nil; child = child.NextSibling {
+			walk(child, nextSkip)
+		}
+	}
+
+	walk(doc, false)
+	return title, normalizeEpubText(builder.String())
+}
+
+func extractNodeText(node *xhtml.Node) string {
+	var builder strings.Builder
+	var walk func(*xhtml.Node)
+	walk = func(current *xhtml.Node) {
+		if current == nil {
+			return
+		}
+		if current.Type == xhtml.TextNode {
+			builder.WriteString(current.Data)
+		}
+		for child := current.FirstChild; child != nil; child = child.NextSibling {
+			walk(child)
+		}
+	}
+	walk(node)
+	return stdhtml.UnescapeString(strings.TrimSpace(builder.String()))
+}
+
+func isEpubBlockTag(tag string) bool {
+	switch tag {
+	case "p", "div", "section", "article", "br", "li", "h1", "h2", "h3", "h4", "h5", "h6", "tr":
+		return true
+	default:
+		return false
+	}
+}
+
+func isSupportedEpubItem(mediaType string) bool {
+	switch mediaType {
+	case "application/xhtml+xml", "text/html":
+		return true
+	default:
+		return false
+	}
+}
+
+func stripHTMLTags(markup string) string {
+	tagRegexp := regexp.MustCompile(`<[^>]+>`)
+	return tagRegexp.ReplaceAllString(markup, " ")
+}
+
+func normalizeEpubText(content string) string {
+	lines := strings.Split(content, "\n")
+	normalizedLines := make([]string, 0, len(lines))
+	blankCount := 0
+
+	for _, line := range lines {
+		trimmed := strings.Join(strings.Fields(strings.TrimSpace(line)), " ")
+		if trimmed == "" {
+			blankCount++
+			if blankCount <= 1 {
+				normalizedLines = append(normalizedLines, "")
+			}
+			continue
+		}
+
+		blankCount = 0
+		normalizedLines = append(normalizedLines, trimmed)
+	}
+
+	return strings.TrimSpace(strings.Join(normalizedLines, "\n"))
 }

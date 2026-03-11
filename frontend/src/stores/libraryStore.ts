@@ -127,6 +127,8 @@ export const useLibraryStore = create<LibraryState>()(
                 },
               ],
               totalFiles: existingFiles.length + 1,
+              lastReadFileId: importedBook.id,
+              lastReadTime: importedBook.lastReadTime,
             }
           }),
         })),
