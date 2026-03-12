@@ -24,10 +24,9 @@
   padding: var(--spacing-2xl) var(--spacing-2xl);
   min-height: 110px;
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  justify-content: center;
-  gap: var(--spacing-md);
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--spacing-2xl); /* 增加间距，创造更多拖动空间 */
   border-bottom: 1px solid rgba(var(--border-primary), 0.1);
   background: rgba(var(--bg-secondary), 0.3);
   backdrop-filter: blur(10px);
@@ -52,19 +51,6 @@
   max-width: 500px; /* 限制最大宽度，留出更多拖动空间 */
   border: 1px solid rgb(var(--color-primary));
   border-radius: 15px;
-}
-
-.headerTop,
-.headerMain {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--spacing-lg);
-  min-width: 0;
-}
-
-.headerMain {
-  gap: var(--spacing-2xl);
 }
 
 .toolbar {
@@ -117,18 +103,28 @@
   overflow-y: auto;
 }
 
+.directoryBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-xl);
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: rgba(var(--bg-secondary), 0.42);
+  border: 1px solid rgba(var(--border-primary), 0.12);
+  border-radius: var(--radius-xl);
+}
+
 .directoryBackButton {
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-xs);
-  height: 42px;
-  padding: 0 var(--spacing-lg);
+  height: 36px;
+  padding: 0 var(--spacing-md);
   background: rgba(var(--bg-elevated), 0.72);
   border: 1px solid rgba(var(--border-primary), 0.24);
   border-radius: var(--radius-lg);
   color: rgb(var(--text-primary));
-  font-size: 0.95rem;
-  font-weight: 600;
   cursor: pointer;
   transition: all var(--transition-base);
 
@@ -148,13 +144,13 @@
 
 .directoryPath {
   color: rgb(var(--text-primary));
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 600;
 }
 
 .directoryCount {
   color: rgb(var(--text-secondary));
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
 }
 
 /* === Books List === */
@@ -259,12 +255,6 @@
     padding: var(--spacing-lg) var(--spacing-xl);  /* 从 32px 减小到 24px */
   }
 
-  .headerTop,
-  .headerMain {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
   .booksList.grid {
     grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
     gap: var(--spacing-md);  /* 保持 16px 间距 */
@@ -272,6 +262,11 @@
 
   .content {
     padding: var(--spacing-xl);  /* 从 48px 减小到 32px */
+  }
+
+  .directoryBar {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
 

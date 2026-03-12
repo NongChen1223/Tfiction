@@ -16,6 +16,7 @@ import {
   ChevronLeft,
 } from 'lucide-react'
 import { Popover, message } from 'antd'
+import { OpenNovel } from '@/wailsjs/go/services/NovelService'
 import type { Book, SortMode, ViewMode } from '@/types'
 import Sidebar from '@/components/features/Sidebar'
 import BookCard from '@/components/features/BookCard'
@@ -25,7 +26,6 @@ import ImportModal, { type ModalOption } from '@/components/features/ImportModal
 import SelectFilesModal from '@/components/features/SelectFilesModal'
 import { useNovelStore } from '@/stores/novelStore'
 import { useLibraryStore } from '@/stores/libraryStore'
-import { openNovel } from '@/services/novelBridge'
 import { formatBookCategory, mapNovelToBook, normalizeNovel } from '@/utils/novel'
 import styles from './Home.module.scss'
 
@@ -196,7 +196,7 @@ export default function Home() {
       (directorySource && existingDirectoryFile
         ? mapDirectoryFileToBook(directorySource, existingDirectoryFile)
         : undefined)
-    const openedNovel = await openNovel(filePath)
+    const openedNovel = await OpenNovel(filePath)
     const normalizedNovel = normalizeNovel(openedNovel)
     const shelfBook = mapNovelToBook(normalizedNovel, existingBook)
     const readerState = {
@@ -422,10 +422,62 @@ export default function Home() {
 
       <main className={styles.main}>
         <header className={styles.header}>
+          <Input
+            icon={<Search size={20} />}
+            placeholder={currentDirectory ? '搜索当前目录中的书籍...' : '搜索书名或作者...'}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onClear={() => setSearchQuery('')}
+            className={styles.searchInput}
+          />
+
+          <div className={styles.toolbar}>
+            <div className={styles.viewModeToggle}>
+              <button
+                className={`${styles.viewButton} ${viewMode === 'grid' ? styles.active : ''}`}
+                onClick={() => setViewMode('grid')}
+                aria-label="网格视图"
+                title="网格视图"
+              >
+                <Grid size={20} />
+              </button>
+              <button
+                className={`${styles.viewButton} ${viewMode === 'list' ? styles.active : ''}`}
+                onClick={() => setViewMode('list')}
+                aria-label="列表视图"
+                title="列表视图"
+              >
+                <List size={20} />
+              </button>
+            </div>
+
+            <Popover
+              content={sortContent}
+              trigger="click"
+              open={sortPopoverOpen}
+              onOpenChange={setSortPopoverOpen}
+              placement="bottomRight"
+            >
+              <button
+                className={`${styles.viewButton} ${sortPopoverOpen ? styles.active : ''}`}
+                aria-label="排序"
+                title="排序"
+              >
+                <ArrowUpDown size={20} />
+              </button>
+            </Popover>
+
+            <Button icon={<Plus size={20} />} onClick={handleImport}>
+              {currentDirectory ? '添加到目录' : '导入文件'}
+            </Button>
+          </div>
+        </header>
+
+        <div className={styles.content}>
           {currentDirectory && (
-            <div className={styles.headerTop}>
+            <div className={styles.directoryBar}>
               <button className={styles.directoryBackButton} onClick={exitDirectory}>
-                <ChevronLeft size={18} />
+                <ChevronLeft size={16} />
                 <span>返回书架</span>
               </button>
               <div className={styles.directoryMeta}>
@@ -437,60 +489,6 @@ export default function Home() {
             </div>
           )}
 
-          <div className={styles.headerMain}>
-            <Input
-              icon={<Search size={20} />}
-              placeholder={currentDirectory ? '搜索当前目录中的书籍...' : '搜索书名或作者...'}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onClear={() => setSearchQuery('')}
-              className={styles.searchInput}
-            />
-
-            <div className={styles.toolbar}>
-              <div className={styles.viewModeToggle}>
-                <button
-                  className={`${styles.viewButton} ${viewMode === 'grid' ? styles.active : ''}`}
-                  onClick={() => setViewMode('grid')}
-                  aria-label="网格视图"
-                  title="网格视图"
-                >
-                  <Grid size={20} />
-                </button>
-                <button
-                  className={`${styles.viewButton} ${viewMode === 'list' ? styles.active : ''}`}
-                  onClick={() => setViewMode('list')}
-                  aria-label="列表视图"
-                  title="列表视图"
-                >
-                  <List size={20} />
-                </button>
-              </div>
-
-              <Popover
-                content={sortContent}
-                trigger="click"
-                open={sortPopoverOpen}
-                onOpenChange={setSortPopoverOpen}
-                placement="bottomRight"
-              >
-                <button
-                  className={`${styles.viewButton} ${sortPopoverOpen ? styles.active : ''}`}
-                  aria-label="排序"
-                  title="排序"
-                >
-                  <ArrowUpDown size={20} />
-                </button>
-              </Popover>
-
-              <Button icon={<Plus size={20} />} onClick={handleImport}>
-                {currentDirectory ? '添加到目录' : '导入文件'}
-              </Button>
-            </div>
-          </div>
-        </header>
-
-        <div className={styles.content}>
           {sortedBooks.length > 0 ? (
             <div className={`${styles.booksList} ${styles[viewMode]}`}>
               {sortedBooks.map((book) => (
