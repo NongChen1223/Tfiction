@@ -103,6 +103,56 @@
   overflow-y: auto;
 }
 
+.directoryBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-xl);
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: rgba(var(--bg-secondary), 0.42);
+  border: 1px solid rgba(var(--border-primary), 0.12);
+  border-radius: var(--radius-xl);
+}
+
+.directoryBackButton {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  height: 36px;
+  padding: 0 var(--spacing-md);
+  background: rgba(var(--bg-elevated), 0.72);
+  border: 1px solid rgba(var(--border-primary), 0.24);
+  border-radius: var(--radius-lg);
+  color: rgb(var(--text-primary));
+  cursor: pointer;
+  transition: all var(--transition-base);
+
+  &:hover {
+    background: rgba(var(--color-primary), 0.1);
+    border-color: rgba(var(--color-primary), 0.28);
+    color: rgb(var(--color-primary));
+  }
+}
+
+.directoryMeta {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  min-width: 0;
+}
+
+.directoryPath {
+  color: rgb(var(--text-primary));
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.directoryCount {
+  color: rgb(var(--text-secondary));
+  font-size: 0.8125rem;
+}
+
 /* === Books List === */
 
 .booksList {
@@ -213,6 +263,11 @@
   .content {
     padding: var(--spacing-xl);  /* 从 48px 减小到 32px */
   }
+
+  .directoryBar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }
 
 /* === Sort Menu (Popover Content) === */
@@ -263,4 +318,3 @@
 .sortMenuLabel {
   flex: 1;
 }
-

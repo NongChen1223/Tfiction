@@ -109,6 +109,13 @@
   }
 }
 
+.backButton {
+  gap: var(--spacing-xs);
+  min-width: auto;
+  padding: 0 var(--spacing-md);
+  white-space: nowrap;
+}
+
 .active {
   background: rgb(var(--color-primary));
   color: rgb(var(--text-inverse));

@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Search,
   Grid,
@@ -13,6 +13,7 @@ import {
   FileText,
   FolderInput,
   FilePlus,
+  ChevronLeft,
 } from 'lucide-react'
 import { Popover, message } from 'antd'
 import { OpenNovel } from '@/wailsjs/go/services/NovelService'
@@ -25,7 +26,7 @@ import ImportModal, { type ModalOption } from '@/components/features/ImportModal
 import SelectFilesModal from '@/components/features/SelectFilesModal'
 import { useNovelStore } from '@/stores/novelStore'
 import { useLibraryStore } from '@/stores/libraryStore'
-import { mapNovelToBook, normalizeNovel } from '@/utils/novel'
+import { formatBookCategory, mapNovelToBook, normalizeNovel } from '@/utils/novel'
 import styles from './Home.module.scss'
 
 function isPickerCancelled(error: unknown) {
@@ -36,11 +37,33 @@ function resolveDirectoryReadTarget(book: Book) {
   return book.files?.find((file) => file.id === book.lastReadFileId) || book.files?.[0] || null
 }
 
+function mapDirectoryFileToBook(
+  directory: Book,
+  file: NonNullable<Book['files']>[number]
+): Book {
+  return {
+    id: file.id,
+    title: file.title,
+    author: file.author || '未知作者',
+    type: 'novel',
+    category: formatBookCategory(file.format),
+    isDirectory: false,
+    filePath: file.filePath,
+    format: file.format,
+    fileSize: file.fileSize,
+    progress: file.progress,
+    lastReadTime: file.lastReadTime,
+    createdAt: directory.createdAt,
+    parentDirectoryId: directory.id,
+  }
+}
+
 /**
  * Home 页面 - 书架/图书馆视图
  */
 export default function Home() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [messageApi, messageContextHolder] = message.useMessage()
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
@@ -60,12 +83,31 @@ export default function Home() {
     upsertBook,
     createDirectory,
     renameBook,
+    renameFileInDirectory,
     removeBook,
+    removeFileFromDirectory,
     moveBooksToDirectory,
     addImportedFileToDirectory,
   } = useLibraryStore()
 
-  const filteredBooks = books.filter((book) => {
+  const currentDirectoryId = searchParams.get('directory')
+  const currentDirectory =
+    books.find((book) => book.id === currentDirectoryId && book.isDirectory) || null
+  const visibleBooks = currentDirectory
+    ? (currentDirectory.files || []).map((file) => mapDirectoryFileToBook(currentDirectory, file))
+    : books
+
+  useEffect(() => {
+    if (!currentDirectoryId || currentDirectory) {
+      return
+    }
+
+    const nextSearchParams = new URLSearchParams(searchParams)
+    nextSearchParams.delete('directory')
+    setSearchParams(nextSearchParams)
+  }, [currentDirectory, currentDirectoryId, searchParams, setSearchParams])
+
+  const filteredBooks = visibleBooks.filter((book) => {
     if (selectedCategory === 'recent') {
       const sevenDaysAgo = Date.now() - 7 * 86400000
       if (!book.lastReadTime || book.lastReadTime < sevenDaysAgo) {
@@ -126,26 +168,82 @@ export default function Home() {
     </div>
   )
 
+  const enterDirectory = (directoryId: string) => {
+    const nextSearchParams = new URLSearchParams(searchParams)
+    nextSearchParams.set('directory', directoryId)
+    setSearchParams(nextSearchParams)
+  }
+
+  const exitDirectory = () => {
+    const nextSearchParams = new URLSearchParams(searchParams)
+    nextSearchParams.delete('directory')
+    setSearchParams(nextSearchParams)
+  }
+
   const openNovelAndEnterReader = async (
     filePath = '',
-    options?: { activateBossMode?: boolean }
+    options?: { activateBossMode?: boolean; sourceDirectoryId?: string }
   ) => {
-    const existingBook = books.find((book) => book.filePath === filePath)
+    const directorySource =
+      books.find(
+        (book) => book.id === options?.sourceDirectoryId && book.isDirectory
+      ) || null
+    const existingDirectoryFile = directorySource?.files?.find(
+      (file) => file.filePath === filePath
+    )
+    const existingBook =
+      books.find((book) => book.filePath === filePath) ||
+      (directorySource && existingDirectoryFile
+        ? mapDirectoryFileToBook(directorySource, existingDirectoryFile)
+        : undefined)
     const openedNovel = await OpenNovel(filePath)
     const normalizedNovel = normalizeNovel(openedNovel)
     const shelfBook = mapNovelToBook(normalizedNovel, existingBook)
+    const readerState = {
+      ...(options?.activateBossMode ? { activateBossMode: true } : {}),
+      ...(options?.sourceDirectoryId ? { returnDirectoryId: options.sourceDirectoryId } : {}),
+    }
 
     setCurrentNovel(normalizedNovel)
     addNovel(normalizedNovel)
     upsertBook(shelfBook)
     navigate('/reader', {
-      state: options?.activateBossMode ? { activateBossMode: true } : null,
+      state: Object.keys(readerState).length > 0 ? readerState : null,
     })
 
     return shelfBook
   }
 
+  const openImportModalForDirectory = (book: Book) => {
+    setTargetDirectory(book)
+    setImportModalConfig({
+      title: `添加文件到「${book.title}」`,
+      options: [
+        {
+          key: 'add-existing',
+          icon: <FolderInput size={48} />,
+          title: '添加已有文件',
+          description: '从书架中选择已有的文件',
+          onClick: () => setSelectFilesModalOpen(true),
+        },
+        {
+          key: 'import-new',
+          icon: <FilePlus size={48} />,
+          title: '导入新文件',
+          description: '从本地直接导入到目录',
+          onClick: handleImportNewFiles,
+        },
+      ],
+    })
+    setImportModalOpen(true)
+  }
+
   const handleImport = () => {
+    if (currentDirectory) {
+      openImportModalForDirectory(currentDirectory)
+      return
+    }
+
     setImportModalConfig({
       title: '导入文件',
       options: [
@@ -200,7 +298,7 @@ export default function Home() {
     }
 
     try {
-      await openNovelAndEnterReader(targetFile.filePath)
+      await openNovelAndEnterReader(targetFile.filePath, { sourceDirectoryId: book.id })
     } catch (error) {
       console.error('打开目录失败:', error)
       messageApi.error(error instanceof Error ? error.message : '打开目录失败')
@@ -208,27 +306,7 @@ export default function Home() {
   }
 
   const handleImportToDirectory = (book: Book) => {
-    setTargetDirectory(book)
-    setImportModalConfig({
-      title: `添加文件到「${book.title}」`,
-      options: [
-        {
-          key: 'add-existing',
-          icon: <FolderInput size={48} />,
-          title: '添加已有文件',
-          description: '从书架中选择已有的文件',
-          onClick: () => setSelectFilesModalOpen(true),
-        },
-        {
-          key: 'import-new',
-          icon: <FilePlus size={48} />,
-          title: '导入新文件',
-          description: '从本地直接导入到目录',
-          onClick: handleImportNewFiles,
-        },
-      ],
-    })
-    setImportModalOpen(true)
+    openImportModalForDirectory(book)
   }
 
   const handleImportNewFiles = async () => {
@@ -237,7 +315,9 @@ export default function Home() {
     }
 
     try {
-      const importedBook = await openNovelAndEnterReader()
+      const importedBook = await openNovelAndEnterReader('', {
+        sourceDirectoryId: targetDirectory.id,
+      })
       addImportedFileToDirectory(targetDirectory.id, importedBook)
       removeBook(importedBook.id)
       messageApi.success(`已导入到「${targetDirectory.title}」并打开阅读`)
@@ -255,11 +335,12 @@ export default function Home() {
     }
 
     moveBooksToDirectory(targetDirectory.id, selectedFileIds)
+    messageApi.success(`已添加到「${targetDirectory.title}」`)
   }
 
   const handleOpenBook = async (book: Book) => {
     if (book.isDirectory) {
-      await handleQuickRead(book)
+      enterDirectory(book.id)
       return
     }
 
@@ -268,7 +349,9 @@ export default function Home() {
     }
 
     try {
-      await openNovelAndEnterReader(book.filePath)
+      await openNovelAndEnterReader(book.filePath, {
+        sourceDirectoryId: book.parentDirectoryId,
+      })
     } catch (error) {
       console.error('打开书籍失败:', error)
       messageApi.error(error instanceof Error ? error.message : '打开书籍失败')
@@ -277,13 +360,17 @@ export default function Home() {
 
   const handleOpenBookInBossMode = async (book: Book) => {
     const targetFile = book.isDirectory ? resolveDirectoryReadTarget(book)?.filePath : book.filePath
+    const sourceDirectoryId = book.isDirectory ? book.id : book.parentDirectoryId
     if (!targetFile) {
       messageApi.warning('当前条目还没有可阅读的文件')
       return
     }
 
     try {
-      await openNovelAndEnterReader(targetFile, { activateBossMode: true })
+      await openNovelAndEnterReader(targetFile, {
+        activateBossMode: true,
+        sourceDirectoryId,
+      })
       messageApi.success('已进入老板模式阅读')
     } catch (error) {
       console.error('老板模式打开失败:', error)
@@ -297,6 +384,11 @@ export default function Home() {
       return
     }
 
+    if (book.parentDirectoryId) {
+      renameFileInDirectory(book.parentDirectoryId, book.id, nextTitle)
+      return
+    }
+
     renameBook(book.id, nextTitle)
   }
 
@@ -306,8 +398,19 @@ export default function Home() {
       return
     }
 
+    if (book.parentDirectoryId) {
+      removeFileFromDirectory(book.parentDirectoryId, book.id)
+      return
+    }
+
     removeBook(book.id)
   }
+
+  const emptyText = searchQuery
+    ? '没有找到匹配的书籍'
+    : currentDirectory
+      ? '这个目录还是空的，先给它加一本书'
+      : '书架还是空的，先导入一本小说试试'
 
   return (
     <div className={styles.container}>
@@ -321,7 +424,7 @@ export default function Home() {
         <header className={styles.header}>
           <Input
             icon={<Search size={20} />}
-            placeholder="搜索书名或作者..."
+            placeholder={currentDirectory ? '搜索当前目录中的书籍...' : '搜索书名或作者...'}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onClear={() => setSearchQuery('')}
@@ -365,12 +468,27 @@ export default function Home() {
             </Popover>
 
             <Button icon={<Plus size={20} />} onClick={handleImport}>
-              导入文件
+              {currentDirectory ? '添加到目录' : '导入文件'}
             </Button>
           </div>
         </header>
 
         <div className={styles.content}>
+          {currentDirectory && (
+            <div className={styles.directoryBar}>
+              <button className={styles.directoryBackButton} onClick={exitDirectory}>
+                <ChevronLeft size={16} />
+                <span>返回书架</span>
+              </button>
+              <div className={styles.directoryMeta}>
+                <span className={styles.directoryPath}>书架 / {currentDirectory.title}</span>
+                <span className={styles.directoryCount}>
+                  {currentDirectory.totalFiles || 0} 个文件
+                </span>
+              </div>
+            </div>
+          )}
+
           {sortedBooks.length > 0 ? (
             <div className={`${styles.booksList} ${styles[viewMode]}`}>
               {sortedBooks.map((book) => (
@@ -389,9 +507,7 @@ export default function Home() {
             </div>
           ) : (
             <div className={styles.empty}>
-              <p className={styles.emptyText}>
-                {searchQuery ? '没有找到匹配的书籍' : '书架还是空的，先导入一本小说试试'}
-              </p>
+              <p className={styles.emptyText}>{emptyText}</p>
             </div>
           )}
         </div>

@@ -73,6 +73,7 @@ export interface WindowState {
 export interface BookFile {
   id: string
   title: string
+  author: string // 作者
   filePath: string // 文件路径
   format: string // 文件格式
   fileSize: number // 文件大小（字节）
@@ -107,6 +108,7 @@ export interface Book {
   files?: BookFile[] // 包含的文件数组
   totalFiles?: number // 文件总数
   lastReadFileId?: string // 最后阅读的文件ID
+  parentDirectoryId?: string // 所属目录ID，仅目录内文件展示时使用
 }
 
 // ViewMode 视图模式类型

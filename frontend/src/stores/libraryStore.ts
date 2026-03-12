@@ -1,19 +1,99 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { Book } from '@/types'
+import type { Book, BookFile } from '@/types'
 
 interface LibraryState {
   books: Book[]
   upsertBook: (book: Book) => void
   createDirectory: (name: string) => void
   renameBook: (bookId: string, title: string) => void
+  renameFileInDirectory: (directoryId: string, fileId: string, title: string) => void
   removeBook: (bookId: string) => void
+  removeFileFromDirectory: (directoryId: string, fileId: string) => void
   moveBooksToDirectory: (directoryId: string, fileIds: string[]) => void
   addImportedFileToDirectory: (directoryId: string, book: Book) => void
   updateProgressByFilePath: (
     filePath: string,
     payload: { progress: number; lastReadTime: number }
   ) => void
+}
+
+const DEFAULT_AUTHOR = '未知作者'
+
+function normalizeDirectoryFiles(files: BookFile[] = []) {
+  const seenKeys = new Set<string>()
+
+  return files.reduce<BookFile[]>((result, file) => {
+    const dedupeKey = file.filePath || file.id
+    if (seenKeys.has(dedupeKey)) {
+      return result
+    }
+
+    seenKeys.add(dedupeKey)
+    result.push({
+      ...file,
+      author: file.author || DEFAULT_AUTHOR,
+      order: result.length + 1,
+    })
+
+    return result
+  }, [])
+}
+
+function normalizeLibraryBooks(books: Book[]) {
+  const nestedKeys = new Set<string>()
+
+  const normalizedBooks = books.map((book) => {
+    if (!book.isDirectory) {
+      return book
+    }
+
+    const normalizedFiles = normalizeDirectoryFiles(book.files)
+    normalizedFiles.forEach((file) => {
+      nestedKeys.add(file.id)
+      if (file.filePath) {
+        nestedKeys.add(file.filePath)
+      }
+    })
+
+    const fallbackLastReadFile = [...normalizedFiles].sort(
+      (a, b) => (b.lastReadTime || 0) - (a.lastReadTime || 0)
+    )[0]
+    const activeLastReadFile = normalizedFiles.find((file) => file.id === book.lastReadFileId)
+
+    return {
+      ...book,
+      files: normalizedFiles,
+      totalFiles: normalizedFiles.length,
+      lastReadFileId: activeLastReadFile?.id || fallbackLastReadFile?.id,
+      lastReadTime:
+        activeLastReadFile?.lastReadTime ||
+        fallbackLastReadFile?.lastReadTime ||
+        book.lastReadTime,
+    }
+  })
+
+  return normalizedBooks.filter((book) => {
+    if (book.isDirectory) {
+      return true
+    }
+
+    return !nestedKeys.has(book.id) && !(book.filePath && nestedKeys.has(book.filePath))
+  })
+}
+
+function mapBookToDirectoryFile(book: Book, order: number): BookFile {
+  return {
+    id: book.id,
+    title: book.title,
+    author: book.author || DEFAULT_AUTHOR,
+    filePath: book.filePath || '',
+    format: book.format || '',
+    fileSize: book.fileSize || 0,
+    progress: book.progress || 0,
+    lastReadTime: book.lastReadTime,
+    order,
+  }
 }
 
 export const useLibraryStore = create<LibraryState>()(
@@ -25,19 +105,19 @@ export const useLibraryStore = create<LibraryState>()(
         set((state) => {
           const existing = state.books.find((item) => item.id === book.id)
           if (!existing) {
-            return { books: [book, ...state.books] }
+            return { books: normalizeLibraryBooks([book, ...state.books]) }
           }
 
           return {
-            books: state.books.map((item) =>
-              item.id === book.id ? { ...existing, ...book } : item
+            books: normalizeLibraryBooks(
+              state.books.map((item) => (item.id === book.id ? { ...existing, ...book } : item))
             ),
           }
         }),
 
       createDirectory: (name) =>
         set((state) => ({
-          books: [
+          books: normalizeLibraryBooks([
             {
               id: `directory:${crypto.randomUUID()}`,
               title: name,
@@ -50,19 +130,56 @@ export const useLibraryStore = create<LibraryState>()(
               createdAt: Date.now(),
             },
             ...state.books,
-          ],
+          ]),
         })),
 
       renameBook: (bookId, title) =>
         set((state) => ({
-          books: state.books.map((book) =>
-            book.id === bookId ? { ...book, title: title.trim() || book.title } : book
+          books: normalizeLibraryBooks(
+            state.books.map((book) =>
+              book.id === bookId ? { ...book, title: title.trim() || book.title } : book
+            )
+          ),
+        })),
+
+      renameFileInDirectory: (directoryId, fileId, title) =>
+        set((state) => ({
+          books: normalizeLibraryBooks(
+            state.books.map((book) => {
+              if (book.id !== directoryId || !book.isDirectory) {
+                return book
+              }
+
+              return {
+                ...book,
+                files:
+                  book.files?.map((file) =>
+                    file.id === fileId ? { ...file, title: title.trim() || file.title } : file
+                  ) || [],
+              }
+            })
           ),
         })),
 
       removeBook: (bookId) =>
         set((state) => ({
-          books: state.books.filter((book) => book.id !== bookId),
+          books: normalizeLibraryBooks(state.books.filter((book) => book.id !== bookId)),
+        })),
+
+      removeFileFromDirectory: (directoryId, fileId) =>
+        set((state) => ({
+          books: normalizeLibraryBooks(
+            state.books.map((book) => {
+              if (book.id !== directoryId || !book.isDirectory) {
+                return book
+              }
+
+              return {
+                ...book,
+                files: book.files?.filter((file) => file.id !== fileId) || [],
+              }
+            })
+          ),
         })),
 
       moveBooksToDirectory: (directoryId, fileIds) =>
@@ -75,106 +192,117 @@ export const useLibraryStore = create<LibraryState>()(
           }
 
           return {
-            books: state.books
-              .map((book) => {
-                if (book.id !== directoryId || !book.isDirectory) {
-                  return book
-                }
+            books: normalizeLibraryBooks(
+              state.books
+                .map((book) => {
+                  if (book.id !== directoryId || !book.isDirectory) {
+                    return book
+                  }
 
-                const existingFiles = book.files || []
-                const newFiles = filesToMove.map((file, index) => ({
-                  id: file.id,
-                  title: file.title,
-                  filePath: file.filePath || '',
-                  format: file.format || '',
-                  fileSize: file.fileSize || 0,
-                  progress: file.progress || 0,
-                  lastReadTime: file.lastReadTime,
-                  order: existingFiles.length + index + 1,
-                }))
+                  const existingFiles = normalizeDirectoryFiles(book.files)
+                  const existingKeys = new Set(
+                    existingFiles.map((file) => file.filePath || file.id)
+                  )
+                  const newFiles = filesToMove
+                    .filter((file) => !existingKeys.has(file.filePath || file.id))
+                    .map((file, index) =>
+                      mapBookToDirectoryFile(file, existingFiles.length + index + 1)
+                    )
 
-                return {
-                  ...book,
-                  files: [...existingFiles, ...newFiles],
-                  totalFiles: existingFiles.length + newFiles.length,
-                }
-              })
-              .filter((book) => !fileIds.includes(book.id)),
+                  return {
+                    ...book,
+                    files: [...existingFiles, ...newFiles],
+                    totalFiles: existingFiles.length + newFiles.length,
+                  }
+                })
+                .filter((book) => !fileIds.includes(book.id))
+            ),
           }
         }),
 
       addImportedFileToDirectory: (directoryId, importedBook) =>
         set((state) => ({
-          books: state.books.map((book) => {
-            if (book.id !== directoryId || !book.isDirectory) {
-              return book
-            }
+          books: normalizeLibraryBooks(
+            state.books.map((book) => {
+              if (book.id !== directoryId || !book.isDirectory) {
+                return book
+              }
 
-            const existingFiles = book.files || []
-            return {
-              ...book,
-              files: [
-                ...existingFiles,
-                {
-                  id: importedBook.id,
-                  title: importedBook.title,
-                  filePath: importedBook.filePath || '',
-                  format: importedBook.format || '',
-                  fileSize: importedBook.fileSize || 0,
-                  progress: importedBook.progress || 0,
-                  lastReadTime: importedBook.lastReadTime,
-                  order: existingFiles.length + 1,
-                },
-              ],
-              totalFiles: existingFiles.length + 1,
-              lastReadFileId: importedBook.id,
-              lastReadTime: importedBook.lastReadTime,
-            }
-          }),
-        })),
-
-      updateProgressByFilePath: (filePath, payload) =>
-        set((state) => ({
-          books: state.books.map((book) => {
-            if (book.isDirectory) {
-              const updatedFiles =
-                book.files?.map((file) =>
-                  file.filePath === filePath
-                    ? {
-                        ...file,
-                        progress: payload.progress,
-                        lastReadTime: payload.lastReadTime,
-                      }
-                    : file
-                ) || []
-
-              const lastReadFile = updatedFiles.find((file) => file.filePath === filePath)
-              if (!lastReadFile) {
+              const existingFiles = normalizeDirectoryFiles(book.files)
+              const alreadyExists = existingFiles.some(
+                (file) => file.id === importedBook.id || file.filePath === importedBook.filePath
+              )
+              if (alreadyExists) {
                 return book
               }
 
               return {
                 ...book,
-                files: updatedFiles,
-                lastReadTime: payload.lastReadTime,
-                lastReadFileId: lastReadFile.id,
+                files: [
+                  ...existingFiles,
+                  mapBookToDirectoryFile(importedBook, existingFiles.length + 1),
+                ],
+                totalFiles: existingFiles.length + 1,
+                lastReadFileId: importedBook.id,
+                lastReadTime: importedBook.lastReadTime,
               }
-            }
+            })
+          ),
+        })),
 
-            if (book.filePath !== filePath) {
-              return book
-            }
+      updateProgressByFilePath: (filePath, payload) =>
+        set((state) => ({
+          books: normalizeLibraryBooks(
+            state.books.map((book) => {
+              if (book.isDirectory) {
+                const updatedFiles =
+                  book.files?.map((file) =>
+                    file.filePath === filePath
+                      ? {
+                          ...file,
+                          progress: payload.progress,
+                          lastReadTime: payload.lastReadTime,
+                        }
+                      : file
+                  ) || []
 
-            return {
-              ...book,
-              progress: payload.progress,
-              lastReadTime: payload.lastReadTime,
-            }
-          }),
+                const lastReadFile = updatedFiles.find((file) => file.filePath === filePath)
+                if (!lastReadFile) {
+                  return book
+                }
+
+                return {
+                  ...book,
+                  files: updatedFiles,
+                  lastReadTime: payload.lastReadTime,
+                  lastReadFileId: lastReadFile.id,
+                }
+              }
+
+              if (book.filePath !== filePath) {
+                return book
+              }
+
+              return {
+                ...book,
+                progress: payload.progress,
+                lastReadTime: payload.lastReadTime,
+              }
+            })
+          ),
         })),
     }),
     {
       name: 'tfiction-library',
+      merge: (persistedState, currentState) => {
+        const typedState = persistedState as Partial<LibraryState> | undefined
+
+        return {
+          ...currentState,
+          ...typedState,
+          books: normalizeLibraryBooks(typedState?.books || currentState.books),
+        }
+      },
     }
   )
 )

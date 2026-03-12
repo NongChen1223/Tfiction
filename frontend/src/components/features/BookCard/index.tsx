@@ -1,3 +1,4 @@
+import type { MouseEvent } from 'react'
 import type { Book, ViewMode } from '@/types'
 import { BookOpen, Eye, EyeOff, Edit2, Trash2, FolderOpen, Plus } from 'lucide-react'
 import Badge from '@/components/common/Badge'
@@ -10,8 +11,8 @@ export interface BookCardProps {
   onOpenInBossMode?: (book: Book) => void
   onEdit?: (book: Book) => void
   onDelete?: (book: Book) => void
-  onQuickRead?: (book: Book) => void // 目录快速阅读
-  onImportToDirectory?: (book: Book) => void // 导入文件到目录
+  onQuickRead?: (book: Book) => void
+  onImportToDirectory?: (book: Book) => void
 }
 
 /**
@@ -29,25 +30,29 @@ export default function BookCard({
   onQuickRead,
   onImportToDirectory,
 }: BookCardProps) {
-  const handleOpen = () => onOpen?.(book)
-  const handleBossMode = (e: React.MouseEvent) => {
-    e.stopPropagation()
+  const handlePrimaryOpen = () => onOpen?.(book)
+  const handlePrimaryOpenClick = (event: MouseEvent) => {
+    event.stopPropagation()
+    onOpen?.(book)
+  }
+  const handleBossMode = (event: MouseEvent) => {
+    event.stopPropagation()
     onOpenInBossMode?.(book)
   }
-  const handleQuickRead = (e: React.MouseEvent) => {
-    e.stopPropagation()
+  const handleQuickRead = (event: MouseEvent) => {
+    event.stopPropagation()
     onQuickRead?.(book)
   }
-  const handleImportToDirectory = (e: React.MouseEvent) => {
-    e.stopPropagation()
+  const handleImportToDirectory = (event: MouseEvent) => {
+    event.stopPropagation()
     onImportToDirectory?.(book)
   }
-  const handleEdit = (e: React.MouseEvent) => {
-    e.stopPropagation()
+  const handleEdit = (event: MouseEvent) => {
+    event.stopPropagation()
     onEdit?.(book)
   }
-  const handleDelete = (e: React.MouseEvent) => {
-    e.stopPropagation()
+  const handleDelete = (event: MouseEvent) => {
+    event.stopPropagation()
     onDelete?.(book)
   }
   const directoryProgress =
@@ -58,21 +63,18 @@ export default function BookCard({
         )
       : 0
   const progressValue = book.isDirectory ? directoryProgress : book.progress || 0
-  const readAction = book.isDirectory ? handleQuickRead : handleOpen
-
   const cardClasses = [styles.card, styles[viewMode]].filter(Boolean).join(' ')
 
-  // 列表模式的渲染
   if (viewMode === 'list') {
     return (
-      <div className={cardClasses}>
+      <div className={cardClasses} onClick={handlePrimaryOpen}>
         <div className={styles.coverWrapper}>
           <div className={styles.cover}>
             {book.cover ? (
               <img src={book.cover} alt={book.title} className={styles.coverImage} />
             ) : (
               <div className={styles.coverPlaceholder}>
-                <BookOpen size={48} />
+                {book.isDirectory ? <FolderOpen size={48} /> : <BookOpen size={48} />}
               </div>
             )}
           </div>
@@ -83,7 +85,7 @@ export default function BookCard({
             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)' }}>
               <div className={styles.tagWrapper}>
                 <Badge variant="primary" size="sm">
-                  {book.category}
+                  {book.isDirectory ? `${book.totalFiles || 0} 个文件` : book.category}
                 </Badge>
               </div>
             </div>
@@ -109,23 +111,52 @@ export default function BookCard({
               </p>
             )}
             <div className={styles.actions}>
-              <button
-                className={styles.iconButton}
-                onClick={readAction}
-                aria-label="阅读"
-                title="阅读"
-              >
-                <Eye size={16} />
-              </button>
-              {!book.isDirectory && (
-                <button
-                  className={styles.iconButton}
-                  onClick={handleBossMode}
-                  aria-label="老板模式阅读"
-                  title="老板模式阅读"
-                >
-                  <EyeOff size={16} />
-                </button>
+              {book.isDirectory ? (
+                <>
+                  <button
+                    className={styles.iconButton}
+                    onClick={handlePrimaryOpenClick}
+                    aria-label="进入目录"
+                    title="进入目录"
+                  >
+                    <FolderOpen size={16} />
+                  </button>
+                  <button
+                    className={styles.iconButton}
+                    onClick={handleQuickRead}
+                    aria-label="立即阅读"
+                    title="立即阅读"
+                  >
+                    <Eye size={16} />
+                  </button>
+                  <button
+                    className={styles.iconButton}
+                    onClick={handleImportToDirectory}
+                    aria-label="导入文件"
+                    title="导入文件"
+                  >
+                    <Plus size={16} />
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    className={styles.iconButton}
+                    onClick={handlePrimaryOpenClick}
+                    aria-label="阅读"
+                    title="阅读"
+                  >
+                    <Eye size={16} />
+                  </button>
+                  <button
+                    className={styles.iconButton}
+                    onClick={handleBossMode}
+                    aria-label="老板模式阅读"
+                    title="老板模式阅读"
+                  >
+                    <EyeOff size={16} />
+                  </button>
+                </>
               )}
               <button
                 className={styles.iconButton}
@@ -150,9 +181,8 @@ export default function BookCard({
     )
   }
 
-  // 网格模式的渲染
   return (
-    <div className={cardClasses}>
+    <div className={cardClasses} onClick={handlePrimaryOpen}>
       <div className={styles.coverWrapper}>
         <div className={styles.cover}>
           {book.cover ? (
@@ -163,16 +193,10 @@ export default function BookCard({
             </div>
           )}
 
-          {/* 圆形进度条 - 左上角 - 仅单文件显示 */}
           {!book.isDirectory && book.progress !== undefined && (
             <div className={styles.progressCircle}>
               <svg className={styles.progressSvg} viewBox="0 0 36 36">
-                <circle
-                  className={styles.progressBg}
-                  cx="18"
-                  cy="18"
-                  r="16"
-                />
+                <circle className={styles.progressBg} cx="18" cy="18" r="16" />
                 <circle
                   className={styles.progressBar}
                   cx="18"
@@ -185,24 +209,24 @@ export default function BookCard({
             </div>
           )}
 
-          {/* Tag标签 - 封面内 */}
           <div className={styles.tagWrapper}>
             <Badge variant="primary" size="sm">
               {book.isDirectory ? `${book.totalFiles || 0} 个文件` : book.category}
             </Badge>
           </div>
 
-          {/* 标题 - 封面底部 */}
           <div className={styles.titleOverlay}>
             <h3 className={styles.title}>{book.title}</h3>
             <p className={styles.author}>作者: {book.author}</p>
           </div>
 
-          {/* 悬浮显示的操作按钮 - 根据类型不同 */}
           <div className={styles.hoverActions}>
             {book.isDirectory ? (
-              // 目录类型：立即阅读 + 导入文件
               <>
+                <button className={styles.actionButton} onClick={handlePrimaryOpenClick}>
+                  <FolderOpen size={20} />
+                  <span>进入目录</span>
+                </button>
                 <button className={styles.actionButton} onClick={handleQuickRead}>
                   <Eye size={20} />
                   <span>立即阅读</span>
@@ -213,9 +237,8 @@ export default function BookCard({
                 </button>
               </>
             ) : (
-              // 单文件类型：立刻阅读 + 老板模式
               <>
-                <button className={styles.actionButton} onClick={handleOpen}>
+                <button className={styles.actionButton} onClick={handlePrimaryOpenClick}>
                   <Eye size={20} />
                   <span>立刻阅读</span>
                 </button>
@@ -229,7 +252,6 @@ export default function BookCard({
         </div>
       </div>
 
-      {/* 底部信息栏 - 最后阅读时间和操作按钮 */}
       <div className={styles.footer}>
         {book.lastReadTime && (
           <p className={styles.lastRead}>

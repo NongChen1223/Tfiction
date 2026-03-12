@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
+import { ArrowLeft } from 'lucide-react'
 import type { SearchResult } from '@/types'
 import { useNovelStore } from '@/stores/novelStore'
 import { useSettingsStore } from '@/stores/settingsStore'
@@ -87,14 +88,16 @@ export default function Reader() {
       : null
 
   const chapterHtml = buildHighlightedHtml(chapterContent, searchKeyword)
+  const routeState = (location.state as
+    | { activateBossMode?: boolean; returnDirectoryId?: string }
+    | null)
   const displayOpacity = isStealthMode
     ? bossMode.isConcealed
       ? Math.min(opacity, 0.04)
       : opacity
     : 1
-  const shouldActivateBossMode = Boolean(
-    (location.state as { activateBossMode?: boolean } | null)?.activateBossMode
-  )
+  const shouldActivateBossMode = Boolean(routeState?.activateBossMode)
+  const returnDirectoryId = routeState?.returnDirectoryId
 
   useClickOutside(bossPanelRef, isStealthMode && bossMode.isPanelOpen, () => {
     bossMode.closePanel()
@@ -154,17 +157,6 @@ export default function Reader() {
     }))
     updateReadProgress(currentNovel.filePath, progress)
     updateProgressByFilePath(currentNovel.filePath, { progress, lastReadTime: now })
-    upsertBook(
-      mapNovelToBook(
-        {
-          ...currentNovel,
-          currentChapter: chapterIndex,
-          readProgress: progress,
-          lastReadTime: now,
-        },
-        undefined
-      )
-    )
   }
 
   const handleOpenFile = async () => {
@@ -290,6 +282,10 @@ export default function Reader() {
     }
   }
 
+  const handleReturnHome = () => {
+    navigate(returnDirectoryId ? `/home?directory=${encodeURIComponent(returnDirectoryId)}` : '/home')
+  }
+
   useEffect(() => {
     if (!currentNovel) {
       setChapterContent('')
@@ -310,13 +306,17 @@ export default function Reader() {
     }
 
     void handleToggleStealthMode()
-    navigate(location.pathname, { replace: true, state: null })
+    navigate(location.pathname, {
+      replace: true,
+      state: returnDirectoryId ? { returnDirectoryId } : null,
+    })
   }, [
     currentNovel,
     handleToggleStealthMode,
     isStealthMode,
     location.pathname,
     navigate,
+    returnDirectoryId,
     shouldActivateBossMode,
   ])
 
@@ -356,7 +356,7 @@ export default function Reader() {
         void handleToggleStealthMode()
       } else if (matchesShortcut(event, keyboardShortcuts.goHome) && !isTypingTarget) {
         event.preventDefault()
-        navigate('/home')
+        handleReturnHome()
       } else if (matchesShortcut(event, keyboardShortcuts.quickHide) && isStealthMode) {
         event.preventDefault()
         setShowSearch(false)
@@ -367,7 +367,7 @@ export default function Reader() {
 
     window.addEventListener('keydown', handleKeyPress)
     return () => window.removeEventListener('keydown', handleKeyPress)
-  }, [bossMode, bossOpacity, currentNovel, isStealthMode, keyboardShortcuts, navigate])
+  }, [bossMode, bossOpacity, currentNovel, handleReturnHome, isStealthMode, keyboardShortcuts])
 
   useEffect(() => {
     const contentElement = contentRef.current
@@ -439,6 +439,14 @@ export default function Reader() {
         }`}
       >
         <div className={styles.toolbarLeft}>
+          <button
+            onClick={handleReturnHome}
+            className={`${styles.toolbarButton} ${styles.backButton}`}
+            title={returnDirectoryId ? '返回目录' : '返回书架'}
+          >
+            <ArrowLeft size={16} />
+            <span>{returnDirectoryId ? '返回目录' : '返回书架'}</span>
+          </button>
           <button
             onClick={() => setShowSidebar((value) => !value)}
             className={styles.toolbarButton}
