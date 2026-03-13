@@ -20,6 +20,7 @@ import type { Book, SortMode, ViewMode } from '@/types'
 import Sidebar from '@/components/features/Sidebar'
 import BookCard from '@/components/features/BookCard'
 import ConfirmModal from '@/components/features/ConfirmModal'
+import RenameModal from '@/components/features/RenameModal'
 import Input from '@/components/common/Input'
 import Button from '@/components/common/Button'
 import ImportModal, { type ModalOption } from '@/components/features/ImportModal'
@@ -83,6 +84,27 @@ function getDeleteDetail(book: Book) {
   return book.isDirectory ? book.title : getBookDisplayNameWithExtension(book)
 }
 
+function getRenameDescription(book: Book) {
+  if (book.isDirectory) {
+    return '只会修改书架里的目录名称，不会改动你本地的原始文件夹或文件。'
+  }
+
+  return '只会修改书架里的显示名称，不会改动本地原始文件。'
+}
+
+function getRenamePreview(book: Book, nextTitle?: string) {
+  const safeTitle = nextTitle?.trim() || book.title
+
+  if (book.isDirectory) {
+    return safeTitle
+  }
+
+  const extension = normalizeBookExtension(book.format)
+  return extension && !safeTitle.toLowerCase().endsWith(extension.toLowerCase())
+    ? `${safeTitle}${extension}`
+    : safeTitle
+}
+
 function resolveDirectoryReadTarget(book: Book) {
   return book.files?.find((file) => file.id === book.lastReadFileId) || book.files?.[0] || null
 }
@@ -129,6 +151,7 @@ export default function Home() {
   const [selectFilesModalOpen, setSelectFilesModalOpen] = useState(false)
   const [targetDirectory, setTargetDirectory] = useState<Book | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Book | null>(null)
+  const [renameTarget, setRenameTarget] = useState<Book | null>(null)
   const { setCurrentNovel, addNovel } = useNovelStore()
   const {
     books,
@@ -232,10 +255,7 @@ export default function Home() {
     setSearchParams(nextSearchParams)
   }
 
-  const openNovelAndEnterReader = async (
-    filePath = '',
-    options?: { activateBossMode?: boolean; sourceDirectoryId?: string }
-  ) => {
+  const loadNovelForShelf = async (filePath = '', options?: { sourceDirectoryId?: string }) => {
     const directorySource =
       books.find(
         (book) => book.id === options?.sourceDirectoryId && book.isDirectory
@@ -251,6 +271,14 @@ export default function Home() {
     const openedNovel = await openNovel(filePath)
     const normalizedNovel = normalizeNovel(openedNovel)
     const shelfBook = mapNovelToBook(normalizedNovel, existingBook)
+    return { normalizedNovel, shelfBook }
+  }
+
+  const openNovelAndEnterReader = async (
+    filePath = '',
+    options?: { activateBossMode?: boolean; sourceDirectoryId?: string }
+  ) => {
+    const { normalizedNovel, shelfBook } = await loadNovelForShelf(filePath, options)
     const readerState = {
       ...(options?.activateBossMode ? { activateBossMode: true } : {}),
       ...(options?.sourceDirectoryId ? { returnDirectoryId: options.sourceDirectoryId } : {}),
@@ -332,8 +360,9 @@ export default function Home() {
 
   const handleImportFile = async () => {
     try {
-      await openNovelAndEnterReader()
-      messageApi.success('文件已导入并打开')
+      const { shelfBook } = await loadNovelForShelf()
+      upsertBook(shelfBook)
+      messageApi.success(`已导入「${getBookDisplayNameWithExtension(shelfBook)}」`)
     } catch (error) {
       if (!isPickerCancelled(error)) {
         console.error('导入文件失败:', error)
@@ -367,12 +396,13 @@ export default function Home() {
     }
 
     try {
-      const importedBook = await openNovelAndEnterReader('', {
+      const { shelfBook } = await loadNovelForShelf('', {
         sourceDirectoryId: targetDirectory.id,
       })
-      addImportedFileToDirectory(targetDirectory.id, importedBook)
-      removeBook(importedBook.id)
-      messageApi.success(`已导入到「${targetDirectory.title}」并打开阅读`)
+      addImportedFileToDirectory(targetDirectory.id, shelfBook)
+      messageApi.success(
+        `已导入「${getBookDisplayNameWithExtension(shelfBook)}」到「${targetDirectory.title}」`
+      )
     } catch (error) {
       if (!isPickerCancelled(error)) {
         console.error('导入目录文件失败:', error)
@@ -431,21 +461,31 @@ export default function Home() {
   }
 
   const handleEditBook = (book: Book) => {
-    const nextTitle = window.prompt('请输入新的书名', book.title)
-    if (!nextTitle) {
+    setRenameTarget(book)
+  }
+
+  const handleRenameConfirm = (nextTitle: string) => {
+    if (!renameTarget) {
       return
     }
 
-    if (book.parentDirectoryId) {
-      renameFileInDirectory(book.parentDirectoryId, book.id, nextTitle)
-      return
+    if (renameTarget.parentDirectoryId) {
+      renameFileInDirectory(renameTarget.parentDirectoryId, renameTarget.id, nextTitle)
+    } else {
+      renameBook(renameTarget.id, nextTitle)
     }
 
-    renameBook(book.id, nextTitle)
+    messageApi.success(
+      renameTarget.isDirectory
+        ? `已重命名为「${nextTitle}」`
+        : `已更新书名为「${getRenamePreview(renameTarget, nextTitle)}」`
+    )
+    setRenameTarget(null)
   }
 
   const handleDeleteBook = (book: Book) => {
-    setDeleteTarget(book)
+    setRenameTarget(null)
+    setDeleteTarget({ ...book })
   }
 
   const handleConfirmDelete = async () => {
@@ -453,23 +493,28 @@ export default function Home() {
       return
     }
 
-    const targetBook = deleteTarget
-    const progressFilePaths = targetBook.isDirectory
-      ? (targetBook.files || []).map((file) => file.filePath).filter(Boolean)
-      : [targetBook.filePath].filter(Boolean)
+    try {
+      const targetBook = deleteTarget
+      const progressFilePaths = targetBook.isDirectory
+        ? (targetBook.files || []).map((file) => file.filePath).filter(Boolean)
+        : [targetBook.filePath].filter(Boolean)
 
-    await Promise.allSettled(
-      progressFilePaths.map((filePath) => DeleteProgress(filePath as string))
-    )
+      await Promise.allSettled(
+        progressFilePaths.map((filePath) => DeleteProgress(filePath as string))
+      )
 
-    if (targetBook.parentDirectoryId) {
-      removeFileFromDirectory(targetBook.parentDirectoryId, targetBook.id)
+      if (targetBook.parentDirectoryId) {
+        removeFileFromDirectory(targetBook.parentDirectoryId, targetBook.id)
+      } else {
+        removeBook(targetBook.id)
+      }
+
       messageApi.success(getDeleteSuccessMessage(targetBook))
-      return
+    } catch (error) {
+      console.error('删除书籍失败:', error)
+      messageApi.error(error instanceof Error ? error.message : '删除失败，请稍后重试')
+      throw error
     }
-
-    removeBook(targetBook.id)
-    messageApi.success(getDeleteSuccessMessage(targetBook))
   }
 
   const emptyText = searchQuery
@@ -593,6 +638,15 @@ export default function Home() {
         tone="danger"
         onClose={() => setDeleteTarget(null)}
         onConfirm={handleConfirmDelete}
+      />
+      <RenameModal
+        open={renameTarget !== null}
+        title={renameTarget ? `重命名${renameTarget.isDirectory ? '目录' : '书籍'}` : ''}
+        description={renameTarget ? getRenameDescription(renameTarget) : ''}
+        currentName={renameTarget?.title || ''}
+        placeholder={renameTarget?.isDirectory ? '例如：三体系列' : '例如：三体'}
+        onClose={() => setRenameTarget(null)}
+        onConfirm={handleRenameConfirm}
       />
 
       <SelectFilesModal

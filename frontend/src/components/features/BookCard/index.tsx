@@ -32,26 +32,32 @@ export default function BookCard({
 }: BookCardProps) {
   const handlePrimaryOpen = () => onOpen?.(book)
   const handlePrimaryOpenClick = (event: MouseEvent) => {
+    event.preventDefault()
     event.stopPropagation()
     onOpen?.(book)
   }
   const handleBossMode = (event: MouseEvent) => {
+    event.preventDefault()
     event.stopPropagation()
     onOpenInBossMode?.(book)
   }
   const handleQuickRead = (event: MouseEvent) => {
+    event.preventDefault()
     event.stopPropagation()
     onQuickRead?.(book)
   }
   const handleImportToDirectory = (event: MouseEvent) => {
+    event.preventDefault()
     event.stopPropagation()
     onImportToDirectory?.(book)
   }
   const handleEdit = (event: MouseEvent) => {
+    event.preventDefault()
     event.stopPropagation()
     onEdit?.(book)
   }
   const handleDelete = (event: MouseEvent) => {
+    event.preventDefault()
     event.stopPropagation()
     onDelete?.(book)
   }
@@ -114,6 +120,7 @@ export default function BookCard({
               {book.isDirectory ? (
                 <>
                   <button
+                    type="button"
                     className={styles.iconButton}
                     onClick={handlePrimaryOpenClick}
                     aria-label="进入目录"
@@ -122,6 +129,7 @@ export default function BookCard({
                     <FolderOpen size={16} />
                   </button>
                   <button
+                    type="button"
                     className={styles.iconButton}
                     onClick={handleQuickRead}
                     aria-label="立即阅读"
@@ -130,6 +138,7 @@ export default function BookCard({
                     <Eye size={16} />
                   </button>
                   <button
+                    type="button"
                     className={styles.iconButton}
                     onClick={handleImportToDirectory}
                     aria-label="导入文件"
@@ -141,6 +150,7 @@ export default function BookCard({
               ) : (
                 <>
                   <button
+                    type="button"
                     className={styles.iconButton}
                     onClick={handlePrimaryOpenClick}
                     aria-label="阅读"
@@ -149,6 +159,7 @@ export default function BookCard({
                     <Eye size={16} />
                   </button>
                   <button
+                    type="button"
                     className={styles.iconButton}
                     onClick={handleBossMode}
                     aria-label="老板模式阅读"
@@ -159,6 +170,7 @@ export default function BookCard({
                 </>
               )}
               <button
+                type="button"
                 className={styles.iconButton}
                 onClick={handleEdit}
                 aria-label="编辑"
@@ -167,6 +179,7 @@ export default function BookCard({
                 <Edit2 size={16} />
               </button>
               <button
+                type="button"
                 className={styles.iconButton}
                 onClick={handleDelete}
                 aria-label="删除"
@@ -223,26 +236,26 @@ export default function BookCard({
           <div className={styles.hoverActions}>
             {book.isDirectory ? (
               <>
-                <button className={styles.actionButton} onClick={handlePrimaryOpenClick}>
+                <button type="button" className={styles.actionButton} onClick={handlePrimaryOpenClick}>
                   <FolderOpen size={20} />
                   <span>进入目录</span>
                 </button>
-                <button className={styles.actionButton} onClick={handleQuickRead}>
+                <button type="button" className={styles.actionButton} onClick={handleQuickRead}>
                   <Eye size={20} />
                   <span>立即阅读</span>
                 </button>
-                <button className={styles.actionButton} onClick={handleImportToDirectory}>
+                <button type="button" className={styles.actionButton} onClick={handleImportToDirectory}>
                   <Plus size={20} />
                   <span>导入文件</span>
                 </button>
               </>
             ) : (
               <>
-                <button className={styles.actionButton} onClick={handlePrimaryOpenClick}>
+                <button type="button" className={styles.actionButton} onClick={handlePrimaryOpenClick}>
                   <Eye size={20} />
                   <span>立刻阅读</span>
                 </button>
-                <button className={styles.actionButton} onClick={handleBossMode}>
+                <button type="button" className={styles.actionButton} onClick={handleBossMode}>
                   <EyeOff size={20} />
                   <span>老板模式</span>
                 </button>
@@ -260,6 +273,7 @@ export default function BookCard({
         )}
         <div className={styles.actions}>
           <button
+            type="button"
             className={styles.iconButton}
             onClick={handleEdit}
             aria-label="编辑"
@@ -268,6 +282,7 @@ export default function BookCard({
             <Edit2 size={16} />
           </button>
           <button
+            type="button"
             className={styles.iconButton}
             onClick={handleDelete}
             aria-label="删除"
