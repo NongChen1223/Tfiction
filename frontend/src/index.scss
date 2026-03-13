@@ -21,10 +21,8 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   color: rgb(var(--text-primary));
-  background:
-    linear-gradient(135deg, var(--neo-grid) 0, transparent 12%, transparent 50%, var(--neo-grid) 50%, var(--neo-grid) 62%, transparent 62%, transparent 100%),
-    linear-gradient(180deg, rgb(var(--bg-primary)), rgb(var(--bg-primary)));
-  background-size: 18px 18px, 100% 100%;
+  background: var(--neo-canvas);
+  background-size: var(--neo-canvas-size);
   transition: background-color var(--transition-slow), color var(--transition-slow);
 }
 

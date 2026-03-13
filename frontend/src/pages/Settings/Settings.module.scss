@@ -150,6 +150,9 @@
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
+  background: var(--neo-canvas);
+  background-size: var(--neo-canvas-size);
+  background-attachment: local;
 }
 
 .content::-webkit-scrollbar {

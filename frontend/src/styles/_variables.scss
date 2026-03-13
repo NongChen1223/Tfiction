@@ -104,6 +104,10 @@
   --neo-shadow: 37 99 235;
   --neo-overlay: rgba(15, 23, 42, 0.22);
   --neo-grid: rgba(59, 130, 246, 0.08);
+  --neo-canvas:
+    linear-gradient(135deg, var(--neo-grid) 0, transparent 12%, transparent 50%, var(--neo-grid) 50%, var(--neo-grid) 62%, transparent 62%, transparent 100%),
+    linear-gradient(180deg, rgb(var(--bg-primary)), rgb(var(--bg-primary)));
+  --neo-canvas-size: 18px 18px, 100% 100%;
 
   /* === Neubrutalism 弹窗配色 - 浅色主题 === */
   --brutal-ink: var(--neo-ink);
@@ -164,6 +168,10 @@
   --neo-shadow: 147 51 234;
   --neo-overlay: rgba(8, 10, 18, 0.62);
   --neo-grid: rgba(168, 85, 247, 0.12);
+  --neo-canvas:
+    linear-gradient(135deg, var(--neo-grid) 0, transparent 12%, transparent 50%, var(--neo-grid) 50%, var(--neo-grid) 62%, transparent 62%, transparent 100%),
+    linear-gradient(180deg, rgb(var(--bg-primary)), rgb(var(--bg-primary)));
+  --neo-canvas-size: 18px 18px, 100% 100%;
 
   --brutal-ink: var(--neo-ink);
   --brutal-surface: var(--neo-panel-soft);
@@ -218,6 +226,10 @@
   --neo-shadow: 162 122 81;
   --neo-overlay: rgba(82, 66, 48, 0.26);
   --neo-grid: rgba(162, 122, 81, 0.1);
+  --neo-canvas:
+    linear-gradient(135deg, var(--neo-grid) 0, transparent 12%, transparent 50%, var(--neo-grid) 50%, var(--neo-grid) 62%, transparent 62%, transparent 100%),
+    linear-gradient(180deg, rgb(var(--bg-primary)), rgb(var(--bg-primary)));
+  --neo-canvas-size: 18px 18px, 100% 100%;
 
   --brutal-ink: var(--neo-ink);
   --brutal-surface: var(--neo-panel-soft);

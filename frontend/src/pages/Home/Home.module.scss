@@ -120,6 +120,9 @@
   flex: 1;
   padding: var(--spacing-2xl);
   overflow-y: auto;
+  background: var(--neo-canvas);
+  background-size: var(--neo-canvas-size);
+  background-attachment: local;
 }
 
 .contentWithDirectory {

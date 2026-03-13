@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Tooltip } from 'antd'
 import {
@@ -31,6 +31,7 @@ interface SettingSection {
 export default function Settings() {
   const navigate = useNavigate()
   const [activeSection, setActiveSection] = useState('appearance')
+  const contentRef = useRef<HTMLDivElement>(null)
   // 检测是否处于收缩状态（窗口宽度 ≤ 1200px）
   const isCollapsed = useMediaQuery('(max-width: 1200px)')
 
@@ -68,6 +69,10 @@ export default function Settings() {
   ]
 
   const currentSection = sections.find((s) => s.id === activeSection)
+
+  useEffect(() => {
+    contentRef.current?.scrollTo({ top: 0, behavior: 'auto' })
+  }, [activeSection])
 
   return (
     <div className={styles.container}>
@@ -117,7 +122,9 @@ export default function Settings() {
         <header className={styles.header} style={{ '--wails-draggable': 'drag' } as React.CSSProperties}>
           <h1 className={styles.title}>{currentSection?.label}</h1>
         </header>
-        <div className={styles.content}>{currentSection?.component}</div>
+        <div ref={contentRef} className={styles.content}>
+          {currentSection?.component}
+        </div>
       </main>
     </div>
   )
