@@ -108,6 +108,10 @@
     linear-gradient(135deg, var(--neo-grid) 0, transparent 12%, transparent 50%, var(--neo-grid) 50%, var(--neo-grid) 62%, transparent 62%, transparent 100%),
     linear-gradient(180deg, rgb(var(--bg-primary)), rgb(var(--bg-primary)));
   --neo-canvas-size: 18px 18px, 100% 100%;
+  --cover-overlay:
+    linear-gradient(180deg, rgba(248, 250, 252, 0) 0%, rgba(248, 250, 252, 0.1) 28%, rgba(248, 250, 252, 0.78) 72%, rgba(255, 255, 255, 0.95) 100%);
+  --cover-title-color: var(--neo-ink);
+  --cover-meta-color: var(--neo-text-muted);
 
   /* === Neubrutalism 弹窗配色 - 浅色主题 === */
   --brutal-ink: var(--neo-ink);
@@ -123,22 +127,22 @@
 /* ==================== 暗色主题 ==================== */
 
 [data-theme='dark'] {
-  /* 主色调（紫色系 - 夜间模式）*/
-  --color-primary: 147 51 234;        /* 主紫色 #9333EA */
-  --color-primary-light: 168 85 247;  /* 浅紫色 #A855F7（用于渐变、高亮） */
-  --color-primary-dark: 126 34 206;   /* 深紫色 #7E22CE（用于悬停、按下状态） */
+  /* 主色调（更柔和的夜间靛紫） */
+  --color-primary: 132 122 186;
+  --color-primary-light: 160 150 214;
+  --color-primary-dark: 103 95 150;
 
   /* 背景颜色 - 暗色主题 */
-  --bg-primary: 10 14 20;       /* 主背景色（深蓝黑色） */
-  --bg-secondary: 15 20 30;     /* 次级背景色（稍亮的深蓝黑） */
-  --bg-tertiary: 20 25 35;      /* 三级背景色（更亮的深蓝黑） */
-  --bg-elevated: 15 20 30;      /* 悬浮元素背景（与次级背景相同） */
+  --bg-primary: 16 17 25;
+  --bg-secondary: 23 24 35;
+  --bg-tertiary: 30 32 46;
+  --bg-elevated: 23 24 35;
 
   /* 文字颜色 - 暗色主题 */
-  --text-primary: 224 224 224;      /* 主文字颜色（浅灰白色） */
-  --text-secondary: 156 163 175;    /* 次级文字颜色（中灰色） */
-  --text-tertiary: 107 114 128;     /* 三级文字颜色（深灰色） */
-  --text-inverse: 17 24 39;         /* 反色文字（浅色背景上的深色文字） */
+  --text-primary: 231 228 241;
+  --text-secondary: 180 175 202;
+  --text-tertiary: 122 120 145;
+  --text-inverse: 17 24 39;
 
   /* 边框颜色 - 暗色主题 */
   --border-primary: 255 255 255 / 0.1;   /* 主边框颜色（10%白色） */
@@ -158,20 +162,24 @@
   --glass-shadow: rgba(0, 0, 0, 0.5);      /* 玻璃阴影（深黑色） */
 
   /* Neubrutalism 弹窗配色 - 暗色主题 */
-  --neo-ink: 234 229 255;
-  --neo-panel: 19 16 31;
-  --neo-panel-muted: 29 24 43;
-  --neo-panel-soft: 24 19 36;
-  --neo-panel-accent: 70 47 122;
-  --neo-panel-danger: 96 53 82;
-  --neo-text-muted: 190 182 223;
-  --neo-shadow: 147 51 234;
-  --neo-overlay: rgba(8, 10, 18, 0.62);
-  --neo-grid: rgba(168, 85, 247, 0.12);
+  --neo-ink: 235 232 245;
+  --neo-panel: 28 25 39;
+  --neo-panel-muted: 39 35 53;
+  --neo-panel-soft: 33 29 46;
+  --neo-panel-accent: 74 68 107;
+  --neo-panel-danger: 93 67 82;
+  --neo-text-muted: 188 180 211;
+  --neo-shadow: 102 94 146;
+  --neo-overlay: rgba(8, 9, 16, 0.58);
+  --neo-grid: rgba(132, 122, 186, 0.09);
   --neo-canvas:
     linear-gradient(135deg, var(--neo-grid) 0, transparent 12%, transparent 50%, var(--neo-grid) 50%, var(--neo-grid) 62%, transparent 62%, transparent 100%),
     linear-gradient(180deg, rgb(var(--bg-primary)), rgb(var(--bg-primary)));
   --neo-canvas-size: 18px 18px, 100% 100%;
+  --cover-overlay:
+    linear-gradient(180deg, rgba(16, 17, 25, 0) 0%, rgba(16, 17, 25, 0.1) 28%, rgba(22, 21, 33, 0.76) 72%, rgba(28, 25, 39, 0.95) 100%);
+  --cover-title-color: var(--neo-ink);
+  --cover-meta-color: var(--neo-text-muted);
 
   --brutal-ink: var(--neo-ink);
   --brutal-surface: var(--neo-panel-soft);
@@ -230,6 +238,10 @@
     linear-gradient(135deg, var(--neo-grid) 0, transparent 12%, transparent 50%, var(--neo-grid) 50%, var(--neo-grid) 62%, transparent 62%, transparent 100%),
     linear-gradient(180deg, rgb(var(--bg-primary)), rgb(var(--bg-primary)));
   --neo-canvas-size: 18px 18px, 100% 100%;
+  --cover-overlay:
+    linear-gradient(180deg, rgba(239, 232, 214, 0) 0%, rgba(239, 232, 214, 0.1) 28%, rgba(239, 232, 214, 0.8) 72%, rgba(247, 241, 226, 0.95) 100%);
+  --cover-title-color: var(--neo-ink);
+  --cover-meta-color: var(--neo-text-muted);
 
   --brutal-ink: var(--neo-ink);
   --brutal-surface: var(--neo-panel-soft);

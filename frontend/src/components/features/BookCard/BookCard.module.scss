@@ -110,14 +110,16 @@
   left: 0;
   right: 0;
   padding: var(--spacing-md);
-  background: linear-gradient(to top, rgba(15, 23, 42, 0.9), transparent);
+  background: var(--cover-overlay);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   z-index: 2;
 }
 
 .title {
   font-size: 1rem;
   font-weight: 700;
-  color: white;
+  color: rgb(var(--cover-title-color));
   margin: 0 0 var(--spacing-xs) 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -129,7 +131,7 @@
 
 .author {
   font-size: 0.875rem;
-  color: rgba(255, 255, 255, 0.8);
+  color: rgb(var(--cover-meta-color));
   margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
