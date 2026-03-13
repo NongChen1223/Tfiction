@@ -3,10 +3,9 @@
 .sidebar {
   width: var(--sidebar-width);
   height: 100vh;
-  background: rgba(var(--bg-secondary), 0.6);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-right: 1px solid rgba(var(--border-primary), 0.2);
+  background: rgb(var(--neo-panel));
+  border-right: var(--neo-border-width) solid rgb(var(--neo-ink));
+  box-shadow: var(--neo-shadow-offset-md) 0 0 rgb(var(--neo-shadow));
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -21,8 +20,9 @@
   display: flex;
   align-items: center;
   gap: var(--spacing-md);
-  border-bottom: 1px solid rgba(var(--border-primary), 0.1);
+  border-bottom: var(--neo-border-width-sm) solid rgb(var(--neo-ink));
   padding-top: calc(var(--spacing-xl) + 10px);
+  background: rgb(var(--neo-panel-soft));
 }
 
 .logo {
@@ -31,21 +31,21 @@
   justify-content: center;
   width: 48px;
   height: 48px;
-  background: linear-gradient(135deg, rgb(var(--color-primary)), rgb(var(--color-primary-light)));
-  border-radius: var(--radius-lg);
-  color: white;
+  background: rgb(var(--neo-panel-accent));
+  border: var(--neo-border-width-sm) solid rgb(var(--neo-ink));
+  border-radius: var(--neo-radius-md);
+  box-shadow: 4px 4px 0 rgb(var(--neo-shadow));
+  color: rgb(var(--neo-ink));
   flex-shrink: 0;
 }
 
 .title {
   font-size: 1.5rem;
-  font-weight: 700;
-  background: linear-gradient(135deg, rgb(var(--color-primary)), rgb(var(--color-primary-light)));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  font-weight: 800;
+  color: rgb(var(--neo-ink));
   margin: 0;
   transition: opacity var(--transition-base);
+  letter-spacing: -0.03em;
 }
 
 /* === Navigation === */
@@ -65,26 +65,33 @@
   gap: var(--spacing-md);
   padding: var(--spacing-md) var(--spacing-lg);
   background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--radius-lg);
-  color: rgb(var(--text-secondary));
+  border: var(--neo-border-width-sm) solid transparent;
+  border-radius: var(--neo-radius-md);
+  color: rgb(var(--neo-ink));
   font-size: 0.9375rem;
-  font-weight: 500;
+  font-weight: 700;
   text-align: left;
   cursor: pointer;
-  transition: all var(--transition-base);
+  transition:
+    transform var(--transition-fast),
+    box-shadow var(--transition-fast),
+    background-color var(--transition-fast),
+    border-color var(--transition-fast);
   white-space: nowrap;
 }
 
 .navItem:hover {
-  background: rgba(var(--color-primary), 0.05);
-  color: rgb(var(--text-primary));
+  background: rgb(var(--neo-panel-soft));
+  border-color: rgb(var(--neo-ink));
+  box-shadow: 4px 4px 0 rgb(var(--neo-shadow));
+  transform: translate(-2px, -2px);
 }
 
 .navItem.active {
-  background: rgba(var(--color-primary), 0.1);
-  border-color: rgba(var(--color-primary), 0.3);
-  color: rgb(var(--color-primary));
+  background: rgb(var(--neo-panel-accent));
+  border-color: rgb(var(--neo-ink));
+  color: rgb(var(--neo-ink));
+  box-shadow: 4px 4px 0 rgb(var(--neo-shadow));
 }
 
 .navIcon {
@@ -111,20 +118,24 @@
   width: 100%;
   padding: var(--spacing-md) var(--spacing-lg);
   margin-top: auto;
-  background: transparent;
-  border: 1px solid rgba(var(--border-primary), 0.2);
-  border-radius: var(--radius-lg);
-  color: rgb(var(--text-secondary));
+  background: rgb(var(--neo-panel-soft));
+  border: var(--neo-border-width-sm) solid rgb(var(--neo-ink));
+  border-radius: var(--neo-radius-md);
+  box-shadow: 4px 4px 0 rgb(var(--neo-shadow));
+  color: rgb(var(--neo-ink));
   font-size: 0.9375rem;
-  font-weight: 500;
+  font-weight: 700;
   cursor: pointer;
-  transition: all var(--transition-base);
+  transition:
+    transform var(--transition-fast),
+    box-shadow var(--transition-fast),
+    background-color var(--transition-fast);
 }
 
 .settingsButton:hover {
-  background: rgba(var(--color-primary), 0.05);
-  border-color: rgba(var(--color-primary), 0.3);
-  color: rgb(var(--color-primary));
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0 rgb(var(--neo-shadow));
+  background: rgb(var(--neo-panel-accent));
 }
 
 .settingsIcon {
@@ -162,8 +173,7 @@
  */
 @media (max-width: 1000px) {
   .sidebar {
-    width: var(--sidebar-collapsed-width);  /* 使用全局变量：收缩后宽度 */
-    border-right-color: transparent;  /* 隐藏右边框 */
+    width: var(--sidebar-collapsed-width);
   }
 
   .header {
@@ -193,29 +203,22 @@
   }
 
   .navItem {
-    justify-content: center;  /* 图标居中 */
+    justify-content: center;
     padding: 0;
-    width: 48px;  /* 固定宽高，变成正方形按钮 */
+    width: 48px;
     height: 48px;
   }
 
-  /* 缩小状态下移除选中项的边框，只保留背景色 */
-  .navItem.active {
-    border-color: transparent;
-  }
-
-  /* 设置按钮保持可见，只隐藏文字 */
   .settingsButton {
-    justify-content: center;  /* 图标居中 */
+    justify-content: center;
     padding: 0;
-    border-color: rgba(var(--border-primary), 0.2);
-    width: 48px;  /* 与导航按钮同样大小 */
+    width: 48px;
     height: 48px;
-    margin-top: auto;  /* 仍然保持在底部 */
+    margin-top: auto;
   }
 
   .settingsLabel {
-    display: none;  /* 隐藏"设置"文字 */
+    display: none;
   }
 }
 

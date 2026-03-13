@@ -4,7 +4,7 @@
   display: flex;
   width: 100%;
   height: 100vh;
-  background: rgb(var(--bg-primary));
+  background: transparent;
   overflow: hidden;
 }
 
@@ -16,6 +16,7 @@
   flex-direction: column;
   overflow: hidden;
   min-width: 0;
+  background: transparent;
 }
 
 /* === Header === */
@@ -27,10 +28,9 @@
   flex-wrap: nowrap;
   align-items: center;
   gap: var(--spacing-2xl); /* 增加间距，创造更多拖动空间 */
-  border-bottom: 1px solid rgba(var(--border-primary), 0.1);
-  background: rgba(var(--bg-secondary), 0.3);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  border-bottom: var(--neo-border-width) solid rgb(var(--neo-ink));
+  background: rgb(var(--neo-panel));
+  box-shadow: 0 var(--neo-shadow-offset-md) 0 rgb(var(--neo-shadow));
   flex-shrink: 0;
   --wails-draggable: drag;
   app-region: drag;
@@ -52,17 +52,16 @@
 }
 
 .searchInputFrame {
-  background: rgb(var(--bg-primary));
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  border: 1px solid rgb(var(--color-primary));
-  border-radius: 15px;
-  box-shadow: none;
+  background: rgb(var(--neo-panel-soft));
+  border: var(--neo-border-width-sm) solid rgb(var(--neo-ink));
+  border-radius: var(--neo-radius-md);
+  box-shadow: var(--neo-shadow-offset-sm) var(--neo-shadow-offset-sm) 0
+    rgb(var(--neo-shadow));
 }
 
 .searchInputFrame:focus-within {
-  border-color: rgb(var(--color-primary));
-  box-shadow: none;
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0 rgb(var(--neo-shadow));
 }
 
 .toolbar {
@@ -78,9 +77,10 @@
   display: flex;
   gap: var(--spacing-xs);
   padding: var(--spacing-xs);
-  background: rgba(var(--bg-tertiary), 0.5);
-  border: 1px solid rgba(var(--border-primary), 0.2);
-  border-radius: var(--radius-lg);
+  background: rgb(var(--neo-panel-soft));
+  border: var(--neo-border-width-sm) solid rgb(var(--neo-ink));
+  border-radius: var(--neo-radius-md);
+  box-shadow: 4px 4px 0 rgb(var(--neo-shadow));
 }
 
 .viewButton {
@@ -89,22 +89,29 @@
   justify-content: center;
   width: 36px;
   height: 36px;
-  background: transparent;
-  border: none;
-  border-radius: var(--radius-md);
-  color: rgb(var(--text-secondary));
+  background: rgb(var(--neo-panel));
+  border: var(--neo-border-width-sm) solid transparent;
+  border-radius: 12px;
+  color: rgb(var(--neo-ink));
   cursor: pointer;
-  transition: all var(--transition-base);
+  transition:
+    transform var(--transition-fast),
+    box-shadow var(--transition-fast),
+    background-color var(--transition-fast);
 }
 
 .viewButton:hover {
-  background: rgba(var(--color-primary), 0.1);
-  color: rgb(var(--color-primary));
+  background: rgb(var(--neo-panel-accent));
+  border-color: rgb(var(--neo-ink));
+  box-shadow: 3px 3px 0 rgb(var(--neo-shadow));
+  transform: translate(-1px, -1px);
 }
 
 .viewButton.active {
-  background: rgb(var(--color-primary));
-  color: white;
+  background: rgb(var(--neo-panel-accent));
+  color: rgb(var(--neo-ink));
+  border-color: rgb(var(--neo-ink));
+  box-shadow: 3px 3px 0 rgb(var(--neo-shadow));
 }
 
 /* === Content === */
@@ -124,7 +131,7 @@
   align-items: center;
   justify-content: flex-start;
   gap: var(--spacing-sm);
-  padding: var(--spacing-xs) var(--spacing-2xl) 0;
+  padding: var(--spacing-sm) var(--spacing-2xl) 0;
   flex-shrink: 0;
 }
 
@@ -135,16 +142,21 @@
   width: 28px;
   height: 28px;
   padding: 0;
-  background: transparent;
-  border: none;
-  border-radius: 0;
-  color: rgb(var(--text-primary));
+  background: rgb(var(--neo-panel));
+  border: var(--neo-border-width-sm) solid rgb(var(--neo-ink));
+  border-radius: 12px;
+  color: rgb(var(--neo-ink));
+  box-shadow: 3px 3px 0 rgb(var(--neo-shadow));
   cursor: pointer;
-  transition: all var(--transition-base);
+  transition:
+    transform var(--transition-fast),
+    box-shadow var(--transition-fast),
+    background-color var(--transition-fast);
 
   &:hover {
-    color: rgb(var(--color-primary));
-    transform: translateX(-2px);
+    transform: translate(2px, 2px);
+    box-shadow: 1px 1px 0 rgb(var(--neo-shadow));
+    background: rgb(var(--neo-panel-accent));
   }
 }
 
@@ -155,9 +167,9 @@
 }
 
 .directoryPath {
-  color: rgb(var(--text-primary));
+  color: rgb(var(--neo-ink));
   font-size: 0.95rem;
-  font-weight: 600;
+  font-weight: 800;
 }
 
 /* === Books List === */
@@ -190,8 +202,14 @@
 }
 
 .emptyText {
+  padding: var(--spacing-lg) var(--spacing-xl);
+  background: rgb(var(--neo-panel));
+  border: var(--neo-border-width) solid rgb(var(--neo-ink));
+  border-radius: var(--neo-radius-lg);
+  box-shadow: var(--neo-shadow-offset-md) var(--neo-shadow-offset-md) 0
+    rgb(var(--neo-shadow));
   font-size: 1rem;
-  color: rgb(var(--text-tertiary));
+  color: rgb(var(--neo-ink));
   text-align: center;
 }
 
@@ -286,7 +304,8 @@
   display: flex;
   flex-direction: column;
   min-width: 160px;
-  padding: var(--spacing-xs) 0;
+  padding: var(--spacing-xs);
+  gap: var(--spacing-xs);
 }
 
 .sortMenuItem {
@@ -294,26 +313,34 @@
   align-items: center;
   gap: var(--spacing-sm);
   padding: var(--spacing-sm) var(--spacing-md);
-  background: transparent;
-  border: none;
+  background: rgb(var(--neo-panel));
+  border: var(--neo-border-width-sm) solid transparent;
+  border-radius: 12px;
   cursor: pointer;
-  transition: all var(--transition-base);
-  color: rgb(var(--text-primary));
+  transition:
+    transform var(--transition-fast),
+    box-shadow var(--transition-fast),
+    background-color var(--transition-fast);
+  color: rgb(var(--neo-ink));
   font-size: var(--font-md);
   text-align: left;
   width: 100%;
 
   &:hover {
-    background: rgba(var(--color-primary), 0.1);
+    background: rgb(var(--neo-panel-soft));
+    border-color: rgb(var(--neo-ink));
+    box-shadow: 3px 3px 0 rgb(var(--neo-shadow));
   }
 
   &.active {
-    background: rgba(var(--color-primary), 0.15);
-    color: rgb(var(--color-primary));
-    font-weight: 600;
+    background: rgb(var(--neo-panel-accent));
+    color: rgb(var(--neo-ink));
+    font-weight: 800;
+    border-color: rgb(var(--neo-ink));
+    box-shadow: 3px 3px 0 rgb(var(--neo-shadow));
 
     .sortMenuIcon {
-      color: rgb(var(--color-primary));
+      color: rgb(var(--neo-ink));
     }
   }
 }
@@ -321,7 +348,7 @@
 .sortMenuIcon {
   display: flex;
   align-items: center;
-  color: rgb(var(--text-secondary));
+  color: rgb(var(--neo-text-muted));
   transition: color var(--transition-base);
 }
 

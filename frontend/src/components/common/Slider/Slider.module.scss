@@ -23,11 +23,13 @@
 
 .value {
   font-size: 0.875rem;
-  font-weight: 600;
-  color: rgb(var(--color-primary));
-  padding: 0.125rem 0.5rem;
-  background: rgba(var(--color-primary), 0.1);
-  border-radius: var(--radius-md);
+  font-weight: 700;
+  color: rgb(var(--neo-ink));
+  padding: 0.125rem 0.6rem;
+  background: rgb(var(--neo-panel-accent));
+  border: var(--neo-border-width-sm) solid rgb(var(--neo-ink));
+  border-radius: var(--neo-radius-sm);
+  box-shadow: 3px 3px 0 rgb(var(--neo-shadow));
 }
 
 /* === Slider === */
@@ -39,35 +41,35 @@
 
 .slider {
   width: 100%;
-  height: 8px;
-  border-radius: var(--radius-sm);
+  height: 10px;
+  border-radius: 999px;
   outline: none;
   -webkit-appearance: none;
   appearance: none;
   cursor: pointer;
   transition: all var(--transition-base);
-  border: 1px solid rgba(var(--border-primary), 0.3);
+  border: var(--neo-border-width-sm) solid rgb(var(--neo-ink));
 }
 
 /* Track styling for webkit browsers */
 .slider::-webkit-slider-runnable-track {
   width: 100%;
-  height: 8px;
-  border-radius: var(--radius-sm);
+  height: 10px;
+  border-radius: 999px;
 }
 
 /* Track styling for Firefox */
 .slider::-moz-range-track {
   width: 100%;
-  height: 8px;
-  border-radius: var(--radius-sm);
-  background: rgba(var(--border-primary), 0.4);
-  border: 1px solid rgba(var(--border-primary), 0.3);
+  height: 10px;
+  border-radius: 999px;
+  background: rgb(var(--neo-panel-muted));
+  border: var(--neo-border-width-sm) solid rgb(var(--neo-ink));
 }
 
 .slider::-moz-range-progress {
-  height: 8px;
-  border-radius: var(--radius-sm);
+  height: 10px;
+  border-radius: 999px;
   background: rgb(var(--color-primary));
 }
 
@@ -78,16 +80,15 @@
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: rgb(var(--color-primary));
-  border: 3px solid white;
-  box-shadow: 0 2px 8px rgba(var(--color-primary), 0.3);
+  background: rgb(var(--neo-panel));
+  border: 3px solid rgb(var(--neo-ink));
+  box-shadow: 3px 3px 0 rgb(var(--neo-shadow));
   cursor: pointer;
   transition: all var(--transition-base);
 }
 
 .slider::-webkit-slider-thumb:hover {
-  transform: scale(1.15);
-  box-shadow: 0 4px 12px rgba(var(--color-primary), 0.5);
+  transform: scale(1.08);
 }
 
 .slider::-webkit-slider-thumb:active {
@@ -99,16 +100,15 @@
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: rgb(var(--color-primary));
-  border: 3px solid white;
-  box-shadow: 0 2px 8px rgba(var(--color-primary), 0.3);
+  background: rgb(var(--neo-panel));
+  border: 3px solid rgb(var(--neo-ink));
+  box-shadow: 3px 3px 0 rgb(var(--neo-shadow));
   cursor: pointer;
   transition: all var(--transition-base);
 }
 
 .slider::-moz-range-thumb:hover {
-  transform: scale(1.15);
-  box-shadow: 0 4px 12px rgba(var(--color-primary), 0.5);
+  transform: scale(1.08);
 }
 
 .slider::-moz-range-thumb:active {

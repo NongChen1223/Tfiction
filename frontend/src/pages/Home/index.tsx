@@ -19,11 +19,13 @@ import { Popover, message } from 'antd'
 import type { Book, SortMode, ViewMode } from '@/types'
 import Sidebar from '@/components/features/Sidebar'
 import BookCard from '@/components/features/BookCard'
+import ConfirmModal from '@/components/features/ConfirmModal'
 import Input from '@/components/common/Input'
 import Button from '@/components/common/Button'
 import ImportModal, { type ModalOption } from '@/components/features/ImportModal'
 import SelectFilesModal from '@/components/features/SelectFilesModal'
 import { openNovel } from '@/services/novelBridge'
+import { DeleteProgress } from '@/wailsjs/go/services/ProgressService'
 import { useNovelStore } from '@/stores/novelStore'
 import { useLibraryStore } from '@/stores/libraryStore'
 import { formatBookCategory, mapNovelToBook, normalizeNovel } from '@/utils/novel'
@@ -31,6 +33,54 @@ import styles from './Home.module.scss'
 
 function isPickerCancelled(error: unknown) {
   return error instanceof Error && error.message.includes('未选择文件')
+}
+
+function normalizeBookExtension(format?: string) {
+  const trimmedFormat = (format || '').trim()
+  if (!trimmedFormat) {
+    return ''
+  }
+
+  return trimmedFormat.startsWith('.') ? trimmedFormat : `.${trimmedFormat}`
+}
+
+function getBookDisplayNameWithExtension(book: Book) {
+  const extension = normalizeBookExtension(book.format)
+  if (!extension) {
+    return book.title
+  }
+
+  return book.title.toLowerCase().endsWith(extension.toLowerCase())
+    ? book.title
+    : `${book.title}${extension}`
+}
+
+function getDeleteConfirmMessage(book: Book) {
+  if (book.isDirectory) {
+    return `确定删除此目录吗？`
+  }
+
+  return `确定删除「${getBookDisplayNameWithExtension(book)}」吗？`
+}
+
+function getDeleteSuccessMessage(book: Book) {
+  if (book.isDirectory) {
+    return `已删除目录「${book.title}」`
+  }
+
+  return `已删除「${getBookDisplayNameWithExtension(book)}」`
+}
+
+function getDeleteDescription(book: Book) {
+  if (book.isDirectory) {
+    return '会从书架移除该目录和目录内记录，并清理关联阅读进度。原始文件不会被删除。'
+  }
+
+  return '会从书架移除这本书，并清理当前阅读进度。原始文件不会被删除。'
+}
+
+function getDeleteDetail(book: Book) {
+  return book.isDirectory ? book.title : getBookDisplayNameWithExtension(book)
 }
 
 function resolveDirectoryReadTarget(book: Book) {
@@ -45,6 +95,7 @@ function mapDirectoryFileToBook(
     id: file.id,
     title: file.title,
     author: file.author || '未知作者',
+    cover: file.cover,
     type: 'novel',
     category: formatBookCategory(file.format),
     isDirectory: false,
@@ -77,6 +128,7 @@ export default function Home() {
   }>({ title: '', options: [] })
   const [selectFilesModalOpen, setSelectFilesModalOpen] = useState(false)
   const [targetDirectory, setTargetDirectory] = useState<Book | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Book | null>(null)
   const { setCurrentNovel, addNovel } = useNovelStore()
   const {
     books,
@@ -393,17 +445,31 @@ export default function Home() {
   }
 
   const handleDeleteBook = (book: Book) => {
-    const confirmed = window.confirm(`确认删除「${book.title}」吗？`)
-    if (!confirmed) {
+    setDeleteTarget(book)
+  }
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) {
       return
     }
 
-    if (book.parentDirectoryId) {
-      removeFileFromDirectory(book.parentDirectoryId, book.id)
+    const targetBook = deleteTarget
+    const progressFilePaths = targetBook.isDirectory
+      ? (targetBook.files || []).map((file) => file.filePath).filter(Boolean)
+      : [targetBook.filePath].filter(Boolean)
+
+    await Promise.allSettled(
+      progressFilePaths.map((filePath) => DeleteProgress(filePath as string))
+    )
+
+    if (targetBook.parentDirectoryId) {
+      removeFileFromDirectory(targetBook.parentDirectoryId, targetBook.id)
+      messageApi.success(getDeleteSuccessMessage(targetBook))
       return
     }
 
-    removeBook(book.id)
+    removeBook(targetBook.id)
+    messageApi.success(getDeleteSuccessMessage(targetBook))
   }
 
   const emptyText = searchQuery
@@ -516,6 +582,17 @@ export default function Home() {
         title={importModalConfig.title}
         options={importModalConfig.options}
         onClose={() => setImportModalOpen(false)}
+      />
+      <ConfirmModal
+        open={deleteTarget !== null}
+        title={deleteTarget ? getDeleteConfirmMessage(deleteTarget) : ''}
+        detail={deleteTarget ? getDeleteDetail(deleteTarget) : ''}
+        description={deleteTarget ? getDeleteDescription(deleteTarget) : ''}
+        confirmText="确认删除"
+        cancelText="先不删"
+        tone="danger"
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleConfirmDelete}
       />
 
       <SelectFilesModal

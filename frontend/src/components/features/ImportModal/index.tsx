@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { Modal, Input } from 'antd'
-import type { LucideIcon } from 'lucide-react'
+import Button from '@/components/common/Button'
+import Dialog from '@/components/common/Dialog'
+import Input from '@/components/common/Input'
 import styles from './ImportModal.module.scss'
 
 export interface ModalOption {
@@ -69,18 +70,12 @@ export default function ImportModal({
   }
 
   return (
-    <Modal
-      title={title}
-      open={open}
-      onCancel={handleCancel}
-      footer={null}
-      width={480}
-      centered
-    >
+    <Dialog open={open} title={title} onClose={handleCancel} width={540}>
       {!showInput ? (
         <div className={styles.options}>
           {options.map((option) => (
             <button
+              type="button"
               key={option.key}
               className={styles.optionCard}
               onClick={() => handleOptionClick(option)}
@@ -100,24 +95,28 @@ export default function ImportModal({
             placeholder={currentOption?.inputPlaceholder || '例如：三体系列、海贼王等'}
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
-            onPressEnter={handleConfirm}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                handleConfirm()
+              }
+            }}
             autoFocus
-            size="large"
+            fullWidth
           />
           <div className={styles.buttonGroup}>
-            <button className={styles.cancelButton} onClick={handleBack}>
+            <Button variant="secondary" onClick={handleBack}>
               取消
-            </button>
-            <button
-              className={styles.confirmButton}
+            </Button>
+            <Button
+              variant="primary"
               onClick={handleConfirm}
               disabled={!inputValue.trim()}
             >
               确定创建
-            </button>
+            </Button>
           </div>
         </div>
       )}
-    </Modal>
+    </Dialog>
   )
 }

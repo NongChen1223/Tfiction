@@ -3,6 +3,7 @@ export interface Novel {
   title: string
   author: string
   filePath: string
+  cover?: string
   format: string
   size: number
   content: string
@@ -74,6 +75,7 @@ export interface BookFile {
   id: string
   title: string
   author: string // 作者
+  cover?: string // 封面图片路径
   filePath: string // 文件路径
   format: string // 文件格式
   fileSize: number // 文件大小（字节）

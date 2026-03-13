@@ -87,6 +87,7 @@ function mapBookToDirectoryFile(book: Book, order: number): BookFile {
     id: book.id,
     title: book.title,
     author: book.author || DEFAULT_AUTHOR,
+    cover: book.cover,
     filePath: book.filePath || '',
     format: book.format || '',
     fileSize: book.fileSize || 0,

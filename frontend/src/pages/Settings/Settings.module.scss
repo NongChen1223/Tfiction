@@ -4,7 +4,7 @@
   display: flex;
   width: 100%;
   height: 100vh;
-  background: rgb(var(--bg-primary));
+  background: transparent;
   overflow: hidden;
 }
 
@@ -13,10 +13,9 @@
 .sidebar {
   width: var(--sidebar-width);
   height: 100vh;
-  background: rgba(var(--bg-secondary), 0.6);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-right: 1px solid rgba(var(--border-primary), 0.2);
+  background: rgb(var(--neo-panel));
+  border-right: var(--neo-border-width) solid rgb(var(--neo-ink));
+  box-shadow: var(--neo-shadow-offset-md) 0 0 rgb(var(--neo-shadow));
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -42,21 +41,25 @@
   gap: var(--spacing-md);
   width: 100%;
   padding: var(--spacing-md) var(--spacing-lg);
-  background: transparent;
-  border: 1px solid rgba(var(--border-primary), 0.3);
-  border-radius: var(--radius-lg);
-  color: rgb(var(--text-secondary));
+  background: rgb(var(--neo-panel-soft));
+  border: var(--neo-border-width-sm) solid rgb(var(--neo-ink));
+  border-radius: var(--neo-radius-md);
+  color: rgb(var(--neo-ink));
   font-size: 0.9375rem;
-  font-weight: 500;
+  font-weight: 700;
   cursor: pointer;
-  transition: all var(--transition-base);
+  box-shadow: 4px 4px 0 rgb(var(--neo-shadow));
+  transition:
+    transform var(--transition-fast),
+    box-shadow var(--transition-fast),
+    background-color var(--transition-fast);
   margin-bottom: var(--spacing-md);
 }
 
 .backButton:hover {
-  background: rgba(var(--color-primary), 0.05);
-  border-color: rgba(var(--color-primary), 0.3);
-  color: rgb(var(--color-primary));
+  background: rgb(var(--neo-panel-accent));
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0 rgb(var(--neo-shadow));
 }
 
 .navItem {
@@ -65,26 +68,32 @@
   gap: var(--spacing-md);
   padding: var(--spacing-md) var(--spacing-lg);
   background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--radius-lg);
-  color: rgb(var(--text-secondary));
+  border: var(--neo-border-width-sm) solid transparent;
+  border-radius: var(--neo-radius-md);
+  color: rgb(var(--neo-ink));
   font-size: 0.9375rem;
-  font-weight: 500;
+  font-weight: 700;
   text-align: left;
   cursor: pointer;
-  transition: all var(--transition-base);
+  transition:
+    transform var(--transition-fast),
+    box-shadow var(--transition-fast),
+    background-color var(--transition-fast);
   white-space: nowrap;
 }
 
 .navItem:hover {
-  background: rgba(var(--color-primary), 0.05);
-  color: rgb(var(--text-primary));
+  background: rgb(var(--neo-panel-soft));
+  border-color: rgb(var(--neo-ink));
+  box-shadow: 4px 4px 0 rgb(var(--neo-shadow));
+  transform: translate(-2px, -2px);
 }
 
 .navItem.active {
-  background: rgba(var(--color-primary), 0.1);
-  border-color: rgba(var(--color-primary), 0.3);
-  color: rgb(var(--color-primary));
+  background: rgb(var(--neo-panel-accent));
+  border-color: rgb(var(--neo-ink));
+  color: rgb(var(--neo-ink));
+  box-shadow: 4px 4px 0 rgb(var(--neo-shadow));
 }
 
 .navIcon {
@@ -113,10 +122,9 @@
 .header {
   padding: var(--spacing-xl) var(--spacing-2xl);
   min-height: 80px;
-  background: rgba(var(--bg-secondary), 0.3);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border-bottom: 1px solid rgba(var(--border-primary), 0.2);
+  background: rgb(var(--neo-panel));
+  border-bottom: var(--neo-border-width) solid rgb(var(--neo-ink));
+  box-shadow: 0 var(--neo-shadow-offset-md) 0 rgb(var(--neo-shadow));
   flex-shrink: 0;
   --wails-draggable: drag;
   app-region: drag;
@@ -133,8 +141,8 @@
 
 .title {
   font-size: 1.5rem;
-  font-weight: 700;
-  color: rgb(var(--text-primary));
+  font-weight: 800;
+  color: rgb(var(--neo-ink));
   margin: 0;
 }
 
@@ -246,4 +254,3 @@
     border-color: transparent;
   }
 }
-

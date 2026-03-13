@@ -1,6 +1,7 @@
-import { useState } from 'react'
-import { Modal, Checkbox } from 'antd'
-import { BookOpen } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { BookOpen, Check, Minus, FolderPlus } from 'lucide-react'
+import Button from '@/components/common/Button'
+import Dialog from '@/components/common/Dialog'
 import type { Book } from '@/types'
 import styles from './SelectFilesModal.module.scss'
 
@@ -8,13 +9,13 @@ export interface SelectFilesModalProps {
   open: boolean
   onClose: () => void
   onConfirm: (selectedFileIds: string[]) => void
-  availableFiles: Book[] // 可选择的单文件列表
-  targetDirectoryName: string // 目标目录名称
+  availableFiles: Book[]
+  targetDirectoryName: string
 }
 
 /**
  * SelectFilesModal 选择文件弹窗
- * 用于从已有单文件中选择，添加到目录
+ * 用于从书架中挑选已有单文件，批量加入目标目录。
  */
 export default function SelectFilesModal({
   open,
@@ -25,6 +26,18 @@ export default function SelectFilesModal({
 }: SelectFilesModalProps) {
   const [selectedIds, setSelectedIds] = useState<string[]>([])
 
+  useEffect(() => {
+    if (!open) {
+      setSelectedIds([])
+    }
+  }, [open, targetDirectoryName])
+
+  const selectedCount = selectedIds.length
+  const allSelected = availableFiles.length > 0 && selectedCount === availableFiles.length
+  const isPartiallySelected = selectedCount > 0 && selectedCount < availableFiles.length
+
+  const selectedIdsSet = useMemo(() => new Set(selectedIds), [selectedIds])
+
   const handleToggle = (fileId: string) => {
     setSelectedIds((prev) =>
       prev.includes(fileId) ? prev.filter((id) => id !== fileId) : [...prev, fileId]
@@ -32,14 +45,19 @@ export default function SelectFilesModal({
   }
 
   const handleSelectAll = () => {
-    if (selectedIds.length === availableFiles.length) {
+    if (allSelected) {
       setSelectedIds([])
-    } else {
-      setSelectedIds(availableFiles.map((file) => file.id))
+      return
     }
+
+    setSelectedIds(availableFiles.map((file) => file.id))
   }
 
   const handleConfirm = () => {
+    if (selectedIds.length === 0) {
+      return
+    }
+
     onConfirm(selectedIds)
     setSelectedIds([])
     onClose()
@@ -50,69 +68,104 @@ export default function SelectFilesModal({
     onClose()
   }
 
+  const footer =
+    availableFiles.length > 0 ? (
+      <>
+        <Button variant="secondary" onClick={handleCancel}>
+          取消
+        </Button>
+        <Button variant="primary" onClick={handleConfirm} disabled={selectedIds.length === 0}>
+          确定添加
+        </Button>
+      </>
+    ) : (
+      <Button variant="secondary" onClick={handleCancel}>
+        我知道了
+      </Button>
+    )
+
   return (
-    <Modal
-      title={`添加文件到「${targetDirectoryName}」`}
+    <Dialog
       open={open}
-      onCancel={handleCancel}
-      onOk={handleConfirm}
-      okText="确定添加"
-      cancelText="取消"
-      width={600}
-      centered
-      okButtonProps={{ disabled: selectedIds.length === 0 }}
+      onClose={handleCancel}
+      title={`添加文件到「${targetDirectoryName}」`}
+      subtitle="从当前书架挑选已有书籍，确认后会直接放进这个目录。"
+      width={680}
+      footer={footer}
+      variant="brutal"
     >
       {availableFiles.length > 0 ? (
-        <>
-          <div className={styles.header}>
-            <Checkbox
-              checked={selectedIds.length === availableFiles.length}
-              indeterminate={
-                selectedIds.length > 0 && selectedIds.length < availableFiles.length
-              }
-              onChange={handleSelectAll}
+        <div className={styles.content}>
+          <div className={styles.toolbar}>
+            <button
+              type="button"
+              className={`${styles.selectAllButton} ${allSelected ? styles.selectAllActive : ''}`}
+              onClick={handleSelectAll}
             >
-              全选 ({selectedIds.length}/{availableFiles.length})
-            </Checkbox>
+              <span
+                className={`${styles.checkbox} ${
+                  allSelected || isPartiallySelected ? styles.checkboxChecked : ''
+                }`}
+                aria-hidden="true"
+              >
+                {allSelected ? <Check size={14} /> : isPartiallySelected ? <Minus size={14} /> : null}
+              </span>
+              <span className={styles.selectAllText}>全选文件</span>
+              <span className={styles.counter}>
+                {selectedCount}/{availableFiles.length}
+              </span>
+            </button>
           </div>
 
           <div className={styles.fileList}>
-            {availableFiles.map((file) => (
-              <div
-                key={file.id}
-                className={`${styles.fileItem} ${
-                  selectedIds.includes(file.id) ? styles.selected : ''
-                }`}
-                onClick={() => handleToggle(file.id)}
-              >
-                <Checkbox
-                  checked={selectedIds.includes(file.id)}
-                  onChange={() => handleToggle(file.id)}
-                  onClick={(e) => e.stopPropagation()}
-                />
-                <div className={styles.fileIcon}>
-                  {file.cover ? (
-                    <img src={file.cover} alt={file.title} />
-                  ) : (
-                    <BookOpen size={32} />
-                  )}
-                </div>
-                <div className={styles.fileInfo}>
-                  <h4 className={styles.fileTitle}>{file.title}</h4>
-                  <p className={styles.fileAuthor}>作者: {file.author}</p>
-                  <p className={styles.fileMeta}>
-                    {file.format?.toUpperCase()} · {file.category}
-                  </p>
-                </div>
-              </div>
-            ))}
+            {availableFiles.map((file) => {
+              const isSelected = selectedIdsSet.has(file.id)
+
+              return (
+                <button
+                  type="button"
+                  key={file.id}
+                  className={`${styles.fileItem} ${isSelected ? styles.fileItemSelected : ''}`}
+                  onClick={() => handleToggle(file.id)}
+                  aria-pressed={isSelected}
+                >
+                  <span
+                    className={`${styles.checkbox} ${isSelected ? styles.checkboxChecked : ''}`}
+                    aria-hidden="true"
+                  >
+                    {isSelected ? <Check size={14} /> : null}
+                  </span>
+
+                  <div className={styles.fileIcon}>
+                    {file.cover ? (
+                      <img src={file.cover} alt={file.title} />
+                    ) : (
+                      <BookOpen size={28} />
+                    )}
+                  </div>
+
+                  <div className={styles.fileInfo}>
+                    <h4 className={styles.fileTitle}>{file.title}</h4>
+                    <p className={styles.fileAuthor}>作者：{file.author || '未知作者'}</p>
+                    <p className={styles.fileMeta}>
+                      {(file.format || 'unknown').toUpperCase()}
+                      {file.category ? ` · ${file.category}` : ''}
+                    </p>
+                  </div>
+                </button>
+              )
+            })}
           </div>
-        </>
+        </div>
       ) : (
         <div className={styles.empty}>
-          <p>暂无可添加的单文件</p>
+          <div className={styles.emptyIcon}>
+            <FolderPlus size={24} />
+          </div>
+          <p className={styles.emptyTitle}>当前没有可添加的单文件</p>
+          <p className={styles.emptyDescription}>先导入几本书，或者把目录里的书移回书架后再试。</p>
         </div>
       )}
-    </Modal>
+    </Dialog>
   )
 }

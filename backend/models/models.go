@@ -8,6 +8,8 @@ type Novel struct {
 	Author string `json:"author"`
 	// FilePath 文件路径
 	FilePath string `json:"file_path"`
+	// Cover 封面图（data URL）
+	Cover string `json:"cover"`
 	// Format 文件格式 (.txt, .epub, .pdf, etc.)
 	Format string `json:"format"`
 	// Size 文件大小（字节）

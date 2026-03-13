@@ -59,7 +59,7 @@ export default function Slider({
           onChange={handleChange}
           disabled={disabled}
           style={{
-            background: `linear-gradient(to right, rgb(var(--color-primary)) 0%, rgb(var(--color-primary)) ${percentage}%, rgba(var(--border-primary), 0.4) ${percentage}%, rgba(var(--border-primary), 0.4) 100%)`,
+            background: `linear-gradient(to right, rgb(var(--color-primary)) 0%, rgb(var(--color-primary)) ${percentage}%, rgb(var(--neo-panel-muted)) ${percentage}%, rgb(var(--neo-panel-muted)) 100%)`,
           }}
         />
       </div>

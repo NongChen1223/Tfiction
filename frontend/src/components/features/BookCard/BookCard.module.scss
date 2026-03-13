@@ -5,10 +5,11 @@
   flex-direction: column;
   cursor: pointer;
   transition: transform var(--transition-base);
+  gap: var(--spacing-sm);
 }
 
 .card:hover {
-  transform: translateY(-4px);
+  transform: translate(-2px, -2px);
 }
 
 /* === Cover Wrapper === */
@@ -17,7 +18,10 @@
   position: relative;
   width: 100%;
   aspect-ratio: 2 / 3;
-  border-radius: var(--radius-lg);
+  border-radius: var(--neo-radius-lg);
+  border: var(--neo-border-width) solid rgb(var(--neo-ink));
+  box-shadow: var(--neo-shadow-offset-md) var(--neo-shadow-offset-md) 0
+    rgb(var(--neo-shadow));
   overflow: hidden;
 }
 
@@ -25,7 +29,7 @@
   position: relative;
   width: 100%;
   height: 100%;
-  background: rgba(var(--bg-secondary), 0.5);
+  background: rgb(var(--neo-panel-soft));
   overflow: hidden;
 }
 
@@ -41,8 +45,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, rgba(var(--color-primary), 0.2), rgba(var(--color-primary), 0.05));
-  color: rgb(var(--color-primary));
+  background: rgb(var(--neo-panel-accent));
+  color: rgb(var(--neo-ink));
 }
 
 /* === 圆形进度条 - 左上角 === */
@@ -105,14 +109,14 @@
   bottom: 0;
   left: 0;
   right: 0;
-  padding: var(--spacing-lg) var(--spacing-md);
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.8), transparent);
+  padding: var(--spacing-md);
+  background: linear-gradient(to top, rgba(15, 23, 42, 0.9), transparent);
   z-index: 2;
 }
 
 .title {
   font-size: 1rem;
-  font-weight: 600;
+  font-weight: 700;
   color: white;
   margin: 0 0 var(--spacing-xs) 0;
   overflow: hidden;
@@ -145,9 +149,7 @@
   align-items: center;
   justify-content: center;
   gap: var(--spacing-md);
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  background: rgba(10, 12, 18, 0.72);
   opacity: 0;
   transition: opacity var(--transition-base);
   z-index: 4;
@@ -162,24 +164,26 @@
   align-items: center;
   gap: var(--spacing-sm);
   padding: var(--spacing-md) var(--spacing-lg);
-  background: rgba(var(--color-primary), 0.9);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: var(--radius-lg);
-  color: white;
+  background: rgb(var(--neo-panel));
+  border: var(--neo-border-width-sm) solid rgb(var(--neo-ink));
+  border-radius: 14px;
+  color: rgb(var(--neo-ink));
   font-size: 0.9375rem;
-  font-weight: 500;
+  font-weight: 700;
   cursor: pointer;
-  transition: all var(--transition-base);
+  box-shadow: 4px 4px 0 rgb(var(--neo-shadow));
+  transition:
+    transform var(--transition-fast),
+    box-shadow var(--transition-fast),
+    background-color var(--transition-fast);
   min-width: 140px;
   justify-content: center;
 }
 
 .actionButton:hover {
-  background: rgba(var(--color-primary), 1);
-  transform: scale(1.05);
-  box-shadow: 0 4px 12px rgba(var(--color-primary), 0.4);
+  background: rgb(var(--neo-panel-accent));
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0 rgb(var(--neo-shadow));
 }
 
 /* === 底部信息栏 === */
@@ -195,7 +199,7 @@
 .lastRead {
   margin: 0;
   font-size: 0.6875rem;
-  color: rgb(var(--text-tertiary));
+  color: rgb(var(--neo-text-muted));
   text-align: left;
   flex: 1;
 }
@@ -210,26 +214,29 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  background: rgba(var(--bg-tertiary), 0.5);
-  border: 1px solid rgba(var(--border-primary), 0.2);
-  border-radius: var(--radius-md);
-  color: rgb(var(--text-secondary));
+  width: 30px;
+  height: 30px;
+  background: rgb(var(--neo-panel));
+  border: var(--neo-border-width-sm) solid rgb(var(--neo-ink));
+  border-radius: 10px;
+  color: rgb(var(--neo-ink));
   cursor: pointer;
-  transition: all var(--transition-base);
+  box-shadow: 3px 3px 0 rgb(var(--neo-shadow));
+  transition:
+    transform var(--transition-fast),
+    box-shadow var(--transition-fast),
+    background-color var(--transition-fast);
 }
 
 .iconButton:hover {
-  background: rgba(var(--color-primary), 0.1);
-  border-color: rgba(var(--color-primary), 0.3);
-  color: rgb(var(--color-primary));
+  background: rgb(var(--neo-panel-accent));
+  transform: translate(1px, 1px);
+  box-shadow: 2px 2px 0 rgb(var(--neo-shadow));
 }
 
 .iconButton:last-child:hover {
-  background: rgba(239, 68, 68, 0.1);
-  border-color: rgba(239, 68, 68, 0.3);
-  color: rgb(239, 68, 68);
+  background: rgb(var(--neo-panel-danger));
+  color: rgb(var(--neo-ink));
 }
 
 /* === 列表模式 === */
@@ -238,18 +245,18 @@
   flex-direction: row;
   align-items: stretch;
   padding: var(--spacing-md);
-  background: rgba(var(--bg-secondary), 0.3);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(var(--border-primary), 0.1);
-  border-radius: var(--radius-lg);
+  background: rgb(var(--neo-panel));
+  border: var(--neo-border-width) solid rgb(var(--neo-ink));
+  border-radius: var(--neo-radius-lg);
+  box-shadow: var(--neo-shadow-offset-md) var(--neo-shadow-offset-md) 0
+    rgb(var(--neo-shadow));
   gap: var(--spacing-lg);
 }
 
 .card.list:hover {
-  background: rgba(var(--bg-secondary), 0.5);
-  border-color: rgba(var(--color-primary), 0.3);
-  transform: translateX(4px);
+  background: rgb(var(--neo-panel-soft));
+  transform: translate(2px, 2px);
+  box-shadow: 4px 4px 0 rgb(var(--neo-shadow));
 }
 
 .card.list .coverWrapper {
@@ -259,7 +266,7 @@
 }
 
 .card.list .cover {
-  border-radius: var(--radius-md);
+  border-radius: 0;
 }
 
 /* 列表模式下隐藏圆形进度条 */
@@ -275,14 +282,14 @@
 }
 
 .card.list .title {
-  color: rgb(var(--text-primary));
+  color: rgb(var(--neo-ink));
   font-size: 1.125rem;
   margin-bottom: var(--spacing-xs);
   -webkit-line-clamp: 1;
 }
 
 .card.list .author {
-  color: rgb(var(--text-secondary));
+  color: rgb(var(--neo-text-muted));
   font-size: 0.875rem;
 }
 
@@ -311,23 +318,24 @@
 
 .listProgressTrack {
   flex: 1;
-  height: 6px;
-  background: rgba(var(--bg-tertiary), 0.8);
-  border-radius: var(--radius-sm);
+  height: 8px;
+  background: rgb(var(--neo-panel-muted));
+  border: var(--neo-border-width-sm) solid rgb(var(--neo-ink));
+  border-radius: 999px;
   overflow: hidden;
 }
 
 .listProgressFill {
   height: 100%;
-  background: linear-gradient(90deg, rgb(var(--color-primary)), rgb(var(--color-primary-light)));
-  border-radius: var(--radius-sm);
+  background: rgb(var(--color-primary));
+  border-radius: 999px;
   transition: width var(--transition-base);
 }
 
 .listProgressText {
   font-size: 0.875rem;
-  color: rgb(var(--text-secondary));
-  font-weight: 500;
+  color: rgb(var(--neo-ink));
+  font-weight: 700;
   min-width: 50px;
   text-align: right;
 }

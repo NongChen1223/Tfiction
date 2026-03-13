@@ -67,6 +67,11 @@
   --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;  /* 无衬线字体（界面默认） */
   --font-serif: 'Georgia', 'Times New Roman', serif;     /* 衬线字体（阅读模式） */
   --font-mono: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Mono', monospace;  /* 等宽字体（代码、数字） */
+  --font-xs: 0.75rem;
+  --font-sm: 0.875rem;
+  --font-md: 1rem;
+  --font-lg: 1.125rem;
+  --font-xl: 1.25rem;
 
   /* === 玻璃态效果颜色 - 浅色主题 === */
   --glass-bg: rgba(255, 255, 255, 0.7);    /* 玻璃背景（半透明白色） */
@@ -76,6 +81,39 @@
   /* === 遮罩层 === */
   --overlay-light: rgba(0, 0, 0, 0.5);     /* 浅色遮罩（模态框背景） */
   --overlay-dark: rgba(0, 0, 0, 0.8);      /* 深色遮罩（强调模态框） */
+
+  /* === Neubrutalism 结构变量 === */
+  --neo-border-width: 3px;
+  --neo-border-width-sm: 2px;
+  --neo-radius-sm: 10px;
+  --neo-radius-md: 16px;
+  --neo-radius-lg: 22px;
+  --neo-radius-xl: 28px;
+  --neo-shadow-offset-sm: 4px;
+  --neo-shadow-offset-md: 6px;
+  --neo-shadow-offset-lg: 10px;
+
+  /* === Neubrutalism 全局配色 - 浅色主题 === */
+  --neo-ink: 17 24 39;
+  --neo-panel: 255 255 255;
+  --neo-panel-muted: 241 245 249;
+  --neo-panel-soft: 248 250 252;
+  --neo-panel-accent: 219 234 254;
+  --neo-panel-danger: 254 226 226;
+  --neo-text-muted: 71 85 105;
+  --neo-shadow: 37 99 235;
+  --neo-overlay: rgba(15, 23, 42, 0.22);
+  --neo-grid: rgba(59, 130, 246, 0.08);
+
+  /* === Neubrutalism 弹窗配色 - 浅色主题 === */
+  --brutal-ink: var(--neo-ink);
+  --brutal-surface: var(--neo-panel-soft);
+  --brutal-surface-secondary: var(--neo-panel);
+  --brutal-description: var(--neo-text-muted);
+  --brutal-shadow-color: var(--neo-shadow);
+  --brutal-accent-bg: var(--neo-panel-accent);
+  --brutal-danger-bg: var(--neo-panel-danger);
+  --brutal-overlay: var(--neo-overlay);
 }
 
 /* ==================== 暗色主题 ==================== */
@@ -114,6 +152,27 @@
   --glass-bg: rgba(15, 20, 30, 0.9);       /* 玻璃背景（半透明深蓝黑） */
   --glass-border: rgba(100, 120, 150, 0.1);/* 玻璃边框（浅蓝灰色） */
   --glass-shadow: rgba(0, 0, 0, 0.5);      /* 玻璃阴影（深黑色） */
+
+  /* Neubrutalism 弹窗配色 - 暗色主题 */
+  --neo-ink: 234 229 255;
+  --neo-panel: 19 16 31;
+  --neo-panel-muted: 29 24 43;
+  --neo-panel-soft: 24 19 36;
+  --neo-panel-accent: 70 47 122;
+  --neo-panel-danger: 96 53 82;
+  --neo-text-muted: 190 182 223;
+  --neo-shadow: 147 51 234;
+  --neo-overlay: rgba(8, 10, 18, 0.62);
+  --neo-grid: rgba(168, 85, 247, 0.12);
+
+  --brutal-ink: var(--neo-ink);
+  --brutal-surface: var(--neo-panel-soft);
+  --brutal-surface-secondary: var(--neo-panel-muted);
+  --brutal-description: var(--neo-text-muted);
+  --brutal-shadow-color: var(--neo-shadow);
+  --brutal-accent-bg: var(--neo-panel-accent);
+  --brutal-danger-bg: var(--neo-panel-danger);
+  --brutal-overlay: var(--neo-overlay);
 }
 
 /* ==================== 护眼主题（豆沙绿） ==================== */
@@ -147,6 +206,27 @@
   --glass-bg: rgba(215, 210, 195, 0.9);    /* 玻璃背景（半透明淡黄色） */
   --glass-border: rgba(180, 175, 160, 0.3);/* 玻璃边框（淡褐色） */
   --glass-shadow: rgba(0, 0, 0, 0.1);      /* 玻璃阴影（浅黑色） */
+
+  /* Neubrutalism 弹窗配色 - 护眼主题 */
+  --neo-ink: 76 63 48;
+  --neo-panel: 247 241 226;
+  --neo-panel-muted: 232 223 203;
+  --neo-panel-soft: 239 232 214;
+  --neo-panel-accent: 212 198 168;
+  --neo-panel-danger: 229 205 181;
+  --neo-text-muted: 112 100 82;
+  --neo-shadow: 162 122 81;
+  --neo-overlay: rgba(82, 66, 48, 0.26);
+  --neo-grid: rgba(162, 122, 81, 0.1);
+
+  --brutal-ink: var(--neo-ink);
+  --brutal-surface: var(--neo-panel-soft);
+  --brutal-surface-secondary: var(--neo-panel);
+  --brutal-description: var(--neo-text-muted);
+  --brutal-shadow-color: var(--neo-shadow);
+  --brutal-accent-bg: var(--neo-panel-accent);
+  --brutal-danger-bg: var(--neo-panel-danger);
+  --brutal-overlay: var(--neo-overlay);
 }
 
 /* ==================== 工具类样式 ==================== */

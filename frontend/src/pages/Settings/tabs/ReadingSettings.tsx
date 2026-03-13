@@ -1,6 +1,8 @@
 import { useSettingsStore } from '@/stores/settingsStore'
-import { Select, Slider, ColorPicker, Switch } from 'antd'
-import type { Color } from 'antd/es/color-picker'
+import ColorField from '@/components/common/ColorField'
+import Select from '@/components/common/Select'
+import Slider from '@/components/common/Slider'
+import Toggle from '@/components/common/Toggle'
 import styles from './ReadingSettings.module.scss'
 
 /**
@@ -50,9 +52,8 @@ export default function ReadingSettings() {
         <h2 className={styles.sectionTitle}>字体设置</h2>
 
         <div className={styles.settingItem}>
-          <label className={styles.label}>字体系列</label>
           <Select
-            style={{ width: '100%' }}
+            label="字体系列"
             options={fontOptions}
             value={fontFamily}
             onChange={setFontFamily}
@@ -60,14 +61,14 @@ export default function ReadingSettings() {
         </div>
 
         <div className={styles.settingItem}>
-          <label className={styles.label}>字体大小：{fontSize}px</label>
           <Slider
+            label={`字体大小：${fontSize}px`}
             min={12}
             max={32}
             step={1}
             value={fontSize}
             onChange={setFontSize}
-            tooltip={{ formatter: (value) => `${value}px` }}
+            showValue={false}
           />
         </div>
       </section>
@@ -76,26 +77,26 @@ export default function ReadingSettings() {
         <h2 className={styles.sectionTitle}>排版设置</h2>
 
         <div className={styles.settingItem}>
-          <label className={styles.label}>行高：{lineHeight.toFixed(1)}倍</label>
           <Slider
+            label={`行高：${lineHeight.toFixed(1)} 倍`}
             min={1.0}
             max={3.0}
             step={0.1}
             value={lineHeight}
             onChange={setLineHeight}
-            tooltip={{ formatter: (value) => `${value?.toFixed(1)}倍` }}
+            showValue={false}
           />
         </div>
 
         <div className={styles.settingItem}>
-          <label className={styles.label}>页面宽度：{pageWidth}px</label>
           <Slider
+            label={`页面宽度：${pageWidth}px`}
             min={400}
             max={1200}
             step={50}
             value={pageWidth}
             onChange={setPageWidth}
-            tooltip={{ formatter: (value) => `${value}px` }}
+            showValue={false}
           />
         </div>
       </section>
@@ -104,25 +105,23 @@ export default function ReadingSettings() {
         <h2 className={styles.sectionTitle}>颜色设置</h2>
 
         <div className={styles.colorRow}>
-          <div className={styles.colorItem}>
-            <label className={styles.label}>背景颜色</label>
-            <ColorPicker
-              value={backgroundColor}
-              onChange={(color: Color) => setBackgroundColor(color.toHexString())}
-              showText
-              size="large"
-            />
-          </div>
+          <ColorField
+            id="reader-background-color"
+            className={styles.colorItem}
+            label="背景颜色"
+            value={backgroundColor}
+            onChange={setBackgroundColor}
+            helperText="会直接影响阅读页正文底色。"
+          />
 
-          <div className={styles.colorItem}>
-            <label className={styles.label}>文字颜色</label>
-            <ColorPicker
-              value={textColor}
-              onChange={(color: Color) => setTextColor(color.toHexString())}
-              showText
-              size="large"
-            />
-          </div>
+          <ColorField
+            id="reader-text-color"
+            className={styles.colorItem}
+            label="文字颜色"
+            value={textColor}
+            onChange={setTextColor}
+            helperText="建议和背景保持足够对比度。"
+          />
         </div>
       </section>
 
@@ -156,28 +155,30 @@ export default function ReadingSettings() {
         <h2 className={styles.sectionTitle}>老板模式</h2>
 
         <div className={styles.settingItem}>
-          <label className={styles.switchLabel}>
-            <span>启用老板模式</span>
-            <Switch checked={bossMode} onChange={setBossMode} />
-          </label>
+          <div className={styles.switchLabel}>
+            <div className={styles.switchCopy}>
+              <span>启用老板模式</span>
+              <p className={styles.switchDescription}>阅读页会即时读取这个开关状态。</p>
+            </div>
+            <Toggle checked={bossMode} onChange={setBossMode} />
+          </div>
         </div>
 
         <div className={styles.settingItem}>
-          <label className={styles.label}>透明度：{bossOpacity.toFixed(2)}</label>
           <Slider
+            label={`透明度：${bossOpacity.toFixed(2)}`}
             min={0.05}
             max={1}
             step={0.05}
             value={bossOpacity}
             onChange={setBossOpacity}
-            tooltip={{ formatter: (value) => value?.toFixed(2) }}
+            showValue={false}
           />
         </div>
 
         <div className={styles.settingItem}>
-          <label className={styles.label}>隐身级别</label>
           <Select
-            style={{ width: '100%' }}
+            label="隐身级别"
             options={bossModeOptions}
             value={bossModeType}
             onChange={setBossModeType}
@@ -185,26 +186,26 @@ export default function ReadingSettings() {
         </div>
 
         <div className={styles.settingItem}>
-          <label className={styles.label}>唤出延迟：{bossRevealDelay}ms</label>
           <Slider
+            label={`唤出延迟：${bossRevealDelay}ms`}
             min={0}
             max={400}
             step={20}
             value={bossRevealDelay}
             onChange={setBossRevealDelay}
-            tooltip={{ formatter: (value) => `${value}ms` }}
+            showValue={false}
           />
         </div>
 
         <div className={styles.settingItem}>
-          <label className={styles.label}>隐藏延迟：{bossHideDelay}ms</label>
           <Slider
+            label={`隐藏延迟：${bossHideDelay}ms`}
             min={80}
             max={1200}
             step={40}
             value={bossHideDelay}
             onChange={setBossHideDelay}
-            tooltip={{ formatter: (value) => `${value}ms` }}
+            showValue={false}
           />
         </div>
 

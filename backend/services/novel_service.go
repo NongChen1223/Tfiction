@@ -3,6 +3,7 @@ package services
 import (
 	"archive/zip"
 	"context"
+	"encoding/base64"
 	"encoding/xml"
 	"fmt"
 	stdhtml "html"
@@ -334,6 +335,9 @@ func (s *NovelService) parseEpubNovel(novel *models.Novel) error {
 	if strings.TrimSpace(pkg.Metadata.Title) != "" {
 		novel.Title = strings.TrimSpace(pkg.Metadata.Title)
 	}
+	if strings.TrimSpace(pkg.Metadata.Creator) != "" {
+		novel.Author = strings.TrimSpace(pkg.Metadata.Creator)
+	}
 
 	manifest := make(map[string]epubManifestItem, len(pkg.Manifest.Items))
 	for _, item := range pkg.Manifest.Items {
@@ -343,6 +347,11 @@ func (s *NovelService) parseEpubNovel(novel *models.Novel) error {
 	opfDir := path.Dir(containerPath)
 	if opfDir == "." {
 		opfDir = ""
+	}
+
+	coverDataURL, err := resolveEpubCoverDataURL(fileMap, pkg, manifest, opfDir)
+	if err == nil && strings.TrimSpace(coverDataURL) != "" {
+		novel.Cover = coverDataURL
 	}
 
 	var contentBuilder strings.Builder
@@ -511,7 +520,9 @@ type epubContainer struct {
 
 type epubPackage struct {
 	Metadata struct {
-		Title string `xml:"title"`
+		Title   string             `xml:"title"`
+		Creator string             `xml:"creator"`
+		Meta    []epubMetadataMeta `xml:"meta"`
 	} `xml:"metadata"`
 	Manifest struct {
 		Items []epubManifestItem `xml:"item"`
@@ -521,12 +532,34 @@ type epubPackage struct {
 			IDRef string `xml:"idref,attr"`
 		} `xml:"itemref"`
 	} `xml:"spine"`
+	Guide struct {
+		References []epubGuideReference `xml:"reference"`
+	} `xml:"guide"`
+}
+
+type epubMetadataMeta struct {
+	Name     string `xml:"name,attr"`
+	Content  string `xml:"content,attr"`
+	Property string `xml:"property,attr"`
+	Value    string `xml:",chardata"`
 }
 
 type epubManifestItem struct {
-	ID        string `xml:"id,attr"`
-	Href      string `xml:"href,attr"`
-	MediaType string `xml:"media-type,attr"`
+	ID         string `xml:"id,attr"`
+	Href       string `xml:"href,attr"`
+	MediaType  string `xml:"media-type,attr"`
+	Properties string `xml:"properties,attr"`
+}
+
+type epubGuideReference struct {
+	Type  string `xml:"type,attr"`
+	Title string `xml:"title,attr"`
+	Href  string `xml:"href,attr"`
+}
+
+type epubCoverCandidate struct {
+	Path      string
+	MediaType string
 }
 
 func readEpubContainerPath(fileMap map[string]*zip.File) (string, error) {
@@ -548,18 +581,7 @@ func readEpubContainerPath(fileMap map[string]*zip.File) (string, error) {
 }
 
 func readZipFileText(fileMap map[string]*zip.File, filePath string) (string, error) {
-	file, exists := fileMap[normalizeZipPath(filePath)]
-	if !exists {
-		return "", fmt.Errorf("文件不存在: %s", filePath)
-	}
-
-	reader, err := file.Open()
-	if err != nil {
-		return "", err
-	}
-	defer reader.Close()
-
-	content, err := io.ReadAll(reader)
+	content, err := readZipFileBytes(fileMap, filePath)
 	if err != nil {
 		return "", err
 	}
@@ -567,8 +589,30 @@ func readZipFileText(fileMap map[string]*zip.File, filePath string) (string, err
 	return string(content), nil
 }
 
+func readZipFileBytes(fileMap map[string]*zip.File, filePath string) ([]byte, error) {
+	file, exists := fileMap[normalizeZipPath(filePath)]
+	if !exists {
+		return nil, fmt.Errorf("文件不存在: %s", filePath)
+	}
+
+	reader, err := file.Open()
+	if err != nil {
+		return nil, err
+	}
+	defer reader.Close()
+
+	content, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, err
+	}
+
+	return content, nil
+}
+
 func normalizeZipPath(filePath string) string {
-	return strings.TrimPrefix(path.Clean(strings.ReplaceAll(filePath, "\\", "/")), "./")
+	normalizedPath := path.Clean(strings.ReplaceAll(filePath, "\\", "/"))
+	normalizedPath = strings.TrimPrefix(normalizedPath, "./")
+	return strings.TrimPrefix(normalizedPath, "/")
 }
 
 func extractEpubChapterText(markup string) (string, string) {
@@ -663,6 +707,449 @@ func isSupportedEpubItem(mediaType string) bool {
 	default:
 		return false
 	}
+}
+
+func isSupportedEpubCoverMediaType(mediaType string) bool {
+	switch mediaType {
+	case "image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp", "image/svg+xml", "image/bmp":
+		return true
+	default:
+		return false
+	}
+}
+
+func resolveEpubCoverDataURL(
+	fileMap map[string]*zip.File,
+	pkg epubPackage,
+	manifest map[string]epubManifestItem,
+	opfDir string,
+) (string, error) {
+	candidates := collectEpubCoverCandidates(pkg, manifest, opfDir)
+	for _, candidate := range candidates {
+		coverDataURL, err := resolveEpubCoverCandidateDataURL(fileMap, candidate)
+		if err != nil {
+			continue
+		}
+		if strings.TrimSpace(coverDataURL) != "" {
+			return coverDataURL, nil
+		}
+	}
+
+	return resolveEpubFrontMatterCoverDataURL(fileMap, pkg, manifest, opfDir)
+}
+
+func collectEpubCoverCandidates(
+	pkg epubPackage,
+	manifest map[string]epubManifestItem,
+	opfDir string,
+) []epubCoverCandidate {
+	candidates := make([]epubCoverCandidate, 0, 16)
+	seen := make(map[string]struct{})
+
+	addCandidate := func(candidate epubCoverCandidate) {
+		candidate.Path = normalizeZipPath(candidate.Path)
+		if candidate.Path == "" {
+			return
+		}
+
+		key := candidate.Path + "::" + strings.ToLower(candidate.MediaType)
+		if _, exists := seen[key]; exists {
+			return
+		}
+
+		seen[key] = struct{}{}
+		candidates = append(candidates, candidate)
+	}
+
+	addManifestItem := func(item epubManifestItem) {
+		addCandidate(epubCoverCandidate{
+			Path:      path.Join(opfDir, item.Href),
+			MediaType: item.MediaType,
+		})
+	}
+
+	addHrefCandidate := func(href string) {
+		resolvedHref := resolveEpubReference(opfDir, href)
+		if resolvedHref == "" {
+			return
+		}
+
+		if item, exists := findManifestItemByPath(manifest, resolvedHref, opfDir); exists {
+			addManifestItem(item)
+			return
+		}
+
+		addCandidate(epubCoverCandidate{
+			Path:      resolvedHref,
+			MediaType: inferEpubMediaType(resolvedHref),
+		})
+	}
+
+	for _, meta := range pkg.Metadata.Meta {
+		coverRef := ""
+		if strings.EqualFold(strings.TrimSpace(meta.Name), "cover") {
+			coverRef = firstNonEmpty(meta.Content, meta.Value)
+		}
+		if strings.EqualFold(strings.TrimSpace(meta.Property), "cover") {
+			coverRef = firstNonEmpty(coverRef, meta.Content, meta.Value)
+		}
+		if coverRef == "" {
+			continue
+		}
+
+		if item, exists := manifest[strings.TrimSpace(coverRef)]; exists {
+			addManifestItem(item)
+			continue
+		}
+
+		addHrefCandidate(coverRef)
+	}
+
+	for _, item := range pkg.Manifest.Items {
+		properties := strings.Fields(strings.ToLower(item.Properties))
+		for _, property := range properties {
+			if property == "cover-image" {
+				addManifestItem(item)
+				break
+			}
+		}
+	}
+
+	for _, reference := range pkg.Guide.References {
+		referenceType := strings.ToLower(strings.TrimSpace(reference.Type))
+		if referenceType == "cover" || referenceType == "title-page" || referenceType == "titlepage" {
+			addHrefCandidate(reference.Href)
+		}
+	}
+
+	for _, item := range pkg.Manifest.Items {
+		lowerID := strings.ToLower(item.ID)
+		lowerHref := strings.ToLower(item.Href)
+		if !containsEpubCoverKeyword(lowerID) && !containsEpubCoverKeyword(lowerHref) {
+			continue
+		}
+
+		if isSupportedEpubCoverMediaType(item.MediaType) || isSupportedEpubItem(item.MediaType) {
+			addManifestItem(item)
+		}
+	}
+
+	return candidates
+}
+
+func resolveEpubCoverCandidateDataURL(
+	fileMap map[string]*zip.File,
+	candidate epubCoverCandidate,
+) (string, error) {
+	mediaType := strings.ToLower(strings.TrimSpace(candidate.MediaType))
+	if mediaType == "" {
+		mediaType = inferEpubMediaType(candidate.Path)
+	}
+
+	if isSupportedEpubCoverMediaType(mediaType) {
+		coverBytes, err := readZipFileBytes(fileMap, candidate.Path)
+		if err != nil {
+			return "", err
+		}
+
+		return fmt.Sprintf(
+			"data:%s;base64,%s",
+			mediaType,
+			base64.StdEncoding.EncodeToString(coverBytes),
+		), nil
+	}
+
+	if !isSupportedEpubItem(mediaType) && !isLikelyEpubMarkupFile(candidate.Path) {
+		return "", nil
+	}
+
+	return resolveEpubCoverFromMarkup(fileMap, candidate.Path)
+}
+
+func resolveEpubCoverFromMarkup(fileMap map[string]*zip.File, markupPath string) (string, error) {
+	markup, err := readZipFileText(fileMap, markupPath)
+	if err != nil {
+		return "", err
+	}
+
+	baseDir := path.Dir(markupPath)
+	if baseDir == "." {
+		baseDir = ""
+	}
+
+	for _, assetRef := range extractEpubAssetReferences(markup) {
+		assetPath := resolveEpubReference(baseDir, assetRef)
+		if assetPath == "" {
+			continue
+		}
+
+		assetMediaType := inferEpubMediaType(assetPath)
+		if !isSupportedEpubCoverMediaType(assetMediaType) {
+			continue
+		}
+
+		assetBytes, err := readZipFileBytes(fileMap, assetPath)
+		if err != nil {
+			continue
+		}
+
+		return fmt.Sprintf(
+			"data:%s;base64,%s",
+			assetMediaType,
+			base64.StdEncoding.EncodeToString(assetBytes),
+		), nil
+	}
+
+	return "", nil
+}
+
+func resolveEpubFrontMatterCoverDataURL(
+	fileMap map[string]*zip.File,
+	pkg epubPackage,
+	manifest map[string]epubManifestItem,
+	opfDir string,
+) (string, error) {
+	const maxFrontMatterItems = 4
+
+	for index, itemRef := range pkg.Spine.ItemRefs {
+		if index >= maxFrontMatterItems {
+			break
+		}
+
+		item, exists := manifest[itemRef.IDRef]
+		if !exists || !isSupportedEpubItem(item.MediaType) {
+			continue
+		}
+
+		markupPath := normalizeZipPath(path.Join(opfDir, item.Href))
+		markup, err := readZipFileText(fileMap, markupPath)
+		if err != nil || !isLikelyEpubCoverMarkup(markup, item) {
+			continue
+		}
+
+		coverDataURL, err := resolveEpubCoverFromMarkup(fileMap, markupPath)
+		if err != nil {
+			continue
+		}
+		if strings.TrimSpace(coverDataURL) != "" {
+			return coverDataURL, nil
+		}
+	}
+
+	return "", nil
+}
+
+func extractEpubAssetReferences(markup string) []string {
+	references := make([]string, 0, 8)
+	seen := make(map[string]struct{})
+	addReference := func(reference string) {
+		trimmed := strings.TrimSpace(stdhtml.UnescapeString(reference))
+		trimmed = strings.Trim(trimmed, `"'`)
+		if trimmed == "" {
+			return
+		}
+		lowerRef := strings.ToLower(trimmed)
+		if strings.HasPrefix(lowerRef, "#") ||
+			strings.HasPrefix(lowerRef, "data:") ||
+			strings.HasPrefix(lowerRef, "http://") ||
+			strings.HasPrefix(lowerRef, "https://") ||
+			strings.HasPrefix(lowerRef, "//") {
+			return
+		}
+
+		if _, exists := seen[trimmed]; exists {
+			return
+		}
+
+		seen[trimmed] = struct{}{}
+		references = append(references, trimmed)
+	}
+
+	doc, err := xhtml.Parse(strings.NewReader(markup))
+	if err == nil {
+		var walk func(*xhtml.Node)
+		walk = func(node *xhtml.Node) {
+			if node == nil {
+				return
+			}
+
+			if node.Type == xhtml.ElementNode {
+				tag := strings.ToLower(node.Data)
+				switch tag {
+				case "img", "image":
+					for _, attr := range node.Attr {
+						if attr.Key == "src" || attr.Key == "href" {
+							addReference(attr.Val)
+						}
+					}
+				case "object", "embed":
+					for _, attr := range node.Attr {
+						if attr.Key == "data" || attr.Key == "src" {
+							addReference(attr.Val)
+						}
+					}
+				}
+
+				for _, attr := range node.Attr {
+					if attr.Key == "style" {
+						for _, styleURL := range extractStyleURLs(attr.Val) {
+							addReference(styleURL)
+						}
+					}
+				}
+			}
+
+			if node.Type == xhtml.ElementNode && strings.EqualFold(node.Data, "style") && node.FirstChild != nil {
+				for _, styleURL := range extractStyleURLs(node.FirstChild.Data) {
+					addReference(styleURL)
+				}
+			}
+
+			for child := node.FirstChild; child != nil; child = child.NextSibling {
+				walk(child)
+			}
+		}
+
+		walk(doc)
+	}
+
+	attributeRegexp := regexp.MustCompile(`(?i)(?:src|href|xlink:href|data)\s*=\s*["']([^"']+)["']`)
+	for _, match := range attributeRegexp.FindAllStringSubmatch(markup, -1) {
+		if len(match) > 1 {
+			addReference(match[1])
+		}
+	}
+
+	for _, styleURL := range extractStyleURLs(markup) {
+		addReference(styleURL)
+	}
+
+	return references
+}
+
+func extractStyleURLs(content string) []string {
+	styleURLRegexp := regexp.MustCompile(`(?i)url\(([^)]+)\)`)
+	matches := styleURLRegexp.FindAllStringSubmatch(content, -1)
+	urls := make([]string, 0, len(matches))
+	for _, match := range matches {
+		if len(match) > 1 {
+			urls = append(urls, match[1])
+		}
+	}
+	return urls
+}
+
+func resolveEpubReference(baseDir, reference string) string {
+	trimmed := strings.TrimSpace(reference)
+	if trimmed == "" {
+		return ""
+	}
+
+	if hashIndex := strings.Index(trimmed, "#"); hashIndex >= 0 {
+		trimmed = trimmed[:hashIndex]
+	}
+	if queryIndex := strings.Index(trimmed, "?"); queryIndex >= 0 {
+		trimmed = trimmed[:queryIndex]
+	}
+	trimmed = strings.TrimSpace(trimmed)
+	if trimmed == "" {
+		return ""
+	}
+
+	if strings.HasPrefix(trimmed, "/") {
+		return normalizeZipPath(trimmed)
+	}
+
+	return normalizeZipPath(path.Join(baseDir, trimmed))
+}
+
+func findManifestItemByPath(
+	manifest map[string]epubManifestItem,
+	targetPath string,
+	opfDir string,
+) (epubManifestItem, bool) {
+	normalizedTargetPath := normalizeZipPath(targetPath)
+	for _, item := range manifest {
+		itemPath := normalizeZipPath(path.Join(opfDir, item.Href))
+		if itemPath == normalizedTargetPath {
+			return item, true
+		}
+	}
+
+	return epubManifestItem{}, false
+}
+
+func inferEpubMediaType(filePath string) string {
+	switch strings.ToLower(path.Ext(filePath)) {
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".png":
+		return "image/png"
+	case ".gif":
+		return "image/gif"
+	case ".webp":
+		return "image/webp"
+	case ".svg":
+		return "image/svg+xml"
+	case ".bmp":
+		return "image/bmp"
+	case ".xhtml":
+		return "application/xhtml+xml"
+	case ".html", ".htm":
+		return "text/html"
+	default:
+		return ""
+	}
+}
+
+func isLikelyEpubMarkupFile(filePath string) bool {
+	switch strings.ToLower(path.Ext(filePath)) {
+	case ".xhtml", ".html", ".htm":
+		return true
+	default:
+		return false
+	}
+}
+
+func isLikelyEpubCoverMarkup(markup string, item epubManifestItem) bool {
+	references := extractEpubAssetReferences(markup)
+	if len(references) == 0 {
+		return false
+	}
+
+	if containsEpubCoverKeyword(item.ID) || containsEpubCoverKeyword(item.Href) {
+		return true
+	}
+
+	title, text := extractEpubChapterText(markup)
+	if containsEpubCoverKeyword(title) {
+		return true
+	}
+
+	trimmedTextLength := runeLen(strings.TrimSpace(text))
+	return trimmedTextLength <= 80
+}
+
+func containsEpubCoverKeyword(content string) bool {
+	lowerContent := strings.ToLower(content)
+	keywords := []string{"cover", "titlepage", "title-page", "frontcover", "jacket"}
+	for _, keyword := range keywords {
+		if strings.Contains(lowerContent, keyword) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+
+	return ""
 }
 
 func stripHTMLTags(markup string) string {

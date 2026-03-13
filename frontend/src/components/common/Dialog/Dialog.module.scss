@@ -1,0 +1,143 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-xl);
+  background:
+    linear-gradient(135deg, var(--neo-grid) 0, transparent 12%, transparent 50%, var(--neo-grid) 50%, var(--neo-grid) 62%, transparent 62%, transparent 100%),
+    var(--neo-overlay);
+  background-size: 18px 18px, 100% 100%;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  animation: fadeIn var(--transition-fast) ease-out;
+}
+
+.dialog {
+  width: min(var(--dialog-width), calc(100vw - var(--spacing-xl) * 2));
+  max-height: min(84vh, 760px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: rgb(var(--neo-panel));
+  border: var(--neo-border-width) solid rgb(var(--neo-ink));
+  border-radius: var(--neo-radius-xl);
+  box-shadow: var(--neo-shadow-offset-lg) var(--neo-shadow-offset-lg) 0
+    rgb(var(--neo-shadow));
+  animation: scaleIn var(--transition-base) ease-out;
+}
+
+.overlayBrutal {
+  background: var(--brutal-overlay);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.dialogBrutal {
+  background: rgb(var(--brutal-surface));
+  border: 3px solid rgb(var(--brutal-ink));
+  border-radius: 20px;
+  box-shadow: 10px 10px 0 rgb(var(--brutal-shadow-color));
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  padding: var(--spacing-xl) var(--spacing-xl) var(--spacing-lg);
+  border-bottom: var(--neo-border-width-sm) solid rgb(var(--neo-ink));
+  background: rgb(var(--neo-panel-soft));
+}
+
+.headerCopy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.title {
+  font-size: 1.125rem;
+  font-weight: 800;
+  color: rgb(var(--neo-ink));
+  line-height: 1.35;
+}
+
+.subtitle {
+  font-size: 0.9375rem;
+  color: rgb(var(--neo-text-muted));
+  line-height: 1.6;
+  margin: 0;
+}
+
+.closeButton {
+  width: 2.25rem;
+  height: 2.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: var(--neo-border-width-sm) solid rgb(var(--neo-ink));
+  border-radius: 12px;
+  background: rgb(var(--neo-panel));
+  color: rgb(var(--neo-ink));
+  cursor: pointer;
+  box-shadow: 3px 3px 0 rgb(var(--neo-shadow));
+  transition: all var(--transition-base);
+}
+
+.closeButton:hover {
+  background: rgb(var(--neo-panel-accent));
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 rgb(var(--neo-shadow));
+}
+
+.body {
+  padding: 0 var(--spacing-xl) var(--spacing-xl);
+  overflow: auto;
+}
+
+.bodyWithoutHeader {
+  padding-top: var(--spacing-xl);
+}
+
+.bodyBrutal {
+  padding-bottom: calc(var(--spacing-xl) + var(--spacing-xs));
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--spacing-md);
+  padding: var(--spacing-lg) var(--spacing-xl) var(--spacing-xl);
+  border-top: var(--neo-border-width-sm) solid rgb(var(--neo-ink));
+  background: rgb(var(--neo-panel-soft));
+}
+
+@media (max-width: 640px) {
+  .overlay {
+    padding: var(--spacing-md);
+  }
+
+  .dialog {
+    width: calc(100vw - var(--spacing-md) * 2);
+    max-height: calc(100vh - var(--spacing-md) * 2);
+    border-radius: var(--radius-xl);
+  }
+
+  .header {
+    padding: var(--spacing-lg) var(--spacing-lg) var(--spacing-md);
+  }
+
+  .body {
+    padding: 0 var(--spacing-lg) var(--spacing-lg);
+  }
+
+  .footer {
+    padding: var(--spacing-md) var(--spacing-lg) var(--spacing-lg);
+  }
+}

@@ -21,7 +21,10 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   color: rgb(var(--text-primary));
-  background-color: rgb(var(--bg-primary));
+  background:
+    linear-gradient(135deg, var(--neo-grid) 0, transparent 12%, transparent 50%, var(--neo-grid) 50%, var(--neo-grid) 62%, transparent 62%, transparent 100%),
+    linear-gradient(180deg, rgb(var(--bg-primary)), rgb(var(--bg-primary)));
+  background-size: 18px 18px, 100% 100%;
   transition: background-color var(--transition-slow), color var(--transition-slow);
 }
 
@@ -119,4 +122,163 @@ button:focus-visible,
 a:focus-visible {
   outline: 2px solid rgba(var(--color-primary), 0.6);
   outline-offset: 2px;
+}
+
+input,
+button,
+textarea,
+select {
+  font: inherit;
+}
+
+/* ==================== 共享 Neubrutalism 样式 ==================== */
+
+.neo-panel,
+.neo-surface {
+  background: rgb(var(--neo-panel));
+  border: var(--neo-border-width) solid rgb(var(--neo-ink));
+  border-radius: var(--neo-radius-lg);
+  box-shadow: var(--neo-shadow-offset-md) var(--neo-shadow-offset-md) 0
+    rgb(var(--neo-shadow));
+}
+
+.neo-surface-soft {
+  background: rgb(var(--neo-panel-soft));
+  border: var(--neo-border-width-sm) solid rgb(var(--neo-ink));
+  border-radius: var(--neo-radius-md);
+  box-shadow: var(--neo-shadow-offset-sm) var(--neo-shadow-offset-sm) 0
+    rgb(var(--neo-shadow));
+}
+
+/* ==================== antd 主题覆盖 ==================== */
+
+.ant-popover {
+  --antd-arrow-background-color: rgb(var(--neo-panel));
+}
+
+.ant-popover .ant-popover-inner {
+  padding: 0;
+  background: rgb(var(--neo-panel));
+  border: var(--neo-border-width-sm) solid rgb(var(--neo-ink));
+  border-radius: var(--neo-radius-md);
+  box-shadow: var(--neo-shadow-offset-sm) var(--neo-shadow-offset-sm) 0
+    rgb(var(--neo-shadow));
+}
+
+.ant-tooltip .ant-tooltip-inner {
+  background: rgb(var(--neo-panel));
+  color: rgb(var(--neo-ink));
+  border: var(--neo-border-width-sm) solid rgb(var(--neo-ink));
+  border-radius: 12px;
+  box-shadow: var(--neo-shadow-offset-sm) var(--neo-shadow-offset-sm) 0
+    rgb(var(--neo-shadow));
+  font-weight: 600;
+}
+
+.ant-tooltip .ant-tooltip-arrow::before {
+  background: rgb(var(--neo-panel));
+}
+
+.ant-message .ant-message-notice-content {
+  background: rgb(var(--neo-panel));
+  color: rgb(var(--neo-ink));
+  border: var(--neo-border-width-sm) solid rgb(var(--neo-ink));
+  border-radius: 14px;
+  box-shadow: var(--neo-shadow-offset-sm) var(--neo-shadow-offset-sm) 0
+    rgb(var(--neo-shadow));
+}
+
+.ant-select .ant-select-selector,
+.ant-color-picker-trigger {
+  min-height: 48px;
+  background: rgb(var(--neo-panel)) !important;
+  border: var(--neo-border-width-sm) solid rgb(var(--neo-ink)) !important;
+  border-radius: 14px !important;
+  box-shadow: var(--neo-shadow-offset-sm) var(--neo-shadow-offset-sm) 0
+    rgb(var(--neo-shadow)) !important;
+}
+
+.ant-select .ant-select-selector:hover,
+.ant-color-picker-trigger:hover {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0 rgb(var(--neo-shadow)) !important;
+}
+
+.ant-select-focused .ant-select-selector {
+  box-shadow: var(--neo-shadow-offset-sm) var(--neo-shadow-offset-sm) 0
+    rgb(var(--neo-shadow)) !important;
+}
+
+.ant-select-dropdown {
+  padding: 8px;
+  background: rgb(var(--neo-panel)) !important;
+  border: var(--neo-border-width-sm) solid rgb(var(--neo-ink));
+  border-radius: 16px !important;
+  box-shadow: var(--neo-shadow-offset-sm) var(--neo-shadow-offset-sm) 0
+    rgb(var(--neo-shadow)) !important;
+}
+
+.ant-select-item-option {
+  border-radius: 12px !important;
+  color: rgb(var(--neo-ink)) !important;
+  font-weight: 600;
+}
+
+.ant-select-item-option-selected {
+  background: rgb(var(--neo-panel-accent)) !important;
+}
+
+.ant-select-item-option-active {
+  background: rgb(var(--neo-panel-soft)) !important;
+}
+
+.ant-slider .ant-slider-rail,
+.ant-slider .ant-slider-track {
+  height: 10px;
+  border-radius: 999px;
+}
+
+.ant-slider .ant-slider-rail {
+  background: rgb(var(--neo-panel-muted));
+  border: 2px solid rgb(var(--neo-ink));
+}
+
+.ant-slider .ant-slider-track {
+  background: rgb(var(--color-primary));
+}
+
+.ant-slider .ant-slider-handle::after {
+  width: 18px;
+  height: 18px;
+  inset-inline-start: -4px;
+  inset-block-start: -4px;
+  background: rgb(var(--neo-panel));
+  border: 3px solid rgb(var(--neo-ink));
+  box-shadow: 3px 3px 0 rgb(var(--neo-shadow));
+}
+
+.ant-switch {
+  background: rgb(var(--neo-panel-muted));
+  border: 2px solid rgb(var(--neo-ink));
+  box-shadow: 3px 3px 0 rgb(var(--neo-shadow));
+}
+
+.ant-switch.ant-switch-checked {
+  background: rgb(var(--color-primary));
+}
+
+.ant-checkbox .ant-checkbox-inner {
+  border: 2px solid rgb(var(--neo-ink));
+  border-radius: 6px;
+  background: rgb(var(--neo-panel));
+}
+
+.ant-checkbox-checked .ant-checkbox-inner {
+  background: rgb(var(--color-primary));
+  border-color: rgb(var(--neo-ink));
+}
+
+.ant-checkbox-wrapper {
+  color: rgb(var(--neo-ink));
+  font-weight: 600;
 }

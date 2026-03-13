@@ -1,0 +1,114 @@
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+  padding-top: var(--spacing-xs);
+}
+
+.copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-self: flex-start;
+  padding: 0.34rem 0.72rem;
+  border: 2px solid rgb(var(--brutal-ink));
+  border-radius: 10px;
+  background: rgb(var(--brutal-accent-bg));
+  color: rgb(var(--brutal-ink));
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.title {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: rgb(var(--brutal-ink));
+  line-height: 1.4;
+}
+
+.description {
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: rgb(var(--brutal-description));
+}
+
+.detail {
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-radius: 16px;
+  background: rgb(var(--brutal-surface-secondary));
+  border: 2px solid rgb(var(--brutal-ink));
+  color: rgb(var(--brutal-ink));
+  font-size: 0.9375rem;
+  font-weight: 700;
+  line-height: 1.5;
+  word-break: break-word;
+  box-shadow: 4px 4px 0 rgb(var(--brutal-shadow-color));
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-md);
+}
+
+.actionButton {
+  min-width: 7.25rem;
+  padding: 0.78rem 1.1rem;
+  border: 2px solid rgb(var(--brutal-ink));
+  border-radius: 14px;
+  background: rgb(var(--brutal-surface-secondary));
+  color: rgb(var(--brutal-ink));
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  box-shadow: 4px 4px 0 rgb(var(--brutal-shadow-color));
+  transition:
+    transform var(--transition-fast),
+    box-shadow var(--transition-fast),
+    background-color var(--transition-fast);
+}
+
+.actionButton:hover:not(:disabled) {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0 rgb(var(--brutal-shadow-color));
+}
+
+.actionButton:active:not(:disabled) {
+  transform: translate(4px, 4px);
+  box-shadow: none;
+}
+
+.actionButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.cancelButton {
+  background: rgb(var(--brutal-surface-secondary));
+}
+
+.confirmButtonPrimary {
+  background: rgb(var(--brutal-accent-bg));
+}
+
+.confirmButtonDanger {
+  background: rgb(var(--brutal-danger-bg));
+}
+
+@media (max-width: 640px) {
+  .actions {
+    flex-direction: column-reverse;
+  }
+
+  .actions > * {
+    width: 100%;
+  }
+}

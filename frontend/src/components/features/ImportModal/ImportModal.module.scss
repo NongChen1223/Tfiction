@@ -10,21 +10,25 @@
   flex-direction: column;
   align-items: center;
   padding: var(--spacing-xl);
-  background: rgba(var(--bg-secondary), 0.5);
-  border: 2px solid rgba(var(--color-primary), 0.2);
-  border-radius: var(--radius-lg);
+  background: rgb(var(--neo-panel-soft));
+  border: var(--neo-border-width-sm) solid rgb(var(--neo-ink));
+  border-radius: var(--neo-radius-md);
   cursor: pointer;
-  transition: all var(--transition-base);
+  box-shadow: 4px 4px 0 rgb(var(--neo-shadow));
+  transition:
+    transform var(--transition-fast),
+    box-shadow var(--transition-fast),
+    background-color var(--transition-fast);
 
   &:hover {
-    background: rgba(var(--bg-secondary), 0.8);
-    border-color: rgb(var(--color-primary));
-    transform: translateY(-4px);
-    box-shadow: var(--shadow-lg);
+    background: rgb(var(--neo-panel-accent));
+    transform: translate(2px, 2px);
+    box-shadow: 2px 2px 0 rgb(var(--neo-shadow));
   }
 
   &:active {
-    transform: translateY(-2px);
+    transform: translate(4px, 4px);
+    box-shadow: none;
   }
 }
 
@@ -35,14 +39,17 @@
   width: 80px;
   height: 80px;
   margin-bottom: var(--spacing-md);
-  color: rgb(var(--color-primary));
-  background: rgba(var(--color-primary), 0.1);
-  border-radius: var(--radius-lg);
+  color: rgb(var(--neo-ink));
+  background: rgb(var(--neo-panel));
+  border: var(--neo-border-width-sm) solid rgb(var(--neo-ink));
+  border-radius: var(--neo-radius-md);
+  box-shadow: 4px 4px 0 rgb(var(--neo-shadow));
   transition: all var(--transition-base);
 
   .optionCard:hover & {
-    background: rgba(var(--color-primary), 0.2);
-    transform: scale(1.1);
+    background: rgb(var(--neo-panel));
+    transform: translate(2px, 2px);
+    box-shadow: 2px 2px 0 rgb(var(--neo-shadow));
   }
 }
 
@@ -76,40 +83,4 @@
   justify-content: flex-end;
   gap: var(--spacing-md);
   margin-top: var(--spacing-lg);
-}
-
-.cancelButton,
-.confirmButton {
-  padding: var(--spacing-sm) var(--spacing-lg);
-  border-radius: var(--radius-md);
-  font-size: var(--font-md);
-  font-weight: 500;
-  cursor: pointer;
-  transition: all var(--transition-base);
-  border: none;
-}
-
-.cancelButton {
-  background: rgba(var(--bg-secondary), 0.8);
-  color: rgb(var(--text-secondary));
-
-  &:hover {
-    background: rgba(var(--bg-secondary), 1);
-  }
-}
-
-.confirmButton {
-  background: rgb(var(--color-primary));
-  color: white;
-
-  &:hover {
-    opacity: 0.9;
-    transform: translateY(-1px);
-  }
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    transform: none;
-  }
 }
