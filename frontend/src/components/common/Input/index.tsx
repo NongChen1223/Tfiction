@@ -7,6 +7,7 @@ export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   onClear?: () => void
   error?: string
   fullWidth?: boolean
+  wrapperClassName?: string
 }
 
 /**
@@ -14,7 +15,18 @@ export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
  * 支持图标、清除按钮、错误提示
  */
 const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ icon, onClear, error, fullWidth = false, className = '', ...props }, ref) => {
+  (
+    {
+      icon,
+      onClear,
+      error,
+      fullWidth = false,
+      className = '',
+      wrapperClassName = '',
+      ...props
+    },
+    ref
+  ) => {
     const containerClasses = [
       styles.container,
       fullWidth && styles.fullWidth,
@@ -26,7 +38,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
 
     return (
       <div className={containerClasses}>
-        <div className={styles.inputWrapper}>
+        <div className={[styles.inputWrapper, wrapperClassName].filter(Boolean).join(' ')}>
           {icon && <span className={styles.icon}>{icon}</span>}
           <input ref={ref} className={styles.input} {...props} />
           {onClear && props.value && (

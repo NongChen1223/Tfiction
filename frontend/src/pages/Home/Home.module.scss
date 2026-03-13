@@ -49,8 +49,20 @@
   flex: 1;
   min-width: 150px;
   max-width: 500px; /* 限制最大宽度，留出更多拖动空间 */
+}
+
+.searchInputFrame {
+  background: rgb(var(--bg-primary));
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   border: 1px solid rgb(var(--color-primary));
   border-radius: 15px;
+  box-shadow: none;
+}
+
+.searchInputFrame:focus-within {
+  border-color: rgb(var(--color-primary));
+  box-shadow: none;
 }
 
 .toolbar {
@@ -103,42 +115,42 @@
   overflow-y: auto;
 }
 
+.contentWithDirectory {
+  padding-top: var(--spacing-xl);
+}
+
 .directoryBar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--spacing-md);
-  margin-bottom: var(--spacing-xl);
-  padding: var(--spacing-md) var(--spacing-lg);
-  background: rgba(var(--bg-secondary), 0.42);
-  border: 1px solid rgba(var(--border-primary), 0.12);
-  border-radius: var(--radius-xl);
+  justify-content: flex-start;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xs) var(--spacing-2xl) 0;
+  flex-shrink: 0;
 }
 
 .directoryBackButton {
   display: inline-flex;
   align-items: center;
-  gap: var(--spacing-xs);
-  height: 36px;
-  padding: 0 var(--spacing-md);
-  background: rgba(var(--bg-elevated), 0.72);
-  border: 1px solid rgba(var(--border-primary), 0.24);
-  border-radius: var(--radius-lg);
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
   color: rgb(var(--text-primary));
   cursor: pointer;
   transition: all var(--transition-base);
 
   &:hover {
-    background: rgba(var(--color-primary), 0.1);
-    border-color: rgba(var(--color-primary), 0.28);
     color: rgb(var(--color-primary));
+    transform: translateX(-2px);
   }
 }
 
 .directoryMeta {
   display: flex;
   align-items: center;
-  gap: var(--spacing-md);
   min-width: 0;
 }
 
@@ -146,11 +158,6 @@
   color: rgb(var(--text-primary));
   font-size: 0.95rem;
   font-weight: 600;
-}
-
-.directoryCount {
-  color: rgb(var(--text-secondary));
-  font-size: 0.8125rem;
 }
 
 /* === Books List === */
@@ -264,9 +271,12 @@
     padding: var(--spacing-xl);  /* 从 48px 减小到 32px */
   }
 
+  .contentWithDirectory {
+    padding-top: var(--spacing-lg);
+  }
+
   .directoryBar {
-    flex-direction: column;
-    align-items: flex-start;
+    padding: var(--spacing-xs) var(--spacing-xl) 0;
   }
 }
 

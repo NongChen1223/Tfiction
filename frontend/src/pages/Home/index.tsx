@@ -16,7 +16,6 @@ import {
   ChevronLeft,
 } from 'lucide-react'
 import { Popover, message } from 'antd'
-import { OpenNovel } from '@/wailsjs/go/services/NovelService'
 import type { Book, SortMode, ViewMode } from '@/types'
 import Sidebar from '@/components/features/Sidebar'
 import BookCard from '@/components/features/BookCard'
@@ -24,6 +23,7 @@ import Input from '@/components/common/Input'
 import Button from '@/components/common/Button'
 import ImportModal, { type ModalOption } from '@/components/features/ImportModal'
 import SelectFilesModal from '@/components/features/SelectFilesModal'
+import { openNovel } from '@/services/novelBridge'
 import { useNovelStore } from '@/stores/novelStore'
 import { useLibraryStore } from '@/stores/libraryStore'
 import { formatBookCategory, mapNovelToBook, normalizeNovel } from '@/utils/novel'
@@ -196,7 +196,7 @@ export default function Home() {
       (directorySource && existingDirectoryFile
         ? mapDirectoryFileToBook(directorySource, existingDirectoryFile)
         : undefined)
-    const openedNovel = await OpenNovel(filePath)
+    const openedNovel = await openNovel(filePath)
     const normalizedNovel = normalizeNovel(openedNovel)
     const shelfBook = mapNovelToBook(normalizedNovel, existingBook)
     const readerState = {
@@ -429,9 +429,11 @@ export default function Home() {
             onChange={(e) => setSearchQuery(e.target.value)}
             onClear={() => setSearchQuery('')}
             className={styles.searchInput}
+            wrapperClassName={styles.searchInputFrame}
           />
 
           <div className={styles.toolbar}>
+
             <div className={styles.viewModeToggle}>
               <button
                 className={`${styles.viewButton} ${viewMode === 'grid' ? styles.active : ''}`}
@@ -472,23 +474,19 @@ export default function Home() {
             </Button>
           </div>
         </header>
-
-        <div className={styles.content}>
-          {currentDirectory && (
-            <div className={styles.directoryBar}>
-              <button className={styles.directoryBackButton} onClick={exitDirectory}>
-                <ChevronLeft size={16} />
-                <span>返回书架</span>
-              </button>
-              <div className={styles.directoryMeta}>
-                <span className={styles.directoryPath}>书架 / {currentDirectory.title}</span>
-                <span className={styles.directoryCount}>
-                  {currentDirectory.totalFiles || 0} 个文件
-                </span>
-              </div>
+        {currentDirectory && (
+          <div className={styles.directoryBar}>
+            <button className={styles.directoryBackButton} onClick={exitDirectory}>
+              <ChevronLeft size={16} />
+            </button>
+            <div className={styles.directoryMeta}>
+              <span className={styles.directoryPath}>书架 / {currentDirectory.title}</span>
             </div>
-          )}
-
+          </div>
+        )}
+        <div
+          className={`${styles.content} ${currentDirectory ? styles.contentWithDirectory : ''}`}
+        >
           {sortedBooks.length > 0 ? (
             <div className={`${styles.booksList} ${styles[viewMode]}`}>
               {sortedBooks.map((book) => (

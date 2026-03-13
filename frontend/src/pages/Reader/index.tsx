@@ -7,7 +7,6 @@ import { useSettingsStore } from '@/stores/settingsStore'
 import { useWindowStore } from '@/stores/windowStore'
 import { useLibraryStore } from '@/stores/libraryStore'
 import {
-  OpenNovel,
   GetChapterContent,
 } from '@/wailsjs/go/services/NovelService'
 import { SearchInNovel } from '@/wailsjs/go/services/SearchService'
@@ -18,7 +17,7 @@ import {
   ToggleStealthMode,
 } from '@/wailsjs/go/services/WindowService'
 import { EventsOn } from '@/wailsjs/runtime/runtime'
-import { saveReadingProgress, setCurrentChapter } from '@/services/novelBridge'
+import { openNovel, saveReadingProgress, setCurrentChapter } from '@/services/novelBridge'
 import { useBossMode } from '@/hooks/useBossMode'
 import { useClickOutside } from '@/hooks/useClickOutside'
 import {
@@ -161,7 +160,7 @@ export default function Reader() {
 
   const handleOpenFile = async () => {
     try {
-      const openedNovel = await OpenNovel('')
+      const openedNovel = await openNovel('')
       const normalizedNovel = normalizeNovel(openedNovel)
       setCurrentNovel(normalizedNovel)
       addNovel(normalizedNovel)
