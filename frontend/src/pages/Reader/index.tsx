@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
 import type { SearchResult } from '@/types'
 import { useNovelStore } from '@/stores/novelStore'
 import { useSettingsStore } from '@/stores/settingsStore'
@@ -11,10 +10,16 @@ import {
 } from '@/wailsjs/go/services/NovelService'
 import { SearchInNovel } from '@/wailsjs/go/services/SearchService'
 import {
+  DisableStealthMode,
+  EnableStealthMode,
+  HideDesktopReaderOverlay,
+  IsDesktopReaderOverlayVisible,
   OnMouseEnter,
   OnMouseLeave,
   SetOpacity,
-  ToggleStealthMode,
+  ShowDesktopReaderOverlay,
+  SupportsDesktopReaderOverlay,
+  UpdateDesktopReaderOverlay,
 } from '@/wailsjs/go/services/WindowService'
 import { EventsOn } from '@/wailsjs/runtime/runtime'
 import { openNovel, saveReadingProgress, setCurrentChapter } from '@/services/novelBridge'
@@ -33,6 +38,40 @@ import styles from './Reader.module.scss'
 
 function isPickerCancelled(error: unknown) {
   return error instanceof Error && error.message.includes('未选择文件')
+}
+
+function buildDesktopOverlayText(title?: string | null, content = '') {
+  const sections = [title?.trim(), content.trim()].filter(Boolean)
+  return sections.join('\n\n')
+}
+
+function parseHexColor(value: string) {
+  const normalized = value.trim()
+  const hex = normalized.startsWith('#') ? normalized.slice(1) : normalized
+
+  if (/^[0-9a-fA-F]{3}$/.test(hex)) {
+    return {
+      red: parseInt(hex[0] + hex[0], 16),
+      green: parseInt(hex[1] + hex[1], 16),
+      blue: parseInt(hex[2] + hex[2], 16),
+    }
+  }
+
+  if (/^[0-9a-fA-F]{6}$/.test(hex)) {
+    return {
+      red: parseInt(hex.slice(0, 2), 16),
+      green: parseInt(hex.slice(2, 4), 16),
+      blue: parseInt(hex.slice(4, 6), 16),
+    }
+  }
+
+  return { red: 34, green: 34, blue: 34 }
+}
+
+function setReaderStealthRoot(enabled: boolean) {
+  document.documentElement.classList.toggle('reader-stealth-active', enabled)
+  document.body.classList.toggle('reader-stealth-active', enabled)
+  document.getElementById('root')?.classList.toggle('reader-stealth-active', enabled)
 }
 
 /**
@@ -70,6 +109,7 @@ export default function Reader() {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [chapterContent, setChapterContent] = useState('')
   const [isLoadingChapter, setIsLoadingChapter] = useState(false)
+  const [supportsDesktopOverlay, setSupportsDesktopOverlay] = useState(false)
 
   const contentRef = useRef<HTMLDivElement>(null)
   const saveTimerRef = useRef<number | null>(null)
@@ -97,10 +137,30 @@ export default function Reader() {
     : 1
   const shouldActivateBossMode = Boolean(routeState?.activateBossMode)
   const returnDirectoryId = routeState?.returnDirectoryId
+  const useDesktopOverlay = supportsDesktopOverlay
 
   useClickOutside(bossPanelRef, isStealthMode && bossMode.isPanelOpen, () => {
     bossMode.closePanel()
   })
+
+  const syncDesktopOverlay = async (nextOpacity = opacity) => {
+    if (!useDesktopOverlay || !currentNovel) {
+      return
+    }
+
+    const overlayText = buildDesktopOverlayText(currentChapter?.title, chapterContent)
+    const { red, green, blue } = parseHexColor(textColor)
+
+    await UpdateDesktopReaderOverlay(
+      overlayText,
+      Math.round(fontSize),
+      lineHeight,
+      nextOpacity,
+      red,
+      green,
+      blue
+    )
+  }
 
   const loadChapterContent = async (
     novelFilePath: string,
@@ -253,15 +313,44 @@ export default function Reader() {
     const nextStealthMode = !isStealthMode
 
     try {
-      await ToggleStealthMode()
-      setStealthMode(nextStealthMode)
+      if (useDesktopOverlay) {
+        if (nextStealthMode) {
+          const overlayText = buildDesktopOverlayText(currentChapter?.title, chapterContent)
+          const { red, green, blue } = parseHexColor(textColor)
+
+          await ShowDesktopReaderOverlay(
+            overlayText,
+            Math.round(fontSize),
+            lineHeight,
+            bossOpacity,
+            red,
+            green,
+            blue
+          )
+          setStealthMode(true)
+          setOpacity(bossOpacity)
+          setShowSearch(false)
+          setShowSidebar(false)
+          bossMode.closePanel()
+        } else {
+          await HideDesktopReaderOverlay()
+          setStealthMode(false)
+          setOpacity(1)
+          bossMode.closePanel()
+        }
+
+        return
+      }
 
       if (nextStealthMode) {
+        await EnableStealthMode()
         await SetOpacity(bossOpacity)
+        setStealthMode(true)
         setOpacity(bossOpacity)
         bossMode.revealImmediately()
       } else {
-        await SetOpacity(1)
+        await DisableStealthMode()
+        setStealthMode(false)
         setOpacity(1)
         bossMode.closePanel()
       }
@@ -272,16 +361,37 @@ export default function Reader() {
 
   const handleOpacityChange = async (value: number) => {
     try {
-      await SetOpacity(value)
       setOpacity(value)
       setBossOpacity(value)
+
+      if (useDesktopOverlay && isStealthMode) {
+        await syncDesktopOverlay(value)
+        bossMode.bumpPanelTimer()
+        return
+      }
+
+      await SetOpacity(value)
       bossMode.bumpPanelTimer()
     } catch (error) {
       console.error('设置透明度失败:', error)
     }
   }
 
-  const handleReturnHome = () => {
+  const handleReturnHome = async () => {
+    if (isStealthMode) {
+      try {
+        if (useDesktopOverlay) {
+          await HideDesktopReaderOverlay()
+        } else {
+          await DisableStealthMode()
+        }
+        setStealthMode(false)
+        setOpacity(1)
+      } catch (error) {
+        console.error('退出摸鱼模式失败:', error)
+      }
+    }
+
     navigate(returnDirectoryId ? `/home?directory=${encodeURIComponent(returnDirectoryId)}` : '/home')
   }
 
@@ -298,6 +408,29 @@ export default function Reader() {
       'keep'
     )
   }, [currentNovel?.filePath, currentNovel?.currentChapter])
+
+  useEffect(() => {
+    let disposed = false
+
+    const detectDesktopOverlay = async () => {
+      try {
+        const supported = await SupportsDesktopReaderOverlay()
+        if (!disposed) {
+          setSupportsDesktopOverlay(Boolean(supported))
+        }
+      } catch {
+        if (!disposed) {
+          setSupportsDesktopOverlay(false)
+        }
+      }
+    }
+
+    void detectDesktopOverlay()
+
+    return () => {
+      disposed = true
+    }
+  }, [])
 
   useEffect(() => {
     if (!currentNovel || !shouldActivateBossMode || isStealthMode) {
@@ -318,6 +451,100 @@ export default function Reader() {
     returnDirectoryId,
     shouldActivateBossMode,
   ])
+
+  useEffect(() => {
+    if (useDesktopOverlay) {
+      setReaderStealthRoot(false)
+      return
+    }
+
+    setReaderStealthRoot(isStealthMode)
+
+    return () => {
+      setReaderStealthRoot(false)
+    }
+  }, [isStealthMode, useDesktopOverlay])
+
+  useEffect(() => {
+    return () => {
+      setReaderStealthRoot(false)
+
+      const windowState = useWindowStore.getState()
+      if (!windowState.isStealthMode && windowState.opacity === 1) {
+        return
+      }
+
+      windowState.setStealthMode(false)
+      windowState.setOpacity(1)
+
+      if (useDesktopOverlay) {
+        void HideDesktopReaderOverlay().catch((error) => {
+          console.error('清理桌面浮窗失败:', error)
+        })
+        return
+      }
+
+      void DisableStealthMode().catch((error) => {
+        console.error('清理阅读摸鱼模式失败:', error)
+      })
+    }
+  }, [useDesktopOverlay])
+
+  useEffect(() => {
+    if (!useDesktopOverlay || !isStealthMode || !currentNovel) {
+      return
+    }
+
+    void syncDesktopOverlay()
+  }, [
+    chapterContent,
+    currentChapter?.title,
+    currentNovel,
+    fontSize,
+    lineHeight,
+    opacity,
+    textColor,
+    useDesktopOverlay,
+    isStealthMode,
+  ])
+
+  useEffect(() => {
+    if (!useDesktopOverlay) {
+      return
+    }
+
+    const syncOverlayState = async () => {
+      try {
+        const isOverlayVisible = await IsDesktopReaderOverlayVisible()
+        if (isOverlayVisible || !useWindowStore.getState().isStealthMode) {
+          return
+        }
+
+        await HideDesktopReaderOverlay()
+        setStealthMode(false)
+        setOpacity(1)
+        bossMode.closePanel()
+      } catch (error) {
+        console.error('同步桌面浮窗状态失败:', error)
+      }
+    }
+
+    const handleWindowReturn = () => {
+      if (document.hidden) {
+        return
+      }
+
+      void syncOverlayState()
+    }
+
+    window.addEventListener('focus', handleWindowReturn)
+    document.addEventListener('visibilitychange', handleWindowReturn)
+
+    return () => {
+      window.removeEventListener('focus', handleWindowReturn)
+      document.removeEventListener('visibilitychange', handleWindowReturn)
+    }
+  }, [bossMode, setOpacity, setStealthMode, useDesktopOverlay])
 
   useEffect(() => {
     const offStealthMode = EventsOn('window:stealthMode', (enabled: boolean) => {
@@ -355,7 +582,7 @@ export default function Reader() {
         void handleToggleStealthMode()
       } else if (matchesShortcut(event, keyboardShortcuts.goHome) && !isTypingTarget) {
         event.preventDefault()
-        handleReturnHome()
+        void handleReturnHome()
       } else if (matchesShortcut(event, keyboardShortcuts.quickHide) && isStealthMode) {
         event.preventDefault()
         setShowSearch(false)
@@ -427,9 +654,8 @@ export default function Reader() {
       onMouseMove={bossMode.bumpPanelTimer}
       onContextMenu={bossMode.handleContextMenu}
       style={{
-        backgroundColor,
+        backgroundColor: isStealthMode ? 'transparent' : backgroundColor,
         color: textColor,
-        opacity: displayOpacity,
       }}
     >
       <div
@@ -439,19 +665,20 @@ export default function Reader() {
       >
         <div className={styles.toolbarLeft}>
           <button
-            onClick={handleReturnHome}
+            type="button"
+            onClick={() => void handleReturnHome()}
             className={`${styles.toolbarButton} ${styles.backButton}`}
             title={returnDirectoryId ? '返回目录' : '返回书架'}
           >
-            <ArrowLeft size={16} />
             <span>{returnDirectoryId ? '返回目录' : '返回书架'}</span>
           </button>
           <button
+            type="button"
             onClick={() => setShowSidebar((value) => !value)}
             className={styles.toolbarButton}
             title="目录"
           >
-            📚
+            目录
           </button>
           <div className={styles.chapterMeta}>
             <span className={styles.chapterInfo}>
@@ -464,48 +691,52 @@ export default function Reader() {
 
         <div className={styles.toolbarCenter}>
           <button
+            type="button"
             onClick={handlePrevChapter}
             className={styles.toolbarButton}
             disabled={currentNovel.currentChapter <= 0}
             title="上一章"
           >
-            ←
+            上一章
           </button>
           <button
+            type="button"
             onClick={handleNextChapter}
             className={styles.toolbarButton}
             disabled={currentNovel.currentChapter >= currentNovel.chapters.length - 1}
             title="下一章"
           >
-            →
+            下一章
           </button>
         </div>
 
         <div className={styles.toolbarRight}>
           <button
+            type="button"
             onClick={() => setShowSearch(true)}
             className={styles.toolbarButton}
             title="搜索 (Ctrl+F)"
           >
-            🔍
+            搜索
           </button>
           <button
+            type="button"
             onClick={() => void handleToggleStealthMode()}
             className={`${styles.toolbarButton} ${isStealthMode ? styles.active : ''}`}
             title="摸鱼模式"
           >
-            🎭
+            {isStealthMode ? '退出摸鱼' : '摸鱼模式'}
           </button>
           {isStealthMode && (
             <input
               type="range"
-              min="0.1"
+              min="0.02"
               max="1"
-              step="0.05"
+              step="0.02"
               value={opacity}
               onChange={(event) => handleOpacityChange(Number(event.target.value))}
               className={styles.opacitySlider}
-              title="透明度"
+              title="文字可见度"
             />
           )}
         </div>
@@ -515,8 +746,12 @@ export default function Reader() {
         <aside className={styles.sidebar}>
           <div className={styles.sidebarHeader}>
             <h3>目录</h3>
-            <button onClick={() => setShowSidebar(false)} className={styles.closeButton}>
-              ×
+            <button
+              type="button"
+              onClick={() => setShowSidebar(false)}
+              className={styles.closeButton}
+            >
+              关闭
             </button>
           </div>
           <div className={styles.chapterList}>
@@ -540,8 +775,12 @@ export default function Reader() {
         <aside className={styles.searchPanel}>
           <div className={styles.searchHeader}>
             <h3>全文搜索</h3>
-            <button onClick={() => setShowSearch(false)} className={styles.closeButton}>
-              ×
+            <button
+              type="button"
+              onClick={() => setShowSearch(false)}
+              className={styles.closeButton}
+            >
+              关闭
             </button>
           </div>
           <div className={styles.searchInput}>
@@ -556,7 +795,7 @@ export default function Reader() {
                 }
               }}
             />
-            <button onClick={() => void handleSearch()} className={styles.searchButton}>
+            <button type="button" onClick={() => void handleSearch()} className={styles.searchButton}>
               搜索
             </button>
           </div>
@@ -598,17 +837,19 @@ export default function Reader() {
           lineHeight,
         }}
       >
-        {currentChapter && <h2 className={styles.chapterTitle}>{currentChapter.title}</h2>}
-        {isLoadingChapter ? (
-          <div className={styles.loading}>章节内容加载中...</div>
-        ) : (
-          <div
-            className={styles.text}
-            dangerouslySetInnerHTML={{
-              __html: chapterHtml,
-            }}
-          />
-        )}
+        <div className={styles.contentBody} style={{ opacity: displayOpacity }}>
+          {currentChapter && <h2 className={styles.chapterTitle}>{currentChapter.title}</h2>}
+          {isLoadingChapter ? (
+            <div className={styles.loading}>章节内容加载中...</div>
+          ) : (
+            <div
+              className={styles.text}
+              dangerouslySetInnerHTML={{
+                __html: chapterHtml,
+              }}
+            />
+          )}
+        </div>
       </div>
 
       {isStealthMode && bossMode.isConcealed && (
@@ -628,8 +869,12 @@ export default function Reader() {
         >
           <div className={styles.bossPanelHeader}>
             <span>隐身控制</span>
-            <button onClick={bossMode.closePanel} className={styles.panelCloseButton}>
-              ×
+            <button
+              type="button"
+              onClick={bossMode.closePanel}
+              className={styles.panelCloseButton}
+            >
+              收起
             </button>
           </div>
 
@@ -657,13 +902,13 @@ export default function Reader() {
 
           <div className={styles.bossPanelSection}>
             <span className={styles.bossPanelLabel}>
-              透明度 {bossOpacity.toFixed(2)}
+              文字可见度 {bossOpacity.toFixed(2)}
             </span>
             <input
               type="range"
-              min="0.05"
+              min="0.02"
               max="1"
-              step="0.05"
+              step="0.02"
               value={bossOpacity}
               onChange={(event) => handleOpacityChange(Number(event.target.value))}
               className={styles.panelSlider}
@@ -698,15 +943,24 @@ export default function Reader() {
 
           <div className={styles.bossPanelActions}>
             <button
+              type="button"
               className={styles.panelActionButton}
               onClick={() => bossMode.pinVisible(!bossMode.isForceVisible)}
             >
               {bossMode.isForceVisible ? '取消常显' : '锁定常显'}
             </button>
-            <button className={styles.panelActionButton} onClick={bossMode.concealImmediately}>
+            <button
+              type="button"
+              className={styles.panelActionButton}
+              onClick={bossMode.concealImmediately}
+            >
               立即隐藏
             </button>
-            <button className={styles.panelActionButton} onClick={() => void handleToggleStealthMode()}>
+            <button
+              type="button"
+              className={styles.panelActionButton}
+              onClick={() => void handleToggleStealthMode()}
+            >
               退出模式
             </button>
           </div>

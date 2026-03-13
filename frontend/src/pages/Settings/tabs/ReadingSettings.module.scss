@@ -143,12 +143,12 @@
   justify-content: center;
   font-size: 1.125rem;
   color: rgb(var(--neo-ink));
-  background: rgb(var(--neo-panel));
+  background: transparent;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.2);
   transition: opacity var(--transition-base);
 }
 
 .fullMode {
-  background: rgb(var(--neo-panel-muted));
   color: rgb(var(--neo-text-muted));
 }
 

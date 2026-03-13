@@ -32,6 +32,14 @@ body {
   overflow: hidden;
 }
 
+html.reader-stealth-active,
+body.reader-stealth-active,
+body.reader-stealth-active #root,
+#root.reader-stealth-active {
+  background: transparent !important;
+  background-image: none !important;
+}
+
 /* ==================== 自定义滚动条 ==================== */
 
 ::-webkit-scrollbar {

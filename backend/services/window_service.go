@@ -12,6 +12,7 @@ type WindowService struct {
 	ctx              context.Context
 	isAlwaysOnTop    bool    // 是否置顶
 	isStealthMode    bool    // 是否摸鱼模式
+	isDesktopOverlay bool    // 是否桌面歌词浮窗
 	opacity          float64 // 透明度 (0.0 - 1.0)
 	isMouseInWindow  bool    // 鼠标是否在窗口内
 	originalPosition struct {
@@ -39,6 +40,9 @@ func (s *WindowService) Cleanup() {
 	// 恢复窗口状态
 	if s.isAlwaysOnTop {
 		s.SetAlwaysOnTop(false)
+	}
+	if s.isDesktopOverlay {
+		s.HideDesktopReaderOverlay()
 	}
 	if s.isStealthMode {
 		s.DisableStealthMode()
@@ -93,11 +97,86 @@ func (s *WindowService) EnableStealthMode() error {
 
 // DisableStealthMode 禁用摸鱼模式
 func (s *WindowService) DisableStealthMode() error {
+	if s.isDesktopOverlay {
+		return s.HideDesktopReaderOverlay()
+	}
+
 	s.isStealthMode = false
+	s.SetAlwaysOnTop(false)
 	s.SetOpacity(1.0)
 
 	runtime.EventsEmit(s.ctx, "window:stealthMode", false)
 	return nil
+}
+
+// SupportsDesktopReaderOverlay 是否支持桌面悬浮阅读浮窗
+func (s *WindowService) SupportsDesktopReaderOverlay() bool {
+	return desktopReaderOverlaySupported()
+}
+
+// ShowDesktopReaderOverlay 显示原生桌面歌词式阅读浮窗
+func (s *WindowService) ShowDesktopReaderOverlay(
+	text string,
+	fontSize int,
+	lineHeight float64,
+	opacity float64,
+	red int,
+	green int,
+	blue int,
+) error {
+	if !desktopReaderOverlaySupported() {
+		return nil
+	}
+
+	s.isDesktopOverlay = true
+	s.isStealthMode = true
+	s.opacity = opacity
+	showDesktopReaderOverlay(text, fontSize, lineHeight, opacity, red, green, blue)
+
+	runtime.EventsEmit(s.ctx, "window:stealthMode", true)
+	runtime.EventsEmit(s.ctx, "window:opacity", opacity)
+	return nil
+}
+
+// UpdateDesktopReaderOverlay 更新桌面悬浮阅读浮窗内容
+func (s *WindowService) UpdateDesktopReaderOverlay(
+	text string,
+	fontSize int,
+	lineHeight float64,
+	opacity float64,
+	red int,
+	green int,
+	blue int,
+) error {
+	if !desktopReaderOverlaySupported() || !s.isDesktopOverlay {
+		return nil
+	}
+
+	s.opacity = opacity
+	updateDesktopReaderOverlay(text, fontSize, lineHeight, opacity, red, green, blue)
+	runtime.EventsEmit(s.ctx, "window:opacity", opacity)
+	return nil
+}
+
+// HideDesktopReaderOverlay 隐藏桌面悬浮阅读浮窗
+func (s *WindowService) HideDesktopReaderOverlay() error {
+	if !desktopReaderOverlaySupported() {
+		return nil
+	}
+
+	hideDesktopReaderOverlay()
+	s.isDesktopOverlay = false
+	s.isStealthMode = false
+	s.opacity = 1.0
+
+	runtime.EventsEmit(s.ctx, "window:stealthMode", false)
+	runtime.EventsEmit(s.ctx, "window:opacity", 1.0)
+	return nil
+}
+
+// IsDesktopReaderOverlayVisible 获取桌面悬浮阅读浮窗当前是否可见
+func (s *WindowService) IsDesktopReaderOverlayVisible() bool {
+	return isDesktopReaderOverlayVisible()
 }
 
 // IsStealthMode 获取是否处于摸鱼模式

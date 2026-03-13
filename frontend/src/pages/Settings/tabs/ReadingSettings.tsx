@@ -166,10 +166,10 @@ export default function ReadingSettings() {
 
         <div className={styles.settingItem}>
           <Slider
-            label={`透明度：${bossOpacity.toFixed(2)}`}
-            min={0.05}
+            label={`文字可见度：${bossOpacity.toFixed(2)}`}
+            min={0.02}
             max={1}
-            step={0.05}
+            step={0.02}
             value={bossOpacity}
             onChange={setBossOpacity}
             showValue={false}
@@ -219,7 +219,7 @@ export default function ReadingSettings() {
               }`}
               style={{ opacity: bossMode ? bossOpacity : 0 }}
             >
-              {bossModeType === 'full' ? '移出后几乎完全隐藏' : '保持可见，但更隐蔽'}
+              {bossModeType === 'full' ? '透明背景，仅保留极弱文字' : '透明背景，仅保留文字'}
             </div>
           </div>
         </div>

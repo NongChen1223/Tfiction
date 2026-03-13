@@ -28,11 +28,7 @@ export const useWindowStore = create<WindowStore>((set) => ({
 
   // 设置摸鱼模式
   setStealthMode: (stealthMode) => {
-    set({
-      isStealthMode: stealthMode,
-      opacity: stealthMode ? 0.3 : 1.0,
-      isAlwaysOnTop: stealthMode,
-    })
+    set({ isStealthMode: stealthMode })
   },
 
   // 设置透明度
@@ -50,8 +46,6 @@ export const useWindowStore = create<WindowStore>((set) => ({
   toggleStealthMode: () => {
     set((state) => ({
       isStealthMode: !state.isStealthMode,
-      opacity: !state.isStealthMode ? 0.3 : 1.0,
-      isAlwaysOnTop: !state.isStealthMode,
     }))
   },
 }))

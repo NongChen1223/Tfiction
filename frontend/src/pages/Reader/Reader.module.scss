@@ -6,14 +6,80 @@
   flex-direction: column;
   overflow: hidden;
   transition:
-    opacity var(--transition-slow),
     background-color var(--transition-base),
     color var(--transition-base);
 }
 
 .stealthMode {
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  background: transparent !important;
+
+  .toolbar,
+  .footer,
+  .sidebar,
+  .searchPanel,
+  .bossPanel,
+  .concealedHint {
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .toolbarButton,
+  .closeButton,
+  .searchButton,
+  .chapterItem,
+  .searchResultItem,
+  .segmentButton,
+  .panelActionButton,
+  .panelCloseButton,
+  .searchInput input,
+  .progressBar {
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+  }
+
+  .progressFill {
+    opacity: 0.4;
+  }
+
+  .chapterMeta,
+  .progressInfo,
+  .bossPanelHeader,
+  .bossPanelLabel,
+  .chapterItemMeta,
+  .searchResultMeta,
+  .bookInfo,
+  .concealedHint {
+    color: rgba(var(--text-primary), 0.54);
+  }
+
+  .chapterTitle,
+  .chapterItemTitle,
+  .searchResultText,
+  .text,
+  .chapterInfo {
+    text-shadow: 0 0 18px rgba(var(--text-primary), 0.08);
+  }
+
+  .searchInput input:focus,
+  .toolbarButton:hover:not(:disabled),
+  .closeButton:hover,
+  .searchButton:hover,
+  .chapterItem:hover,
+  .searchResultItem:hover,
+  .segmentButton:hover,
+  .panelActionButton:hover,
+  .panelCloseButton:hover,
+  .chapterItem.active,
+  .active {
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+    transform: none;
+  }
 }
 
 .empty {
@@ -86,11 +152,13 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0 var(--spacing-sm);
+  padding: 0 0.9rem;
   border: var(--neo-border-width-sm) solid rgb(var(--neo-ink));
   border-radius: 12px;
   background: rgb(var(--neo-panel));
   color: rgb(var(--neo-ink));
+  font-size: 0.85rem;
+  font-weight: 700;
   cursor: pointer;
   box-shadow: 3px 3px 0 rgb(var(--neo-shadow));
   transition:
@@ -112,9 +180,7 @@
 }
 
 .backButton {
-  gap: var(--spacing-xs);
   min-width: auto;
-  padding: 0 var(--spacing-md);
   white-space: nowrap;
 }
 
@@ -195,12 +261,15 @@
 }
 
 .closeButton {
-  width: 30px;
-  height: 30px;
+  min-width: 56px;
+  height: 32px;
+  padding: 0 0.75rem;
   border: var(--neo-border-width-sm) solid rgb(var(--neo-ink));
   border-radius: 10px;
   background: rgb(var(--neo-panel));
   color: rgb(var(--neo-ink));
+  font-size: 0.78rem;
+  font-weight: 700;
   cursor: pointer;
   box-shadow: 3px 3px 0 rgb(var(--neo-shadow));
   transition: background-color var(--transition-base), transform var(--transition-base);
@@ -313,6 +382,10 @@
     opacity var(--transition-slow),
     filter var(--transition-slow),
     transform var(--transition-slow);
+}
+
+.contentBody {
+  transition: opacity var(--transition-slow);
 }
 
 .contentConcealed {
@@ -428,13 +501,16 @@
 }
 
 .panelCloseButton {
-  width: 26px;
+  min-width: 48px;
   height: 26px;
+  padding: 0 0.6rem;
   border: var(--neo-border-width-sm) solid rgb(var(--neo-ink));
   border-radius: 10px;
   background: rgb(var(--neo-panel-soft));
   cursor: pointer;
   color: rgb(var(--neo-ink));
+  font-size: 0.72rem;
+  font-weight: 700;
   box-shadow: 3px 3px 0 rgb(var(--neo-shadow));
 }
 

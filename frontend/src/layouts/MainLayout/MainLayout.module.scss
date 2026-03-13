@@ -5,10 +5,4 @@
   height: 100vh;
   overflow: hidden;
   position: relative;
-  transition: opacity var(--transition-base);
-}
-
-/* 摸鱼模式 - 鼠标离开窗口时隐藏内容 */
-.stealthMode {
-  opacity: 0.3;
 }
