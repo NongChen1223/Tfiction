@@ -17,6 +17,7 @@ static NSView *tfictionOverlayHeaderView = nil;
 static NSView *tfictionOverlayResizeHandleView = nil;
 static NSWindow *tfictionMainAppWindow = nil;
 static BOOL tfictionOverlayVisible = NO;
+static BOOL tfictionOverlayChromeVisible = NO;
 
 static const CGFloat TFictionOverlayDefaultWidth = 620.0;
 static const CGFloat TFictionOverlayDefaultHeight = 280.0;
@@ -28,11 +29,16 @@ static const CGFloat TFictionOverlayHeaderTopInset = 8.0;
 static const CGFloat TFictionOverlayContentInset = 10.0;
 static const CGFloat TFictionOverlayBottomInset = 20.0;
 static const CGFloat TFictionOverlayResizeHandleSize = 18.0;
+static const CGFloat TFictionOverlayChromeRevealDistance = 14.0;
 
 static void TFictionHideDesktopReaderOverlayWindow(void);
 static void TFictionLayoutDesktopReaderOverlayViews(void);
 static NSRect TFictionPreferredDesktopReaderOverlayFrame(void);
 static NSRect TFictionClampDesktopReaderOverlayFrame(NSRect frame, NSScreen *preferredScreen);
+static void TFictionSetOverlayChromeVisible(BOOL visible);
+static BOOL TFictionShouldRevealOverlayChromeAtPoint(NSPoint point, NSRect bounds);
+static void TFictionHandleOverlayMouseTracking(NSView *view, NSEvent *event);
+static void TFictionPerformOverlayWindowDrag(NSWindow *window, NSEvent *event);
 
 @interface TFictionOverlayPanel : NSPanel
 @end
@@ -45,9 +51,14 @@ static NSRect TFictionClampDesktopReaderOverlayFrame(NSRect frame, NSScreen *pre
 - (BOOL)canBecomeMainWindow {
 	return NO;
 }
+
+- (BOOL)acceptsFirstMouse:(NSEvent *)event {
+	return YES;
+}
 @end
 
 @interface TFictionOverlayRootView : NSView
+@property(nonatomic, strong) NSTrackingArea *trackingArea;
 @end
 
 @implementation TFictionOverlayRootView
@@ -55,8 +66,29 @@ static NSRect TFictionClampDesktopReaderOverlayFrame(NSRect frame, NSScreen *pre
 	return NO;
 }
 
+- (BOOL)acceptsFirstMouse:(NSEvent *)event {
+	return YES;
+}
+
 - (BOOL)mouseDownCanMoveWindow {
 	return YES;
+}
+
+- (void)updateTrackingAreas {
+	[super updateTrackingAreas];
+
+	if (self.trackingArea != nil) {
+		[self removeTrackingArea:self.trackingArea];
+	}
+
+	self.trackingArea = [[NSTrackingArea alloc] initWithRect:NSZeroRect
+	                                                 options:NSTrackingMouseMoved |
+	                                                         NSTrackingMouseEnteredAndExited |
+	                                                         NSTrackingActiveAlways |
+	                                                         NSTrackingInVisibleRect
+	                                                   owner:self
+	                                                userInfo:nil];
+	[self addTrackingArea:self.trackingArea];
 }
 
 - (void)layout {
@@ -64,8 +96,28 @@ static NSRect TFictionClampDesktopReaderOverlayFrame(NSRect frame, NSScreen *pre
 	TFictionLayoutDesktopReaderOverlayViews();
 }
 
+- (void)mouseEntered:(NSEvent *)event {
+	TFictionHandleOverlayMouseTracking(self, event);
+}
+
+- (void)mouseMoved:(NSEvent *)event {
+	TFictionHandleOverlayMouseTracking(self, event);
+}
+
+- (void)mouseExited:(NSEvent *)event {
+	TFictionSetOverlayChromeVisible(NO);
+}
+
+- (void)mouseDown:(NSEvent *)event {
+	TFictionPerformOverlayWindowDrag(self.window, event);
+}
+
 - (void)drawRect:(NSRect)dirtyRect {
 	[super drawRect:dirtyRect];
+
+	if (!tfictionOverlayChromeVisible) {
+		return;
+	}
 
 	NSRect bounds = NSInsetRect(self.bounds, 0.8, 0.8);
 
@@ -99,12 +151,25 @@ static NSRect TFictionClampDesktopReaderOverlayFrame(NSRect frame, NSScreen *pre
 	return NO;
 }
 
+- (BOOL)acceptsFirstMouse:(NSEvent *)event {
+	return YES;
+}
+
 - (BOOL)mouseDownCanMoveWindow {
 	return YES;
 }
 
+- (void)mouseDown:(NSEvent *)event {
+	TFictionSetOverlayChromeVisible(YES);
+	TFictionPerformOverlayWindowDrag(self.window, event);
+}
+
 - (void)drawRect:(NSRect)dirtyRect {
 	[super drawRect:dirtyRect];
+
+	if (!tfictionOverlayChromeVisible) {
+		return;
+	}
 
 	NSRect gripRect = NSMakeRect(
 		(NSWidth(self.bounds) - 72.0) / 2.0,
@@ -139,12 +204,17 @@ static NSRect TFictionClampDesktopReaderOverlayFrame(NSRect frame, NSScreen *pre
 	return NO;
 }
 
+- (BOOL)acceptsFirstMouse:(NSEvent *)event {
+	return YES;
+}
+
 - (void)resetCursorRects {
 	[self addCursorRect:self.bounds cursor:[NSCursor crosshairCursor]];
 }
 
 - (void)mouseDown:(NSEvent *)event {
 	[super mouseDown:event];
+	TFictionSetOverlayChromeVisible(YES);
 	self.initialMouseLocation = [NSEvent mouseLocation];
 	self.initialWindowFrame = self.window.frame;
 }
@@ -173,6 +243,10 @@ static NSRect TFictionClampDesktopReaderOverlayFrame(NSRect frame, NSScreen *pre
 - (void)drawRect:(NSRect)dirtyRect {
 	[super drawRect:dirtyRect];
 
+	if (!tfictionOverlayChromeVisible) {
+		return;
+	}
+
 	[[[NSColor whiteColor] colorWithAlphaComponent:0.55] setStroke];
 
 	for (NSInteger index = 0; index < 3; index++) {
@@ -186,7 +260,59 @@ static NSRect TFictionClampDesktopReaderOverlayFrame(NSRect frame, NSScreen *pre
 }
 @end
 
+@interface TFictionOverlayScrollView : NSScrollView
+@property(nonatomic, strong) NSTrackingArea *trackingArea;
+@end
+
+@implementation TFictionOverlayScrollView
+- (BOOL)acceptsFirstResponder {
+	return YES;
+}
+
+- (BOOL)acceptsFirstMouse:(NSEvent *)event {
+	return YES;
+}
+
+- (void)updateTrackingAreas {
+	[super updateTrackingAreas];
+
+	if (self.trackingArea != nil) {
+		[self removeTrackingArea:self.trackingArea];
+	}
+
+	self.trackingArea = [[NSTrackingArea alloc] initWithRect:NSZeroRect
+	                                                 options:NSTrackingMouseMoved |
+	                                                         NSTrackingMouseEnteredAndExited |
+	                                                         NSTrackingActiveAlways |
+	                                                         NSTrackingInVisibleRect
+	                                                   owner:self
+	                                                userInfo:nil];
+	[self addTrackingArea:self.trackingArea];
+}
+
+- (void)mouseEntered:(NSEvent *)event {
+	TFictionHandleOverlayMouseTracking(self, event);
+}
+
+- (void)mouseMoved:(NSEvent *)event {
+	TFictionHandleOverlayMouseTracking(self, event);
+}
+
+- (void)mouseExited:(NSEvent *)event {
+	TFictionSetOverlayChromeVisible(NO);
+}
+
+- (void)scrollWheel:(NSEvent *)event {
+	if (self.window != nil) {
+		[self.window orderFrontRegardless];
+	}
+
+	[super scrollWheel:event];
+}
+@end
+
 @interface TFictionOverlayTextView : NSTextView
+@property(nonatomic, strong) NSTrackingArea *trackingArea;
 @end
 
 @implementation TFictionOverlayTextView
@@ -194,8 +320,41 @@ static NSRect TFictionClampDesktopReaderOverlayFrame(NSRect frame, NSScreen *pre
 	return YES;
 }
 
+- (BOOL)acceptsFirstMouse:(NSEvent *)event {
+	return YES;
+}
+
 - (BOOL)mouseDownCanMoveWindow {
 	return YES;
+}
+
+- (void)updateTrackingAreas {
+	[super updateTrackingAreas];
+
+	if (self.trackingArea != nil) {
+		[self removeTrackingArea:self.trackingArea];
+	}
+
+	self.trackingArea = [[NSTrackingArea alloc] initWithRect:NSZeroRect
+	                                                 options:NSTrackingMouseMoved |
+	                                                         NSTrackingMouseEnteredAndExited |
+	                                                         NSTrackingActiveAlways |
+	                                                         NSTrackingInVisibleRect
+	                                                   owner:self
+	                                                userInfo:nil];
+	[self addTrackingArea:self.trackingArea];
+}
+
+- (void)mouseEntered:(NSEvent *)event {
+	TFictionHandleOverlayMouseTracking(self, event);
+}
+
+- (void)mouseMoved:(NSEvent *)event {
+	TFictionHandleOverlayMouseTracking(self, event);
+}
+
+- (void)mouseExited:(NSEvent *)event {
+	TFictionSetOverlayChromeVisible(NO);
 }
 
 - (void)keyDown:(NSEvent *)event {
@@ -213,7 +372,16 @@ static NSRect TFictionClampDesktopReaderOverlayFrame(NSRect frame, NSScreen *pre
 		return;
 	}
 
-	[super mouseDown:event];
+	TFictionPerformOverlayWindowDrag(self.window, event);
+}
+
+- (void)scrollWheel:(NSEvent *)event {
+	if (self.enclosingScrollView != nil) {
+		[self.enclosingScrollView scrollWheel:event];
+		return;
+	}
+
+	[super scrollWheel:event];
 }
 @end
 
@@ -324,6 +492,57 @@ static NSColor *TFictionOverlayColor(int red, int green, int blue, double alpha)
 	                                 alpha:MAX(0.0, MIN(alpha, 1.0))];
 }
 
+static void TFictionSetOverlayChromeVisible(BOOL visible) {
+	if (tfictionOverlayChromeVisible == visible) {
+		return;
+	}
+
+	tfictionOverlayChromeVisible = visible;
+
+	if (tfictionOverlayHeaderView != nil) {
+		[tfictionOverlayHeaderView setHidden:!visible];
+		[tfictionOverlayHeaderView setNeedsDisplay:YES];
+	}
+	if (tfictionOverlayResizeHandleView != nil) {
+		[tfictionOverlayResizeHandleView setHidden:!visible];
+		[tfictionOverlayResizeHandleView setNeedsDisplay:YES];
+	}
+	if (tfictionOverlayRootView != nil) {
+		[tfictionOverlayRootView setNeedsDisplay:YES];
+	}
+}
+
+static BOOL TFictionShouldRevealOverlayChromeAtPoint(NSPoint point, NSRect bounds) {
+	if (NSIsEmptyRect(bounds) || !NSPointInRect(point, bounds)) {
+		return NO;
+	}
+
+	NSRect innerBounds = NSInsetRect(bounds, TFictionOverlayChromeRevealDistance, TFictionOverlayChromeRevealDistance);
+	if (NSWidth(innerBounds) <= 0 || NSHeight(innerBounds) <= 0) {
+		return YES;
+	}
+
+	return !NSPointInRect(point, innerBounds);
+}
+
+static void TFictionHandleOverlayMouseTracking(NSView *view, NSEvent *event) {
+	if (view == nil || event == nil || tfictionOverlayRootView == nil) {
+		return;
+	}
+
+	NSPoint point = [tfictionOverlayRootView convertPoint:event.locationInWindow fromView:nil];
+	TFictionSetOverlayChromeVisible(TFictionShouldRevealOverlayChromeAtPoint(point, tfictionOverlayRootView.bounds));
+}
+
+static void TFictionPerformOverlayWindowDrag(NSWindow *window, NSEvent *event) {
+	if (window == nil || event == nil || event.type != NSEventTypeLeftMouseDown) {
+		return;
+	}
+
+	TFictionSetOverlayChromeVisible(YES);
+	[window performWindowDragWithEvent:event];
+}
+
 // 透明浮窗仍保留一层轻量拖拽框，方便用户在极低可见度下找到并调整大小。
 static void TFictionLayoutDesktopReaderOverlayViews(void) {
 	if (tfictionOverlayRootView == nil || tfictionOverlayScrollView == nil || tfictionOverlayHeaderView == nil || tfictionOverlayResizeHandleView == nil) {
@@ -364,7 +583,9 @@ static void TFictionEnsureDesktopReaderOverlayWindow(void) {
 	}
 
 	NSRect frame = TFictionPreferredDesktopReaderOverlayFrame();
-	NSUInteger styleMask = NSWindowStyleMaskBorderless | NSWindowStyleMaskResizable;
+	NSUInteger styleMask = NSWindowStyleMaskBorderless |
+		NSWindowStyleMaskResizable |
+		NSWindowStyleMaskNonactivatingPanel;
 
 	tfictionOverlayWindow = [[TFictionOverlayPanel alloc] initWithContentRect:frame
 	                                                  styleMask:styleMask
@@ -375,8 +596,11 @@ static void TFictionEnsureDesktopReaderOverlayWindow(void) {
 	[tfictionOverlayWindow setBackgroundColor:[NSColor clearColor]];
 	[tfictionOverlayWindow setHasShadow:NO];
 	[tfictionOverlayWindow setMovableByWindowBackground:YES];
+	[tfictionOverlayWindow setFloatingPanel:YES];
+	[tfictionOverlayWindow setIgnoresMouseEvents:NO];
 	[tfictionOverlayWindow setLevel:NSFloatingWindowLevel];
 	[tfictionOverlayWindow setHidesOnDeactivate:NO];
+	[tfictionOverlayWindow setAcceptsMouseMovedEvents:YES];
 	[tfictionOverlayWindow setCollectionBehavior:
 	  NSWindowCollectionBehaviorCanJoinAllSpaces |
 	  NSWindowCollectionBehaviorFullScreenAuxiliary];
@@ -394,7 +618,7 @@ static void TFictionEnsureDesktopReaderOverlayWindow(void) {
 	[tfictionOverlayHeaderView setAutoresizingMask:NSViewWidthSizable | NSViewMinYMargin];
 	[tfictionOverlayRootView addSubview:tfictionOverlayHeaderView];
 
-	tfictionOverlayScrollView = [[NSScrollView alloc] initWithFrame:NSZeroRect];
+	tfictionOverlayScrollView = [[TFictionOverlayScrollView alloc] initWithFrame:NSZeroRect];
 	[tfictionOverlayScrollView setDrawsBackground:NO];
 	[tfictionOverlayScrollView setBorderType:NSNoBorder];
 	[tfictionOverlayScrollView setHasVerticalScroller:NO];
@@ -421,6 +645,7 @@ static void TFictionEnsureDesktopReaderOverlayWindow(void) {
 	[tfictionOverlayResizeHandleView setAutoresizingMask:NSViewMinXMargin | NSViewMaxYMargin];
 	[tfictionOverlayRootView addSubview:tfictionOverlayResizeHandleView];
 
+	TFictionSetOverlayChromeVisible(NO);
 	TFictionLayoutDesktopReaderOverlayViews();
 }
 
@@ -465,6 +690,7 @@ static void TFictionShowDesktopReaderOverlayWindow(const char *text, int fontSiz
 		}
 
 		tfictionOverlayVisible = YES;
+		TFictionSetOverlayChromeVisible(NO);
 		[tfictionOverlayWindow makeKeyAndOrderFront:nil];
 		[tfictionOverlayWindow makeFirstResponder:[tfictionOverlayScrollView documentView]];
 		[NSApp activateIgnoringOtherApps:YES];
@@ -488,6 +714,7 @@ static void TFictionHideDesktopReaderOverlayWindow(void) {
 		}
 
 		tfictionOverlayVisible = NO;
+		TFictionSetOverlayChromeVisible(NO);
 
 		if (tfictionMainAppWindow != nil) {
 			[tfictionMainAppWindow makeKeyAndOrderFront:nil];
