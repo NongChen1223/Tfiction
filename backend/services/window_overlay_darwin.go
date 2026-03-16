@@ -7,6 +7,7 @@ package services
 #cgo LDFLAGS: -framework Cocoa
 
 #include <stdlib.h>
+#include <string.h>
 #include <math.h>
 #import <Cocoa/Cocoa.h>
 #import <dispatch/dispatch.h>
@@ -1318,10 +1319,11 @@ static NSArray<NSString *> *TFictionParseOverlayChapterTitles(const char *chapte
 }
 
 static void TFictionUpdateDesktopReaderOverlayControls(const char *chaptersJSON, int currentChapter, double progress, double opacity) {
+	char *chaptersJSONCopy = chaptersJSON != NULL ? strdup(chaptersJSON) : NULL;
 	dispatch_async(dispatch_get_main_queue(), ^{
 		TFictionEnsureDesktopReaderOverlayWindow();
 
-		NSArray<NSString *> *nextTitles = TFictionParseOverlayChapterTitles(chaptersJSON);
+		NSArray<NSString *> *nextTitles = TFictionParseOverlayChapterTitles(chaptersJSONCopy);
 		BOOL shouldKeepExistingTitles = nextTitles.count == 0 && tfictionOverlayChapterTitles.count > 0;
 		if (!shouldKeepExistingTitles && ![tfictionOverlayChapterTitles isEqualToArray:nextTitles]) {
 			tfictionOverlayChapterTitles = nextTitles;
@@ -1333,6 +1335,10 @@ static void TFictionUpdateDesktopReaderOverlayControls(const char *chaptersJSON,
 		tfictionOverlayCurrentOpacity = opacity;
 		TFictionRefreshOverlayControls();
 		TFictionLayoutDesktopReaderOverlayViews();
+
+		if (chaptersJSONCopy != NULL) {
+			free(chaptersJSONCopy);
+		}
 	});
 }
 
@@ -1442,11 +1448,12 @@ static void TFictionApplyDesktopReaderOverlayContent(const char *text, int fontS
 }
 
 static void TFictionShowDesktopReaderOverlayWindow(const char *text, int fontSize, double lineHeight, double opacity, int red, int green, int blue) {
+	char *textCopy = text != NULL ? strdup(text) : NULL;
 	dispatch_async(dispatch_get_main_queue(), ^{
 		tfictionMainAppWindow = TFictionResolveMainAppWindow();
 		[tfictionOverlayActionQueue removeAllObjects];
 		TFictionSetOverlayChapterPanelVisible(NO);
-		TFictionApplyDesktopReaderOverlayContent(text, fontSize, lineHeight, opacity, red, green, blue);
+		TFictionApplyDesktopReaderOverlayContent(textCopy, fontSize, lineHeight, opacity, red, green, blue);
 		[tfictionOverlayWindow setFrame:TFictionPreferredDesktopReaderOverlayFrame() display:YES animate:NO];
 		TFictionLayoutDesktopReaderOverlayViews();
 
@@ -1461,16 +1468,27 @@ static void TFictionShowDesktopReaderOverlayWindow(const char *text, int fontSiz
 		[tfictionOverlayWindow makeKeyAndOrderFront:nil];
 		[tfictionOverlayWindow makeFirstResponder:[tfictionOverlayScrollView documentView]];
 		[NSApp activateIgnoringOtherApps:YES];
+
+		if (textCopy != NULL) {
+			free(textCopy);
+		}
 	});
 }
 
 static void TFictionUpdateDesktopReaderOverlayWindow(const char *text, int fontSize, double lineHeight, double opacity, int red, int green, int blue) {
+	char *textCopy = text != NULL ? strdup(text) : NULL;
 	dispatch_async(dispatch_get_main_queue(), ^{
 		if (!tfictionOverlayVisible) {
+			if (textCopy != NULL) {
+				free(textCopy);
+			}
 			return;
 		}
 
-		TFictionApplyDesktopReaderOverlayContent(text, fontSize, lineHeight, opacity, red, green, blue);
+		TFictionApplyDesktopReaderOverlayContent(textCopy, fontSize, lineHeight, opacity, red, green, blue);
+		if (textCopy != NULL) {
+			free(textCopy);
+		}
 	});
 }
 
