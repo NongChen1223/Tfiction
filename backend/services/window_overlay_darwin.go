@@ -711,9 +711,12 @@ static void TFictionRefreshOverlayControls(void) {
 	[tfictionOverlayNextButton setEnabled:hasNextChapter];
 	[tfictionOverlayPrevButton setAlphaValue:(hasPrevChapter ? 1.0 : 0.45)];
 	[tfictionOverlayNextButton setAlphaValue:(hasNextChapter ? 1.0 : 0.45)];
-	[tfictionOverlayOpacitySlider setDoubleValue:TFictionOverlayOpacitySliderValue(tfictionOverlayCurrentOpacity)];
+	double opacitySliderValue = TFictionOverlayOpacitySliderValue(tfictionOverlayCurrentOpacity);
+	[tfictionOverlayOpacitySlider setDoubleValue:opacitySliderValue];
+	[tfictionOverlayOpacitySlider setToolTip:[NSString stringWithFormat:@"透明度 %.2f", opacitySliderValue]];
 	[tfictionOverlayProgressLabel setStringValue:[NSString stringWithFormat:@"总进度 %.1f%%", tfictionOverlayCurrentProgress]];
-	[tfictionOverlayOpacityLabel setStringValue:[NSString stringWithFormat:@"透明度 %.2f", TFictionOverlayOpacitySliderValue(tfictionOverlayCurrentOpacity)]];
+	[tfictionOverlayOpacityLabel setStringValue:@"透明度"];
+	[tfictionOverlayOpacityLabel setToolTip:[NSString stringWithFormat:@"透明度 %.2f", opacitySliderValue]];
 	TFictionSetOverlayButtonTitle(
 		tfictionOverlayPrevButton,
 		@"上章",
@@ -1117,9 +1120,12 @@ static void TFictionLayoutDesktopReaderOverlayViews(void) {
 	CGFloat controlsWidth = NSWidth(tfictionOverlayControlsView.bounds);
 	CGFloat buttonWidth = 54.0;
 	CGFloat closeWidth = 54.0;
-	CGFloat opacityLabelWidth = 58.0;
-	CGFloat fixedWidth = (buttonWidth * 3.0) + closeWidth + opacityLabelWidth + (TFictionOverlayControlsGap * 5.0) + 20.0;
-	CGFloat opacitySliderWidth = MAX(140.0, controlsWidth - fixedWidth);
+	CGFloat opacityLabelWidth = 44.0;
+	CGFloat opacitySliderWidth = 220.0;
+	CGFloat fixedWidth = (buttonWidth * 3.0) + closeWidth + opacityLabelWidth + opacitySliderWidth + (TFictionOverlayControlsGap * 5.0) + 20.0;
+	if (fixedWidth > controlsWidth) {
+		opacitySliderWidth = MAX(120.0, controlsWidth - ((buttonWidth * 3.0) + closeWidth + opacityLabelWidth + (TFictionOverlayControlsGap * 5.0) + 20.0));
+	}
 	CGFloat currentX = 10.0;
 	CGFloat currentY = 6.0;
 	CGFloat controlHeight = TFictionOverlayControlsHeight - 12.0;
@@ -1275,7 +1281,7 @@ static void TFictionEnsureDesktopReaderOverlayWindow(void) {
 	tfictionOverlayDirectoryButton = TFictionCreateOverlayActionButton(@"目录", @selector(handleToggleDirectory:));
 	tfictionOverlayCloseButton = TFictionCreateOverlayActionButton(@"退出", @selector(handleCloseOverlay:));
 	tfictionOverlayProgressLabel = TFictionCreateOverlayLabel(@"总进度 0.0%");
-	tfictionOverlayOpacityLabel = TFictionCreateOverlayLabel(@"透明度 0.72");
+	tfictionOverlayOpacityLabel = TFictionCreateOverlayLabel(@"透明度");
 	tfictionOverlayProgressTrackView = [[NSView alloc] initWithFrame:NSZeroRect];
 	[tfictionOverlayProgressTrackView setWantsLayer:YES];
 	tfictionOverlayProgressTrackView.layer.cornerRadius = 4.0;
