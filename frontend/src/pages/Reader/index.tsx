@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import type { CSSProperties } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import type { SearchResult } from '@/types'
 import { useNovelStore } from '@/stores/novelStore'
@@ -103,6 +104,18 @@ function clampUnitInterval(value: number) {
   return Math.max(0, Math.min(1, Number(value || 0)))
 }
 
+function hasWailsRuntimeEvents() {
+  if (typeof window === 'undefined') {
+    return false
+  }
+
+  const runtime = (window as Window & {
+    runtime?: { EventsOnMultiple?: unknown }
+  }).runtime
+
+  return typeof runtime?.EventsOnMultiple === 'function'
+}
+
 /**
  * Reader 阅读器页面
  * 小说阅读的主界面
@@ -175,6 +188,12 @@ export default function Reader() {
   const shouldActivateBossMode = Boolean(routeState?.activateBossMode)
   const returnDirectoryId = routeState?.returnDirectoryId
   const useDesktopOverlay = supportsDesktopOverlay
+  const contentStyle: CSSProperties = {
+    maxWidth: `${pageWidth}px`,
+    fontSize: `${fontSize}px`,
+    fontFamily: resolveReaderFontFamily(fontFamily),
+    lineHeight,
+  }
 
   useClickOutside(bossPanelRef, isStealthMode && bossMode.isPanelOpen, () => {
     bossMode.closePanel()
@@ -725,6 +744,10 @@ export default function Reader() {
   ])
 
   useEffect(() => {
+    if (!hasWailsRuntimeEvents()) {
+      return
+    }
+
     const offStealthMode = EventsOn('window:stealthMode', (enabled: boolean) => {
       setStealthMode(Boolean(enabled))
     })
@@ -836,6 +859,7 @@ export default function Reader() {
         color: textColor,
       }}
     >
+
       <div
         className={`${styles.toolbar} ${
           !bossMode.isChromeVisible ? styles.chromeHidden : ''
@@ -866,7 +890,6 @@ export default function Reader() {
             <span className={styles.bookInfo}>{currentNovel.title}</span>
           </div>
         </div>
-
         <div className={styles.toolbarCenter}>
           <button
             type="button"
@@ -921,7 +944,6 @@ export default function Reader() {
           )}
         </div>
       </div>
-
       {showSidebar && bossMode.isChromeVisible && (
         <aside className={styles.sidebar}>
           <div className={styles.sidebarHeader}>
@@ -1010,12 +1032,7 @@ export default function Reader() {
         className={`${styles.content} ${
           bossMode.isConcealed ? styles.contentConcealed : ''
         }`}
-        style={{
-          maxWidth: `${pageWidth}px`,
-          fontSize: `${fontSize}px`,
-          fontFamily: resolveReaderFontFamily(fontFamily),
-          lineHeight,
-        }}
+        style={contentStyle}
       >
         <div className={styles.contentBody} style={{ opacity: displayOpacity }}>
           {currentChapter && <h2 className={styles.chapterTitle}>{currentChapter.title}</h2>}
