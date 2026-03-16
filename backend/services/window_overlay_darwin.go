@@ -486,6 +486,15 @@ static double TFictionOverlayOpacityFromSliderValue(double sliderValue) {
 }
 @end
 
+@interface TFictionOverlayFlippedView : NSView
+@end
+
+@implementation TFictionOverlayFlippedView
+- (BOOL)isFlipped {
+	return YES;
+}
+@end
+
 @interface TFictionOverlayTextView : NSTextView
 @property(nonatomic, strong) NSTrackingArea *trackingArea;
 @end
@@ -799,13 +808,21 @@ static void TFictionApplyOverlayChapterButtonStyles(void) {
 }
 
 static void TFictionScrollCurrentChapterButtonIntoView(void) {
-	if (tfictionOverlayChapterListScrollView == nil) {
+	if (tfictionOverlayChapterListScrollView == nil || tfictionOverlayChapterListContentView == nil) {
 		return;
 	}
 
+	NSClipView *clipView = tfictionOverlayChapterListScrollView.contentView;
+	CGFloat visibleHeight = NSHeight(clipView.bounds);
+	CGFloat contentHeight = NSHeight(tfictionOverlayChapterListContentView.frame);
+	CGFloat maxOffsetY = MAX(0.0, contentHeight - visibleHeight);
+
 	for (NSButton *button in tfictionOverlayChapterButtons) {
 		if (button.tag == tfictionOverlayCurrentChapterIndex) {
-			[tfictionOverlayChapterListContentView scrollRectToVisible:NSInsetRect(button.frame, 0.0, -12.0)];
+			CGFloat targetY = NSMidY(button.frame) - (visibleHeight / 2.0);
+			targetY = MIN(MAX(targetY, 0.0), maxOffsetY);
+			[clipView scrollToPoint:NSMakePoint(0.0, targetY)];
+			[tfictionOverlayChapterListScrollView reflectScrolledClipView:clipView];
 			return;
 		}
 	}
@@ -822,7 +839,9 @@ static void TFictionSetOverlayChapterPanelVisible(BOOL visible) {
 	TFictionRefreshOverlayControls();
 	TFictionLayoutDesktopReaderOverlayViews();
 	if (visible) {
-		TFictionScrollCurrentChapterButtonIntoView();
+		dispatch_async(dispatch_get_main_queue(), ^{
+			TFictionScrollCurrentChapterButtonIntoView();
+		});
 	}
 }
 
@@ -1302,7 +1321,7 @@ static void TFictionEnsureDesktopReaderOverlayWindow(void) {
 	[tfictionOverlayChapterListScrollView setScrollerStyle:NSScrollerStyleOverlay];
 	[tfictionOverlayChapterPanelView addSubview:tfictionOverlayChapterListScrollView];
 
-	tfictionOverlayChapterListContentView = [[NSView alloc] initWithFrame:NSZeroRect];
+	tfictionOverlayChapterListContentView = [[TFictionOverlayFlippedView alloc] initWithFrame:NSZeroRect];
 	[tfictionOverlayChapterListContentView setWantsLayer:YES];
 	tfictionOverlayChapterListContentView.layer.backgroundColor = [NSColor clearColor].CGColor;
 	[tfictionOverlayChapterListScrollView setDocumentView:tfictionOverlayChapterListContentView];
