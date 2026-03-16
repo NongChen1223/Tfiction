@@ -10,6 +10,7 @@ import {
 } from '@/wailsjs/go/services/NovelService'
 import { SearchInNovel } from '@/wailsjs/go/services/SearchService'
 import {
+  ConsumeDesktopReaderOverlayActions,
   DisableStealthMode,
   EnableStealthMode,
   HideDesktopReaderOverlay,
@@ -20,6 +21,8 @@ import {
   ShowDesktopReaderOverlay,
   SupportsDesktopReaderOverlay,
   UpdateDesktopReaderOverlay,
+  UpdateDesktopReaderOverlayOpacity,
+  UpdateDesktopReaderOverlayControls,
 } from '@/wailsjs/go/services/WindowService'
 import { EventsOn } from '@/wailsjs/runtime/runtime'
 import { openNovel, saveReadingProgress, setCurrentChapter } from '@/services/novelBridge'
@@ -74,6 +77,16 @@ function setReaderStealthRoot(enabled: boolean) {
   document.getElementById('root')?.classList.toggle('reader-stealth-active', enabled)
 }
 
+interface DesktopOverlayAction {
+  type: 'prev' | 'next' | 'chapter' | 'opacity' | 'close'
+  chapterIndex?: number
+  value?: number
+}
+
+function clampUnitInterval(value: number) {
+  return Math.max(0, Math.min(1, Number(value || 0)))
+}
+
 /**
  * Reader 阅读器页面
  * 小说阅读的主界面
@@ -114,6 +127,8 @@ export default function Reader() {
   const contentRef = useRef<HTMLDivElement>(null)
   const saveTimerRef = useRef<number | null>(null)
   const bossPanelRef = useRef<HTMLDivElement>(null)
+  const pendingScrollProgressRef = useRef<number | null>(null)
+  const overlayActionPollingRef = useRef(false)
   const bossMode = useBossMode({
     isStealthMode,
     bossModeType,
@@ -162,6 +177,20 @@ export default function Reader() {
     )
   }
 
+  const syncDesktopOverlayControls = async (nextOpacity = opacity) => {
+    if (!useDesktopOverlay || !currentNovel) {
+      return
+    }
+
+    const chapterTitles = currentNovel.chapters.map((chapter) => chapter.title)
+    await UpdateDesktopReaderOverlayControls(
+      JSON.stringify(chapterTitles),
+      currentNovel.currentChapter,
+      Number(currentNovel.readProgress || 0),
+      nextOpacity
+    )
+  }
+
   const loadChapterContent = async (
     novelFilePath: string,
     chapterIndex: number,
@@ -175,6 +204,16 @@ export default function Reader() {
 
       requestAnimationFrame(() => {
         if (!contentRef.current) {
+          return
+        }
+
+        if (pendingScrollProgressRef.current !== null) {
+          const maxScrollTop = Math.max(
+            contentRef.current.scrollHeight - contentRef.current.clientHeight,
+            0
+          )
+          contentRef.current.scrollTop = maxScrollTop * pendingScrollProgressRef.current
+          pendingScrollProgressRef.current = null
           return
         }
 
@@ -218,6 +257,40 @@ export default function Reader() {
     updateProgressByFilePath(currentNovel.filePath, { progress, lastReadTime: now })
   }
 
+  const moveToReadingLocation = async (
+    chapterIndex: number,
+    chapterScrollProgress: number
+  ) => {
+    if (!currentNovel || currentNovel.chapters.length === 0) {
+      return
+    }
+
+    const nextChapterIndex = Math.max(
+      0,
+      Math.min(chapterIndex, currentNovel.chapters.length - 1)
+    )
+    const nextScrollProgress = clampUnitInterval(chapterScrollProgress)
+
+    try {
+      pendingScrollProgressRef.current = nextScrollProgress
+      await setCurrentChapter(currentNovel.filePath, nextChapterIndex)
+      patchCurrentNovel((novel) => ({
+        ...novel,
+        currentChapter: nextChapterIndex,
+      }))
+      setShowSidebar(false)
+      await loadChapterContent(
+        currentNovel.filePath,
+        nextChapterIndex,
+        nextScrollProgress > 0 ? 'keep' : 'top'
+      )
+      await persistReadingProgress(nextChapterIndex, nextScrollProgress)
+    } catch (error) {
+      pendingScrollProgressRef.current = null
+      console.error('跳转阅读位置失败:', error)
+    }
+  }
+
   const handleOpenFile = async () => {
     try {
       const openedNovel = await openNovel('')
@@ -237,18 +310,7 @@ export default function Reader() {
       return
     }
 
-    try {
-      await setCurrentChapter(currentNovel.filePath, chapterIndex)
-      patchCurrentNovel((novel) => ({
-        ...novel,
-        currentChapter: chapterIndex,
-      }))
-      setShowSidebar(false)
-      await loadChapterContent(currentNovel.filePath, chapterIndex)
-      await persistReadingProgress(chapterIndex, 0)
-    } catch (error) {
-      console.error('切换章节失败:', error)
-    }
+    await moveToReadingLocation(chapterIndex, 0)
   }
 
   const handlePrevChapter = () => {
@@ -291,22 +353,12 @@ export default function Reader() {
     }
 
     const chapterIndex = findChapterIndexByPosition(currentNovel.chapters, result.position)
-    if (chapterIndex !== currentNovel.currentChapter) {
-      await handleChapterChange(chapterIndex)
-    }
+    const chapter = currentNovel.chapters[chapterIndex]
+    const chapterLength = Math.max(chapter.endPos - chapter.startPos, 1)
+    const localProgress = (result.position - chapter.startPos) / chapterLength
 
-    requestAnimationFrame(() => {
-      if (!contentRef.current) {
-        return
-      }
-
-      const chapter = currentNovel.chapters[chapterIndex]
-      const chapterLength = Math.max(chapter.endPos - chapter.startPos, 1)
-      const localProgress = (result.position - chapter.startPos) / chapterLength
-      const scrollHeight =
-        contentRef.current.scrollHeight - contentRef.current.clientHeight
-      contentRef.current.scrollTop = Math.max(0, scrollHeight * localProgress)
-    })
+    setShowSearch(false)
+    await moveToReadingLocation(chapterIndex, localProgress)
   }
 
   const handleToggleStealthMode = async () => {
@@ -327,6 +379,7 @@ export default function Reader() {
             green,
             blue
           )
+          await syncDesktopOverlayControls(bossOpacity)
           setStealthMode(true)
           setOpacity(bossOpacity)
           setShowSearch(false)
@@ -365,7 +418,8 @@ export default function Reader() {
       setBossOpacity(value)
 
       if (useDesktopOverlay && isStealthMode) {
-        await syncDesktopOverlay(value)
+        await UpdateDesktopReaderOverlayOpacity(value)
+        await syncDesktopOverlayControls(value)
         bossMode.bumpPanelTimer()
         return
       }
@@ -408,6 +462,25 @@ export default function Reader() {
       'keep'
     )
   }, [currentNovel?.filePath, currentNovel?.currentChapter])
+
+  useEffect(() => {
+    if (pendingScrollProgressRef.current === null || !contentRef.current) {
+      return
+    }
+
+    requestAnimationFrame(() => {
+      if (pendingScrollProgressRef.current === null || !contentRef.current) {
+        return
+      }
+
+      const maxScrollTop = Math.max(
+        contentRef.current.scrollHeight - contentRef.current.clientHeight,
+        0
+      )
+      contentRef.current.scrollTop = maxScrollTop * pendingScrollProgressRef.current
+      pendingScrollProgressRef.current = null
+    })
+  }, [chapterContent, currentNovel?.currentChapter])
 
   useEffect(() => {
     let disposed = false
@@ -502,8 +575,21 @@ export default function Reader() {
     currentNovel,
     fontSize,
     lineHeight,
-    opacity,
     textColor,
+    useDesktopOverlay,
+    isStealthMode,
+  ])
+
+  useEffect(() => {
+    if (!useDesktopOverlay || !isStealthMode || !currentNovel) {
+      return
+    }
+
+    void syncDesktopOverlayControls()
+  }, [
+    currentNovel,
+    currentNovel?.currentChapter,
+    currentNovel?.readProgress,
     useDesktopOverlay,
     isStealthMode,
   ])
@@ -545,6 +631,72 @@ export default function Reader() {
       document.removeEventListener('visibilitychange', handleWindowReturn)
     }
   }, [bossMode, setOpacity, setStealthMode, useDesktopOverlay])
+
+  useEffect(() => {
+    if (!useDesktopOverlay || !isStealthMode) {
+      return
+    }
+
+    const timer = window.setInterval(() => {
+      if (overlayActionPollingRef.current) {
+        return
+      }
+
+      overlayActionPollingRef.current = true
+      void ConsumeDesktopReaderOverlayActions()
+        .then(async (rawPayload) => {
+          if (!rawPayload) {
+            return
+          }
+
+          let actions: DesktopOverlayAction[] = []
+          try {
+            actions = JSON.parse(rawPayload) as DesktopOverlayAction[]
+          } catch (error) {
+            console.error('解析原生浮窗动作失败:', error)
+            return
+          }
+
+          for (const action of actions) {
+            if (action.type === 'prev') {
+              handlePrevChapter()
+            } else if (action.type === 'next') {
+              handleNextChapter()
+            } else if (action.type === 'chapter' && typeof action.chapterIndex === 'number') {
+              await handleChapterChange(action.chapterIndex)
+            } else if (action.type === 'opacity' && typeof action.value === 'number') {
+              await handleOpacityChange(action.value)
+            } else if (action.type === 'close') {
+              await HideDesktopReaderOverlay()
+              setStealthMode(false)
+              setOpacity(1)
+              bossMode.closePanel()
+            }
+          }
+        })
+        .catch((error) => {
+          console.error('读取原生浮窗动作失败:', error)
+        })
+        .finally(() => {
+          overlayActionPollingRef.current = false
+        })
+    }, 120)
+
+    return () => {
+      window.clearInterval(timer)
+    }
+  }, [
+    bossMode,
+    currentNovel,
+    handleChapterChange,
+    handleOpacityChange,
+    handleNextChapter,
+    handlePrevChapter,
+    isStealthMode,
+    setOpacity,
+    setStealthMode,
+    useDesktopOverlay,
+  ])
 
   useEffect(() => {
     const offStealthMode = EventsOn('window:stealthMode', (enabled: boolean) => {

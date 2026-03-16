@@ -7,6 +7,7 @@ package services
 #cgo LDFLAGS: -framework Cocoa
 
 #include <stdlib.h>
+#include <math.h>
 #import <Cocoa/Cocoa.h>
 #import <dispatch/dispatch.h>
 
@@ -15,14 +16,42 @@ static NSScrollView *tfictionOverlayScrollView = nil;
 static NSView *tfictionOverlayRootView = nil;
 static NSView *tfictionOverlayHeaderView = nil;
 static NSView *tfictionOverlayResizeHandleView = nil;
+static NSView *tfictionOverlayControlsView = nil;
+static NSView *tfictionOverlayFooterView = nil;
+static NSButton *tfictionOverlayPrevButton = nil;
+static NSButton *tfictionOverlayNextButton = nil;
+static NSButton *tfictionOverlayDirectoryButton = nil;
+static NSButton *tfictionOverlayCloseButton = nil;
+static NSSlider *tfictionOverlayOpacitySlider = nil;
+static NSTextField *tfictionOverlayProgressLabel = nil;
+static NSTextField *tfictionOverlayOpacityLabel = nil;
+static NSView *tfictionOverlayProgressTrackView = nil;
+static NSView *tfictionOverlayProgressFillView = nil;
+static NSView *tfictionOverlayChapterPanelView = nil;
+static NSScrollView *tfictionOverlayChapterListScrollView = nil;
+static NSView *tfictionOverlayChapterListContentView = nil;
 static NSWindow *tfictionMainAppWindow = nil;
 static BOOL tfictionOverlayVisible = NO;
 static BOOL tfictionOverlayChromeVisible = NO;
+static BOOL tfictionOverlayChapterPanelVisible = NO;
+static NSMutableArray<NSDictionary *> *tfictionOverlayActionQueue = nil;
+static NSArray<NSString *> *tfictionOverlayChapterTitles = nil;
+static NSMutableArray<NSButton *> *tfictionOverlayChapterButtons = nil;
+static id tfictionOverlayControlTarget = nil;
+static NSString *tfictionOverlayCurrentText = @"";
+static int tfictionOverlayCurrentFontSize = 16;
+static double tfictionOverlayCurrentLineHeight = 1.8;
+static double tfictionOverlayCurrentOpacity = 0.3;
+static int tfictionOverlayCurrentRed = 34;
+static int tfictionOverlayCurrentGreen = 34;
+static int tfictionOverlayCurrentBlue = 34;
+static NSInteger tfictionOverlayCurrentChapterIndex = 0;
+static double tfictionOverlayCurrentProgress = 0.0;
 
 static const CGFloat TFictionOverlayDefaultWidth = 620.0;
 static const CGFloat TFictionOverlayDefaultHeight = 280.0;
-static const CGFloat TFictionOverlayMinWidth = 320.0;
-static const CGFloat TFictionOverlayMinHeight = 160.0;
+static const CGFloat TFictionOverlayMinWidth = 600.0;
+static const CGFloat TFictionOverlayMinHeight = 220.0;
 static const CGFloat TFictionOverlayEdgeMargin = 24.0;
 static const CGFloat TFictionOverlayHeaderHeight = 20.0;
 static const CGFloat TFictionOverlayHeaderTopInset = 8.0;
@@ -30,6 +59,12 @@ static const CGFloat TFictionOverlayContentInset = 10.0;
 static const CGFloat TFictionOverlayBottomInset = 20.0;
 static const CGFloat TFictionOverlayResizeHandleSize = 18.0;
 static const CGFloat TFictionOverlayChromeRevealDistance = 14.0;
+static const CGFloat TFictionOverlayControlsHeight = 42.0;
+static const CGFloat TFictionOverlayFooterHeight = 28.0;
+static const CGFloat TFictionOverlayControlsGap = 8.0;
+static const CGFloat TFictionOverlayChapterPanelWidth = 220.0;
+static const CGFloat TFictionOverlayChapterRowHeight = 30.0;
+static const CGFloat TFictionOverlayChapterRowGap = 6.0;
 
 static void TFictionHideDesktopReaderOverlayWindow(void);
 static void TFictionLayoutDesktopReaderOverlayViews(void);
@@ -39,6 +74,15 @@ static void TFictionSetOverlayChromeVisible(BOOL visible);
 static BOOL TFictionShouldRevealOverlayChromeAtPoint(NSPoint point, NSRect bounds);
 static void TFictionHandleOverlayMouseTracking(NSView *view, NSEvent *event);
 static void TFictionPerformOverlayWindowDrag(NSWindow *window, NSEvent *event);
+static void TFictionUpdateDesktopReaderOverlayControls(const char *chaptersJSON, int currentChapter, double progress, double opacity);
+static char *TFictionConsumeDesktopReaderOverlayActions(void);
+static void TFictionSetOverlayChapterPanelVisible(BOOL visible);
+static void TFictionRefreshOverlayControls(void);
+static void TFictionRefreshOverlayProgressBar(void);
+static void TFictionRefreshOverlayChapterButtons(void);
+static void TFictionApplyOverlayChapterButtonStyles(void);
+static void TFictionEnqueueOverlayAction(NSString *type, NSInteger chapterIndex, double value, BOOL coalesce);
+static void TFictionUpdateDesktopReaderOverlayOpacity(double opacity);
 
 @interface TFictionOverlayPanel : NSPanel
 @end
@@ -260,6 +304,39 @@ static void TFictionPerformOverlayWindowDrag(NSWindow *window, NSEvent *event);
 }
 @end
 
+@interface TFictionOverlayControlTarget : NSObject
+@end
+
+@implementation TFictionOverlayControlTarget
+- (void)handlePrevChapter:(id)sender {
+	TFictionEnqueueOverlayAction(@"prev", -1, NAN, NO);
+}
+
+- (void)handleNextChapter:(id)sender {
+	TFictionEnqueueOverlayAction(@"next", -1, NAN, NO);
+}
+
+- (void)handleToggleDirectory:(id)sender {
+	TFictionSetOverlayChapterPanelVisible(!tfictionOverlayChapterPanelVisible);
+}
+
+- (void)handleCloseOverlay:(id)sender {
+	TFictionEnqueueOverlayAction(@"close", -1, NAN, NO);
+	TFictionHideDesktopReaderOverlayWindow();
+}
+
+- (void)handleOpacityChanged:(NSSlider *)sender {
+	tfictionOverlayCurrentOpacity = sender.doubleValue;
+	TFictionRefreshOverlayControls();
+	TFictionEnqueueOverlayAction(@"opacity", -1, sender.doubleValue, YES);
+}
+
+- (void)handleSelectChapter:(NSButton *)sender {
+	TFictionSetOverlayChapterPanelVisible(NO);
+	TFictionEnqueueOverlayAction(@"chapter", sender.tag, NAN, NO);
+}
+@end
+
 @interface TFictionOverlayScrollView : NSScrollView
 @property(nonatomic, strong) NSTrackingArea *trackingArea;
 @end
@@ -359,6 +436,7 @@ static void TFictionPerformOverlayWindowDrag(NSWindow *window, NSEvent *event);
 
 - (void)keyDown:(NSEvent *)event {
 	if (event.keyCode == 53) {
+		TFictionEnqueueOverlayAction(@"close", -1, NAN, NO);
 		TFictionHideDesktopReaderOverlayWindow();
 		return;
 	}
@@ -368,6 +446,7 @@ static void TFictionPerformOverlayWindowDrag(NSWindow *window, NSEvent *event);
 
 - (void)mouseDown:(NSEvent *)event {
 	if (event.clickCount >= 2) {
+		TFictionEnqueueOverlayAction(@"close", -1, NAN, NO);
 		TFictionHideDesktopReaderOverlayWindow();
 		return;
 	}
@@ -384,6 +463,248 @@ static void TFictionPerformOverlayWindowDrag(NSWindow *window, NSEvent *event);
 	[super scrollWheel:event];
 }
 @end
+
+static void TFictionPerformSyncOnMainQueue(dispatch_block_t block) {
+	if (block == nil) {
+		return;
+	}
+
+	if ([NSThread isMainThread]) {
+		block();
+		return;
+	}
+
+	dispatch_sync(dispatch_get_main_queue(), block);
+}
+
+static NSTextField *TFictionCreateOverlayLabel(NSString *text) {
+	NSTextField *label = [NSTextField labelWithString:text ?: @""];
+	[label setTextColor:[[NSColor whiteColor] colorWithAlphaComponent:0.84]];
+	[label setFont:[NSFont systemFontOfSize:11.0 weight:NSFontWeightSemibold]];
+	[label setBackgroundColor:[NSColor clearColor]];
+	[label setBezeled:NO];
+	[label setDrawsBackground:NO];
+	[label setSelectable:NO];
+	[label setEditable:NO];
+	[label setLineBreakMode:NSLineBreakByTruncatingTail];
+	return label;
+}
+
+static void TFictionSetOverlayButtonTitle(NSButton *button, NSString *title, NSColor *color, NSFont *font) {
+	if (button == nil) {
+		return;
+	}
+
+	NSString *safeTitle = title ?: @"";
+	NSDictionary *attributes = @{
+		NSForegroundColorAttributeName: color ?: [[NSColor whiteColor] colorWithAlphaComponent:0.92],
+		NSFontAttributeName: font ?: [NSFont systemFontOfSize:12.0 weight:NSFontWeightSemibold],
+	};
+	[button setTitle:safeTitle];
+	[button setAttributedTitle:[[NSAttributedString alloc] initWithString:safeTitle attributes:attributes]];
+}
+
+static NSButton *TFictionCreateOverlayActionButton(NSString *title, SEL action) {
+	NSButton *button = [NSButton buttonWithTitle:title ?: @""
+	                                      target:tfictionOverlayControlTarget
+	                                      action:action];
+	[button setBordered:NO];
+	[button setBezelStyle:NSBezelStyleRegularSquare];
+	[button setWantsLayer:YES];
+	button.layer.cornerRadius = 10.0;
+	button.layer.borderWidth = 1.0;
+	button.layer.borderColor = [[NSColor whiteColor] colorWithAlphaComponent:0.16].CGColor;
+	button.layer.backgroundColor = [[NSColor blackColor] colorWithAlphaComponent:0.16].CGColor;
+	TFictionSetOverlayButtonTitle(button, title, [[NSColor whiteColor] colorWithAlphaComponent:0.92], [NSFont systemFontOfSize:12.0 weight:NSFontWeightSemibold]);
+	return button;
+}
+
+static NSButton *TFictionCreateOverlayChapterButton(NSString *title, NSInteger index) {
+	NSButton *button = [NSButton buttonWithTitle:title ?: @""
+	                                      target:tfictionOverlayControlTarget
+	                                      action:@selector(handleSelectChapter:)];
+	[button setTag:index];
+	[button setBordered:NO];
+	[button setButtonType:NSButtonTypeMomentaryPushIn];
+	[button setBezelStyle:NSBezelStyleRegularSquare];
+	[button setAlignment:NSTextAlignmentLeft];
+	[button setWantsLayer:YES];
+	button.layer.cornerRadius = 10.0;
+	button.layer.borderWidth = 1.0;
+	button.layer.borderColor = [[NSColor whiteColor] colorWithAlphaComponent:0.12].CGColor;
+	button.layer.backgroundColor = [NSColor colorWithCalibratedWhite:0.16 alpha:0.96].CGColor;
+	TFictionSetOverlayButtonTitle(button, title, [[NSColor whiteColor] colorWithAlphaComponent:0.94], [NSFont systemFontOfSize:12.0 weight:NSFontWeightMedium]);
+	return button;
+}
+
+static void TFictionEnqueueOverlayAction(NSString *type, NSInteger chapterIndex, double value, BOOL coalesce) {
+	if (type == nil || type.length == 0) {
+		return;
+	}
+
+	if (tfictionOverlayActionQueue == nil) {
+		tfictionOverlayActionQueue = [[NSMutableArray alloc] init];
+	}
+
+	NSMutableDictionary *payload = [NSMutableDictionary dictionaryWithObject:type forKey:@"type"];
+	if (chapterIndex >= 0) {
+		payload[@"chapterIndex"] = @(chapterIndex);
+	}
+	if (!isnan(value)) {
+		payload[@"value"] = @(value);
+	}
+
+	if (coalesce) {
+		for (NSInteger index = tfictionOverlayActionQueue.count - 1; index >= 0; index--) {
+			NSDictionary *existing = tfictionOverlayActionQueue[index];
+			if ([existing[@"type"] isEqualToString:type]) {
+				tfictionOverlayActionQueue[index] = payload;
+				return;
+			}
+		}
+	}
+
+	[tfictionOverlayActionQueue addObject:payload];
+}
+
+static void TFictionRefreshOverlayControls(void) {
+	if (tfictionOverlayPrevButton == nil || tfictionOverlayNextButton == nil ||
+	    tfictionOverlayDirectoryButton == nil ||
+	    tfictionOverlayOpacitySlider == nil || tfictionOverlayProgressLabel == nil ||
+	    tfictionOverlayOpacityLabel == nil) {
+		return;
+	}
+
+	NSInteger chapterCount = (NSInteger)tfictionOverlayChapterTitles.count;
+	NSInteger currentChapter = MAX(0, MIN(tfictionOverlayCurrentChapterIndex, MAX(chapterCount - 1, 0)));
+	tfictionOverlayCurrentChapterIndex = currentChapter;
+	tfictionOverlayCurrentProgress = MAX(0.0, MIN(tfictionOverlayCurrentProgress, 100.0));
+	tfictionOverlayCurrentOpacity = MAX(0.02, MIN(tfictionOverlayCurrentOpacity, 1.0));
+
+	[tfictionOverlayPrevButton setEnabled:YES];
+	[tfictionOverlayNextButton setEnabled:YES];
+	[tfictionOverlayOpacitySlider setDoubleValue:tfictionOverlayCurrentOpacity];
+	[tfictionOverlayProgressLabel setStringValue:[NSString stringWithFormat:@"总进度 %.1f%%", tfictionOverlayCurrentProgress]];
+	[tfictionOverlayOpacityLabel setStringValue:[NSString stringWithFormat:@"透明 %.2f", tfictionOverlayCurrentOpacity]];
+	TFictionSetOverlayButtonTitle(
+		tfictionOverlayPrevButton,
+		@"上章",
+		[[NSColor whiteColor] colorWithAlphaComponent:0.96],
+		[NSFont systemFontOfSize:12.0 weight:NSFontWeightSemibold]
+	);
+	TFictionSetOverlayButtonTitle(
+		tfictionOverlayNextButton,
+		@"下章",
+		[[NSColor whiteColor] colorWithAlphaComponent:0.96],
+		[NSFont systemFontOfSize:12.0 weight:NSFontWeightSemibold]
+	);
+	TFictionSetOverlayButtonTitle(
+		tfictionOverlayDirectoryButton,
+		(tfictionOverlayChapterPanelVisible ? @"收起" : @"目录"),
+		[[NSColor whiteColor] colorWithAlphaComponent:0.92],
+		[NSFont systemFontOfSize:12.0 weight:NSFontWeightSemibold]
+	);
+	TFictionSetOverlayButtonTitle(
+		tfictionOverlayCloseButton,
+		@"退出",
+		[[NSColor whiteColor] colorWithAlphaComponent:0.92],
+		[NSFont systemFontOfSize:12.0 weight:NSFontWeightSemibold]
+	);
+	TFictionRefreshOverlayProgressBar();
+}
+
+static void TFictionRefreshOverlayProgressBar(void) {
+	if (tfictionOverlayProgressTrackView == nil || tfictionOverlayProgressFillView == nil) {
+		return;
+	}
+
+	CGFloat trackWidth = NSWidth(tfictionOverlayProgressTrackView.bounds);
+	CGFloat trackHeight = NSHeight(tfictionOverlayProgressTrackView.bounds);
+	if (trackWidth <= 0.0 || trackHeight <= 0.0) {
+		return;
+	}
+
+	CGFloat progressRatio = MAX(0.0, MIN(tfictionOverlayCurrentProgress / 100.0, 1.0));
+	CGFloat fillWidth = trackWidth * progressRatio;
+	if (fillWidth > 0.0) {
+		fillWidth = MAX(fillWidth, trackHeight);
+	}
+	fillWidth = MIN(fillWidth, trackWidth);
+
+	[tfictionOverlayProgressFillView setHidden:(fillWidth <= 0.0)];
+	[tfictionOverlayProgressFillView setFrame:NSMakeRect(0.0, 0.0, fillWidth, trackHeight)];
+}
+
+static void TFictionRefreshOverlayChapterButtons(void) {
+	if (tfictionOverlayChapterListContentView == nil) {
+		return;
+	}
+
+	if (tfictionOverlayChapterButtons == nil) {
+		tfictionOverlayChapterButtons = [[NSMutableArray alloc] init];
+	}
+
+	for (NSButton *button in tfictionOverlayChapterButtons) {
+		[button removeFromSuperview];
+	}
+	[tfictionOverlayChapterButtons removeAllObjects];
+
+	for (NSInteger index = 0; index < tfictionOverlayChapterTitles.count; index++) {
+		NSString *title = tfictionOverlayChapterTitles[index];
+		NSButton *button = TFictionCreateOverlayChapterButton(title, index);
+		[tfictionOverlayChapterButtons addObject:button];
+		[tfictionOverlayChapterListContentView addSubview:button];
+	}
+}
+
+static void TFictionApplyOverlayChapterButtonStyles(void) {
+	for (NSButton *button in tfictionOverlayChapterButtons) {
+		BOOL selected = (button.tag == tfictionOverlayCurrentChapterIndex);
+		NSString *title = button.title;
+		if (title == nil || title.length == 0) {
+			title = button.attributedTitle.string ?: @"";
+		}
+		button.layer.backgroundColor = (selected
+			? [NSColor colorWithCalibratedWhite:0.28 alpha:1.0]
+			: [NSColor colorWithCalibratedWhite:0.16 alpha:0.96]).CGColor;
+		button.layer.borderColor = (selected
+			? [[NSColor whiteColor] colorWithAlphaComponent:0.36]
+			: [[NSColor whiteColor] colorWithAlphaComponent:0.12]).CGColor;
+		TFictionSetOverlayButtonTitle(
+			button,
+			title,
+			[[NSColor whiteColor] colorWithAlphaComponent:(selected ? 0.98 : 0.94)],
+			[NSFont systemFontOfSize:12.0 weight:(selected ? NSFontWeightSemibold : NSFontWeightMedium)]
+		);
+	}
+}
+
+static void TFictionScrollCurrentChapterButtonIntoView(void) {
+	if (tfictionOverlayChapterListScrollView == nil) {
+		return;
+	}
+
+	for (NSButton *button in tfictionOverlayChapterButtons) {
+		if (button.tag == tfictionOverlayCurrentChapterIndex) {
+			[tfictionOverlayChapterListContentView scrollRectToVisible:NSInsetRect(button.frame, 0.0, -12.0)];
+			return;
+		}
+	}
+}
+
+static void TFictionSetOverlayChapterPanelVisible(BOOL visible) {
+	tfictionOverlayChapterPanelVisible = visible;
+
+	if (tfictionOverlayChapterPanelView != nil) {
+		[tfictionOverlayChapterPanelView setHidden:!visible];
+	}
+
+	TFictionRefreshOverlayControls();
+	TFictionLayoutDesktopReaderOverlayViews();
+	if (visible) {
+		TFictionScrollCurrentChapterButtonIntoView();
+	}
+}
 
 static NSWindow *TFictionResolveMainAppWindow(void) {
 	for (NSWindow *window in [NSApp windows]) {
@@ -545,7 +866,9 @@ static void TFictionPerformOverlayWindowDrag(NSWindow *window, NSEvent *event) {
 
 // 透明浮窗仍保留一层轻量拖拽框，方便用户在极低可见度下找到并调整大小。
 static void TFictionLayoutDesktopReaderOverlayViews(void) {
-	if (tfictionOverlayRootView == nil || tfictionOverlayScrollView == nil || tfictionOverlayHeaderView == nil || tfictionOverlayResizeHandleView == nil) {
+	if (tfictionOverlayRootView == nil || tfictionOverlayScrollView == nil || tfictionOverlayHeaderView == nil ||
+	    tfictionOverlayResizeHandleView == nil || tfictionOverlayControlsView == nil ||
+	    tfictionOverlayFooterView == nil) {
 		return;
 	}
 
@@ -556,6 +879,19 @@ static void TFictionLayoutDesktopReaderOverlayViews(void) {
 		MAX(80.0, NSWidth(bounds) - 24.0),
 		TFictionOverlayHeaderHeight
 	)];
+	CGFloat controlsY = NSHeight(bounds) - TFictionOverlayHeaderHeight - TFictionOverlayHeaderTopInset - TFictionOverlayControlsHeight - 6.0;
+	[tfictionOverlayControlsView setFrame:NSMakeRect(
+		12.0,
+		controlsY,
+		MAX(160.0, NSWidth(bounds) - 24.0),
+		TFictionOverlayControlsHeight
+	)];
+	[tfictionOverlayFooterView setFrame:NSMakeRect(
+		12.0,
+		12.0,
+		MAX(160.0, NSWidth(bounds) - 24.0),
+		TFictionOverlayFooterHeight
+	)];
 	[tfictionOverlayResizeHandleView setFrame:NSMakeRect(
 		NSWidth(bounds) - TFictionOverlayResizeHandleSize - 8.0,
 		6.0,
@@ -563,9 +899,48 @@ static void TFictionLayoutDesktopReaderOverlayViews(void) {
 		TFictionOverlayResizeHandleSize
 	)];
 
+	CGFloat controlsWidth = NSWidth(tfictionOverlayControlsView.bounds);
+	CGFloat buttonWidth = 54.0;
+	CGFloat closeWidth = 54.0;
+	CGFloat opacityLabelWidth = 58.0;
+	CGFloat fixedWidth = (buttonWidth * 3.0) + closeWidth + opacityLabelWidth + (TFictionOverlayControlsGap * 5.0) + 20.0;
+	CGFloat opacitySliderWidth = MAX(140.0, controlsWidth - fixedWidth);
+	CGFloat currentX = 10.0;
+	CGFloat currentY = 6.0;
+	CGFloat controlHeight = TFictionOverlayControlsHeight - 12.0;
+
+	[tfictionOverlayPrevButton setFrame:NSMakeRect(currentX, currentY, buttonWidth, controlHeight)];
+	currentX += buttonWidth + TFictionOverlayControlsGap;
+	[tfictionOverlayNextButton setFrame:NSMakeRect(currentX, currentY, buttonWidth, controlHeight)];
+	currentX += buttonWidth + TFictionOverlayControlsGap;
+	[tfictionOverlayDirectoryButton setFrame:NSMakeRect(currentX, currentY, buttonWidth, controlHeight)];
+	currentX += buttonWidth + TFictionOverlayControlsGap;
+	[tfictionOverlayCloseButton setFrame:NSMakeRect(currentX, currentY, closeWidth, controlHeight)];
+	currentX += closeWidth + TFictionOverlayControlsGap;
+
+	[tfictionOverlayOpacityLabel setFrame:NSMakeRect(currentX, currentY + 8.0, opacityLabelWidth, 16.0)];
+	currentX += opacityLabelWidth + TFictionOverlayControlsGap;
+	[tfictionOverlayOpacitySlider setFrame:NSMakeRect(currentX, currentY + 2.0, opacitySliderWidth, controlHeight)];
+
+	CGFloat footerWidth = NSWidth(tfictionOverlayFooterView.bounds);
+	CGFloat footerHeight = NSHeight(tfictionOverlayFooterView.bounds);
+	CGFloat progressLabelWidth = 92.0;
+	[tfictionOverlayProgressLabel setFrame:NSMakeRect(10.0, floor((footerHeight - 16.0) / 2.0), progressLabelWidth, 16.0)];
+	[tfictionOverlayProgressTrackView setFrame:NSMakeRect(
+		progressLabelWidth + 16.0,
+		floor((footerHeight - 8.0) / 2.0),
+		MAX(80.0, footerWidth - progressLabelWidth - 28.0),
+		8.0
+	)];
+	TFictionRefreshOverlayProgressBar();
+
 	NSRect scrollFrame = NSInsetRect(bounds, TFictionOverlayContentInset, TFictionOverlayContentInset);
-	scrollFrame.origin.y += TFictionOverlayBottomInset;
-	scrollFrame.size.height -= (TFictionOverlayHeaderHeight + TFictionOverlayHeaderTopInset + TFictionOverlayBottomInset + 6.0);
+	scrollFrame.origin.y += TFictionOverlayFooterHeight + 14.0;
+	scrollFrame.size.height -= (TFictionOverlayHeaderHeight +
+		TFictionOverlayHeaderTopInset +
+		TFictionOverlayControlsHeight +
+		TFictionOverlayFooterHeight +
+		24.0);
 	[tfictionOverlayScrollView setFrame:scrollFrame];
 
 	TFictionOverlayTextView *textView = (TFictionOverlayTextView *)[tfictionOverlayScrollView documentView];
@@ -574,6 +949,37 @@ static void TFictionLayoutDesktopReaderOverlayViews(void) {
 		[textView.textContainer setContainerSize:NSMakeSize(scrollFrame.size.width, CGFLOAT_MAX)];
 	}
 
+	if (tfictionOverlayChapterPanelView != nil && tfictionOverlayChapterListScrollView != nil && tfictionOverlayChapterListContentView != nil) {
+		CGFloat chapterPanelWidth = MIN(TFictionOverlayChapterPanelWidth, MAX(180.0, NSWidth(bounds) - 24.0));
+		CGFloat chapterPanelHeight = MIN(320.0, MAX(120.0, scrollFrame.size.height - 12.0));
+		[tfictionOverlayChapterPanelView setFrame:NSMakeRect(
+			12.0,
+			MAX(scrollFrame.origin.y + scrollFrame.size.height - chapterPanelHeight, scrollFrame.origin.y),
+			chapterPanelWidth,
+			chapterPanelHeight
+		)];
+		[tfictionOverlayChapterListScrollView setFrame:NSInsetRect(tfictionOverlayChapterPanelView.bounds, 8.0, 8.0)];
+
+		CGFloat contentWidth = NSWidth(tfictionOverlayChapterListScrollView.bounds);
+		CGFloat currentButtonY = 8.0;
+		for (NSButton *button in tfictionOverlayChapterButtons) {
+			[button setFrame:NSMakeRect(
+				8.0,
+				currentButtonY,
+				MAX(60.0, contentWidth - 16.0),
+				TFictionOverlayChapterRowHeight
+			)];
+			currentButtonY += TFictionOverlayChapterRowHeight + TFictionOverlayChapterRowGap;
+		}
+		[tfictionOverlayChapterListContentView setFrame:NSMakeRect(
+			0,
+			0,
+			contentWidth,
+			MAX(NSHeight(tfictionOverlayChapterListScrollView.bounds), currentButtonY)
+		)];
+	}
+
+	TFictionApplyOverlayChapterButtonStyles();
 	[tfictionOverlayRootView setNeedsDisplay:YES];
 }
 
@@ -606,7 +1012,7 @@ static void TFictionEnsureDesktopReaderOverlayWindow(void) {
 	  NSWindowCollectionBehaviorFullScreenAuxiliary];
 	[tfictionOverlayWindow setTitleVisibility:NSWindowTitleHidden];
 	[tfictionOverlayWindow setTitlebarAppearsTransparent:YES];
-	[tfictionOverlayWindow setMinSize:NSMakeSize(320, 160)];
+	[tfictionOverlayWindow setMinSize:NSMakeSize(TFictionOverlayMinWidth, TFictionOverlayMinHeight)];
 	[tfictionOverlayWindow setAnimationBehavior:NSWindowAnimationBehaviorNone];
 
 	tfictionOverlayRootView = [[TFictionOverlayRootView alloc] initWithFrame:NSMakeRect(0, 0, frame.size.width, frame.size.height)];
@@ -617,6 +1023,82 @@ static void TFictionEnsureDesktopReaderOverlayWindow(void) {
 	tfictionOverlayHeaderView = [[TFictionOverlayHeaderView alloc] initWithFrame:NSZeroRect];
 	[tfictionOverlayHeaderView setAutoresizingMask:NSViewWidthSizable | NSViewMinYMargin];
 	[tfictionOverlayRootView addSubview:tfictionOverlayHeaderView];
+
+	if (tfictionOverlayControlTarget == nil) {
+		tfictionOverlayControlTarget = [[TFictionOverlayControlTarget alloc] init];
+	}
+
+	tfictionOverlayControlsView = [[NSView alloc] initWithFrame:NSZeroRect];
+	[tfictionOverlayControlsView setWantsLayer:YES];
+	tfictionOverlayControlsView.layer.cornerRadius = 14.0;
+	tfictionOverlayControlsView.layer.borderWidth = 1.0;
+	tfictionOverlayControlsView.layer.borderColor = [[NSColor whiteColor] colorWithAlphaComponent:0.16].CGColor;
+	tfictionOverlayControlsView.layer.backgroundColor = [[NSColor blackColor] colorWithAlphaComponent:0.18].CGColor;
+	[tfictionOverlayRootView addSubview:tfictionOverlayControlsView];
+
+	tfictionOverlayFooterView = [[NSView alloc] initWithFrame:NSZeroRect];
+	[tfictionOverlayFooterView setWantsLayer:YES];
+	tfictionOverlayFooterView.layer.cornerRadius = 12.0;
+	tfictionOverlayFooterView.layer.borderWidth = 1.0;
+	tfictionOverlayFooterView.layer.borderColor = [[NSColor whiteColor] colorWithAlphaComponent:0.12].CGColor;
+	tfictionOverlayFooterView.layer.backgroundColor = [[NSColor blackColor] colorWithAlphaComponent:0.24].CGColor;
+	[tfictionOverlayRootView addSubview:tfictionOverlayFooterView];
+
+	tfictionOverlayPrevButton = TFictionCreateOverlayActionButton(@"上章", @selector(handlePrevChapter:));
+	tfictionOverlayNextButton = TFictionCreateOverlayActionButton(@"下章", @selector(handleNextChapter:));
+	tfictionOverlayDirectoryButton = TFictionCreateOverlayActionButton(@"目录", @selector(handleToggleDirectory:));
+	tfictionOverlayCloseButton = TFictionCreateOverlayActionButton(@"退出", @selector(handleCloseOverlay:));
+	tfictionOverlayProgressLabel = TFictionCreateOverlayLabel(@"总进度 0.0%");
+	tfictionOverlayOpacityLabel = TFictionCreateOverlayLabel(@"透明 0.30");
+	tfictionOverlayProgressTrackView = [[NSView alloc] initWithFrame:NSZeroRect];
+	[tfictionOverlayProgressTrackView setWantsLayer:YES];
+	tfictionOverlayProgressTrackView.layer.cornerRadius = 4.0;
+	tfictionOverlayProgressTrackView.layer.masksToBounds = YES;
+	tfictionOverlayProgressTrackView.layer.backgroundColor = [[NSColor whiteColor] colorWithAlphaComponent:0.14].CGColor;
+
+	tfictionOverlayProgressFillView = [[NSView alloc] initWithFrame:NSZeroRect];
+	[tfictionOverlayProgressFillView setWantsLayer:YES];
+	tfictionOverlayProgressFillView.layer.cornerRadius = 4.0;
+	tfictionOverlayProgressFillView.layer.masksToBounds = YES;
+	tfictionOverlayProgressFillView.layer.backgroundColor = [[NSColor whiteColor] colorWithAlphaComponent:0.92].CGColor;
+	[tfictionOverlayProgressTrackView addSubview:tfictionOverlayProgressFillView];
+
+	tfictionOverlayOpacitySlider = [[NSSlider alloc] initWithFrame:NSZeroRect];
+	[tfictionOverlayOpacitySlider setMinValue:0.02];
+	[tfictionOverlayOpacitySlider setMaxValue:1.0];
+	[tfictionOverlayOpacitySlider setTarget:tfictionOverlayControlTarget];
+	[tfictionOverlayOpacitySlider setAction:@selector(handleOpacityChanged:)];
+
+	[tfictionOverlayControlsView addSubview:tfictionOverlayPrevButton];
+	[tfictionOverlayControlsView addSubview:tfictionOverlayNextButton];
+	[tfictionOverlayControlsView addSubview:tfictionOverlayDirectoryButton];
+	[tfictionOverlayControlsView addSubview:tfictionOverlayCloseButton];
+	[tfictionOverlayControlsView addSubview:tfictionOverlayOpacityLabel];
+	[tfictionOverlayControlsView addSubview:tfictionOverlayOpacitySlider];
+	[tfictionOverlayFooterView addSubview:tfictionOverlayProgressLabel];
+	[tfictionOverlayFooterView addSubview:tfictionOverlayProgressTrackView];
+
+	tfictionOverlayChapterPanelView = [[NSView alloc] initWithFrame:NSZeroRect];
+	[tfictionOverlayChapterPanelView setWantsLayer:YES];
+	tfictionOverlayChapterPanelView.layer.cornerRadius = 14.0;
+	tfictionOverlayChapterPanelView.layer.borderWidth = 1.0;
+	tfictionOverlayChapterPanelView.layer.borderColor = [[NSColor whiteColor] colorWithAlphaComponent:0.26].CGColor;
+	tfictionOverlayChapterPanelView.layer.backgroundColor = [NSColor colorWithCalibratedWhite:0.08 alpha:0.96].CGColor;
+	[tfictionOverlayChapterPanelView setHidden:YES];
+	[tfictionOverlayRootView addSubview:tfictionOverlayChapterPanelView];
+
+	tfictionOverlayChapterListScrollView = [[NSScrollView alloc] initWithFrame:NSZeroRect];
+	[tfictionOverlayChapterListScrollView setDrawsBackground:NO];
+	[tfictionOverlayChapterListScrollView setBorderType:NSNoBorder];
+	[tfictionOverlayChapterListScrollView setHasVerticalScroller:YES];
+	[tfictionOverlayChapterListScrollView setHasHorizontalScroller:NO];
+	[tfictionOverlayChapterListScrollView setScrollerStyle:NSScrollerStyleOverlay];
+	[tfictionOverlayChapterPanelView addSubview:tfictionOverlayChapterListScrollView];
+
+	tfictionOverlayChapterListContentView = [[NSView alloc] initWithFrame:NSZeroRect];
+	[tfictionOverlayChapterListContentView setWantsLayer:YES];
+	tfictionOverlayChapterListContentView.layer.backgroundColor = [NSColor clearColor].CGColor;
+	[tfictionOverlayChapterListScrollView setDocumentView:tfictionOverlayChapterListContentView];
 
 	tfictionOverlayScrollView = [[TFictionOverlayScrollView alloc] initWithFrame:NSZeroRect];
 	[tfictionOverlayScrollView setDrawsBackground:NO];
@@ -645,14 +1127,141 @@ static void TFictionEnsureDesktopReaderOverlayWindow(void) {
 	[tfictionOverlayResizeHandleView setAutoresizingMask:NSViewMinXMargin | NSViewMaxYMargin];
 	[tfictionOverlayRootView addSubview:tfictionOverlayResizeHandleView];
 
+	tfictionOverlayChapterTitles = @[];
+	tfictionOverlayChapterButtons = [[NSMutableArray alloc] init];
+	tfictionOverlayActionQueue = [[NSMutableArray alloc] init];
+	TFictionRefreshOverlayControls();
 	TFictionSetOverlayChromeVisible(NO);
 	TFictionLayoutDesktopReaderOverlayViews();
+}
+
+static NSArray<NSString *> *TFictionParseOverlayChapterTitles(const char *chaptersJSON) {
+	if (chaptersJSON == NULL) {
+		return @[];
+	}
+
+	NSString *jsonString = [NSString stringWithUTF8String:chaptersJSON];
+	if (jsonString == nil || jsonString.length == 0) {
+		return @[];
+	}
+
+	NSData *data = [jsonString dataUsingEncoding:NSUTF8StringEncoding];
+	if (data == nil) {
+		return @[];
+	}
+
+	id parsed = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+	if (![parsed isKindOfClass:[NSArray class]]) {
+		return @[];
+	}
+
+	NSMutableArray<NSString *> *titles = [NSMutableArray array];
+	for (id item in (NSArray *)parsed) {
+		if ([item isKindOfClass:[NSString class]]) {
+			[titles addObject:item];
+			continue;
+		}
+
+		if (item != nil) {
+			[titles addObject:[item description]];
+		}
+	}
+
+	return [titles copy];
+}
+
+static void TFictionUpdateDesktopReaderOverlayControls(const char *chaptersJSON, int currentChapter, double progress, double opacity) {
+	dispatch_async(dispatch_get_main_queue(), ^{
+		TFictionEnsureDesktopReaderOverlayWindow();
+
+		NSArray<NSString *> *nextTitles = TFictionParseOverlayChapterTitles(chaptersJSON);
+		if (![tfictionOverlayChapterTitles isEqualToArray:nextTitles]) {
+			tfictionOverlayChapterTitles = nextTitles;
+			TFictionRefreshOverlayChapterButtons();
+		}
+
+		tfictionOverlayCurrentChapterIndex = currentChapter;
+		tfictionOverlayCurrentProgress = progress;
+		tfictionOverlayCurrentOpacity = opacity;
+		TFictionRefreshOverlayControls();
+		TFictionLayoutDesktopReaderOverlayViews();
+	});
+}
+
+static char *TFictionConsumeDesktopReaderOverlayActions(void) {
+	__block char *jsonCString = NULL;
+
+	TFictionPerformSyncOnMainQueue(^{
+		if (tfictionOverlayActionQueue == nil || tfictionOverlayActionQueue.count == 0) {
+			return;
+		}
+
+		NSData *jsonData = [NSJSONSerialization dataWithJSONObject:tfictionOverlayActionQueue options:0 error:nil];
+		[tfictionOverlayActionQueue removeAllObjects];
+		if (jsonData == nil || jsonData.length == 0) {
+			return;
+		}
+
+		NSString *jsonString = [[NSString alloc] initWithData:jsonData encoding:NSUTF8StringEncoding];
+		if (jsonString == nil || jsonString.length == 0) {
+			return;
+		}
+
+		jsonCString = strdup(jsonString.UTF8String);
+	});
+
+	return jsonCString;
+}
+
+static void TFictionApplyDesktopReaderOverlayOpacity(double opacity) {
+	TFictionEnsureDesktopReaderOverlayWindow();
+	tfictionOverlayCurrentOpacity = MAX(0.02, MIN(opacity, 1.0));
+
+	TFictionOverlayTextView *textView = (TFictionOverlayTextView *)[tfictionOverlayScrollView documentView];
+	if (textView == nil || [textView textStorage] == nil) {
+		TFictionRefreshOverlayControls();
+		return;
+	}
+
+	NSTextStorage *textStorage = [textView textStorage];
+	NSRange fullRange = NSMakeRange(0, textStorage.length);
+	if (fullRange.length > 0) {
+		[textStorage beginEditing];
+		[textStorage addAttribute:NSForegroundColorAttributeName
+		                    value:TFictionOverlayColor(
+		                    	tfictionOverlayCurrentRed,
+		                    	tfictionOverlayCurrentGreen,
+		                    	tfictionOverlayCurrentBlue,
+		                    	tfictionOverlayCurrentOpacity
+		                    )
+		                    range:fullRange];
+		[textStorage endEditing];
+	}
+
+	TFictionRefreshOverlayControls();
 }
 
 static void TFictionApplyDesktopReaderOverlayContent(const char *text, int fontSize, double lineHeight, double opacity, int red, int green, int blue) {
 	TFictionEnsureDesktopReaderOverlayWindow();
 
-	NSString *string = text != NULL ? [NSString stringWithUTF8String:text] : @"";
+	NSString *string = text != NULL ? [NSString stringWithUTF8String:text] : nil;
+	if (string == nil) {
+		string = @"";
+	}
+	BOOL shouldPreserveScroll = tfictionOverlayVisible && [tfictionOverlayCurrentText isEqualToString:string];
+	NSPoint preservedScrollOrigin = NSZeroPoint;
+	if (shouldPreserveScroll && tfictionOverlayScrollView != nil) {
+		preservedScrollOrigin = tfictionOverlayScrollView.contentView.bounds.origin;
+	}
+
+	tfictionOverlayCurrentText = string ?: @"";
+	tfictionOverlayCurrentFontSize = fontSize;
+	tfictionOverlayCurrentLineHeight = lineHeight;
+	tfictionOverlayCurrentOpacity = opacity;
+	tfictionOverlayCurrentRed = red;
+	tfictionOverlayCurrentGreen = green;
+	tfictionOverlayCurrentBlue = blue;
+
 	TFictionOverlayTextView *textView = (TFictionOverlayTextView *)[tfictionOverlayScrollView documentView];
 
 	NSMutableParagraphStyle *paragraphStyle = [[NSMutableParagraphStyle alloc] init];
@@ -675,12 +1284,20 @@ static void TFictionApplyDesktopReaderOverlayContent(const char *text, int fontS
 
 	NSAttributedString *attributedText = [[NSAttributedString alloc] initWithString:string attributes:attributes];
 	[[textView textStorage] setAttributedString:attributedText];
-	[textView scrollRangeToVisible:NSMakeRange(0, 0)];
+	if (shouldPreserveScroll && tfictionOverlayScrollView != nil) {
+		[tfictionOverlayScrollView.contentView scrollToPoint:preservedScrollOrigin];
+		[tfictionOverlayScrollView reflectScrolledClipView:tfictionOverlayScrollView.contentView];
+	} else {
+		[textView scrollRangeToVisible:NSMakeRange(0, 0)];
+	}
+	TFictionRefreshOverlayControls();
 }
 
 static void TFictionShowDesktopReaderOverlayWindow(const char *text, int fontSize, double lineHeight, double opacity, int red, int green, int blue) {
 	dispatch_async(dispatch_get_main_queue(), ^{
 		tfictionMainAppWindow = TFictionResolveMainAppWindow();
+		[tfictionOverlayActionQueue removeAllObjects];
+		TFictionSetOverlayChapterPanelVisible(NO);
 		TFictionApplyDesktopReaderOverlayContent(text, fontSize, lineHeight, opacity, red, green, blue);
 		[tfictionOverlayWindow setFrame:TFictionPreferredDesktopReaderOverlayFrame() display:YES animate:NO];
 		TFictionLayoutDesktopReaderOverlayViews();
@@ -707,6 +1324,16 @@ static void TFictionUpdateDesktopReaderOverlayWindow(const char *text, int fontS
 	});
 }
 
+static void TFictionUpdateDesktopReaderOverlayOpacity(double opacity) {
+	dispatch_async(dispatch_get_main_queue(), ^{
+		if (!tfictionOverlayVisible) {
+			return;
+		}
+
+		TFictionApplyDesktopReaderOverlayOpacity(opacity);
+	});
+}
+
 static void TFictionHideDesktopReaderOverlayWindow(void) {
 	dispatch_async(dispatch_get_main_queue(), ^{
 		if (tfictionOverlayWindow != nil) {
@@ -714,6 +1341,7 @@ static void TFictionHideDesktopReaderOverlayWindow(void) {
 		}
 
 		tfictionOverlayVisible = NO;
+		TFictionSetOverlayChapterPanelVisible(NO);
 		TFictionSetOverlayChromeVisible(NO);
 
 		if (tfictionMainAppWindow != nil) {
@@ -765,10 +1393,36 @@ func updateDesktopReaderOverlay(text string, fontSize int, lineHeight, opacity f
 	)
 }
 
+func updateDesktopReaderOverlayOpacity(opacity float64) {
+	C.TFictionUpdateDesktopReaderOverlayOpacity(C.double(opacity))
+}
+
+func updateDesktopReaderOverlayControls(chaptersJSON string, currentChapter int, progress, opacity float64) {
+	cChaptersJSON := C.CString(chaptersJSON)
+	defer C.free(unsafe.Pointer(cChaptersJSON))
+
+	C.TFictionUpdateDesktopReaderOverlayControls(
+		cChaptersJSON,
+		C.int(currentChapter),
+		C.double(progress),
+		C.double(opacity),
+	)
+}
+
 func hideDesktopReaderOverlay() {
 	C.TFictionHideDesktopReaderOverlayWindow()
 }
 
 func isDesktopReaderOverlayVisible() bool {
 	return bool(C.TFictionIsDesktopReaderOverlayVisible())
+}
+
+func consumeDesktopReaderOverlayActions() string {
+	cActions := C.TFictionConsumeDesktopReaderOverlayActions()
+	if cActions == nil {
+		return ""
+	}
+	defer C.free(unsafe.Pointer(cActions))
+
+	return C.GoString(cActions)
 }

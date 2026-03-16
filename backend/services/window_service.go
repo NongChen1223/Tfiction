@@ -158,6 +158,42 @@ func (s *WindowService) UpdateDesktopReaderOverlay(
 	return nil
 }
 
+// UpdateDesktopReaderOverlayOpacity 仅更新桌面浮窗正文透明度，避免重建全文导致闪回
+func (s *WindowService) UpdateDesktopReaderOverlayOpacity(opacity float64) error {
+	if !desktopReaderOverlaySupported() || !s.isDesktopOverlay {
+		return nil
+	}
+
+	s.opacity = opacity
+	updateDesktopReaderOverlayOpacity(opacity)
+	runtime.EventsEmit(s.ctx, "window:opacity", opacity)
+	return nil
+}
+
+// UpdateDesktopReaderOverlayControls 更新桌面浮窗内的原生控件状态
+func (s *WindowService) UpdateDesktopReaderOverlayControls(
+	chaptersJSON string,
+	currentChapter int,
+	progress float64,
+	opacity float64,
+) error {
+	if !desktopReaderOverlaySupported() || !s.isDesktopOverlay {
+		return nil
+	}
+
+	updateDesktopReaderOverlayControls(chaptersJSON, currentChapter, progress, opacity)
+	return nil
+}
+
+// ConsumeDesktopReaderOverlayActions 读取原生浮窗控件发出的动作队列
+func (s *WindowService) ConsumeDesktopReaderOverlayActions() string {
+	if !desktopReaderOverlaySupported() || !s.isDesktopOverlay {
+		return ""
+	}
+
+	return consumeDesktopReaderOverlayActions()
+}
+
 // HideDesktopReaderOverlay 隐藏桌面悬浮阅读浮窗
 func (s *WindowService) HideDesktopReaderOverlay() error {
 	if !desktopReaderOverlaySupported() {
