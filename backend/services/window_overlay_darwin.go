@@ -396,6 +396,79 @@ static void TFictionUpdateDesktopReaderOverlayOpacity(double opacity);
 }
 @end
 
+@interface TFictionOverlayChapterListScrollView : NSScrollView
+@property(nonatomic, strong) NSTrackingArea *trackingArea;
+@end
+
+@implementation TFictionOverlayChapterListScrollView
+- (BOOL)acceptsFirstResponder {
+	return YES;
+}
+
+- (BOOL)acceptsFirstMouse:(NSEvent *)event {
+	return YES;
+}
+
+- (void)updateTrackingAreas {
+	[super updateTrackingAreas];
+
+	if (self.trackingArea != nil) {
+		[self removeTrackingArea:self.trackingArea];
+	}
+
+	self.trackingArea = [[NSTrackingArea alloc] initWithRect:NSZeroRect
+	                                                 options:NSTrackingMouseMoved |
+	                                                         NSTrackingMouseEnteredAndExited |
+	                                                         NSTrackingActiveAlways |
+	                                                         NSTrackingInVisibleRect
+	                                                   owner:self
+	                                                userInfo:nil];
+	[self addTrackingArea:self.trackingArea];
+}
+
+- (void)mouseEntered:(NSEvent *)event {
+	TFictionHandleOverlayMouseTracking(self, event);
+}
+
+- (void)mouseMoved:(NSEvent *)event {
+	TFictionHandleOverlayMouseTracking(self, event);
+}
+
+- (void)mouseExited:(NSEvent *)event {
+	TFictionHandleOverlayMouseTracking(self, event);
+}
+
+- (void)scrollWheel:(NSEvent *)event {
+	if (self.window != nil) {
+		[self.window orderFrontRegardless];
+	}
+
+	[super scrollWheel:event];
+}
+@end
+
+@interface TFictionOverlayChapterPanelView : NSView
+@end
+
+@implementation TFictionOverlayChapterPanelView
+- (BOOL)isOpaque {
+	return NO;
+}
+
+- (BOOL)acceptsFirstMouse:(NSEvent *)event {
+	return YES;
+}
+
+- (void)scrollWheel:(NSEvent *)event {
+	if (tfictionOverlayChapterListScrollView != nil) {
+		[tfictionOverlayChapterListScrollView scrollWheel:event];
+		return;
+	}
+
+	[super scrollWheel:event];
+}
+@end
+
 @interface TFictionOverlayTextView : NSTextView
 @property(nonatomic, strong) NSTrackingArea *trackingArea;
 @end
@@ -704,6 +777,7 @@ static void TFictionSetOverlayChapterPanelVisible(BOOL visible) {
 	tfictionOverlayChapterPanelVisible = visible;
 
 	if (tfictionOverlayChapterPanelView != nil) {
+		[tfictionOverlayRootView addSubview:tfictionOverlayChapterPanelView positioned:NSWindowAbove relativeTo:tfictionOverlayScrollView];
 		[tfictionOverlayChapterPanelView setHidden:!(visible && tfictionOverlayChromeVisible)];
 	}
 
@@ -1029,6 +1103,7 @@ static void TFictionLayoutDesktopReaderOverlayViews(void) {
 			contentWidth,
 			MAX(NSHeight(tfictionOverlayChapterListScrollView.bounds), currentButtonY)
 		)];
+		[tfictionOverlayRootView addSubview:tfictionOverlayChapterPanelView positioned:NSWindowAbove relativeTo:tfictionOverlayScrollView];
 	}
 
 	TFictionApplyOverlayChapterButtonStyles();
@@ -1132,7 +1207,7 @@ static void TFictionEnsureDesktopReaderOverlayWindow(void) {
 	[tfictionOverlayFooterView addSubview:tfictionOverlayProgressLabel];
 	[tfictionOverlayFooterView addSubview:tfictionOverlayProgressTrackView];
 
-	tfictionOverlayChapterPanelView = [[NSView alloc] initWithFrame:NSZeroRect];
+	tfictionOverlayChapterPanelView = [[TFictionOverlayChapterPanelView alloc] initWithFrame:NSZeroRect];
 	[tfictionOverlayChapterPanelView setWantsLayer:YES];
 	tfictionOverlayChapterPanelView.layer.cornerRadius = 14.0;
 	tfictionOverlayChapterPanelView.layer.borderWidth = 1.0;
@@ -1141,7 +1216,7 @@ static void TFictionEnsureDesktopReaderOverlayWindow(void) {
 	[tfictionOverlayChapterPanelView setHidden:YES];
 	[tfictionOverlayRootView addSubview:tfictionOverlayChapterPanelView];
 
-	tfictionOverlayChapterListScrollView = [[NSScrollView alloc] initWithFrame:NSZeroRect];
+	tfictionOverlayChapterListScrollView = [[TFictionOverlayChapterListScrollView alloc] initWithFrame:NSZeroRect];
 	[tfictionOverlayChapterListScrollView setDrawsBackground:NO];
 	[tfictionOverlayChapterListScrollView setBorderType:NSNoBorder];
 	[tfictionOverlayChapterListScrollView setHasVerticalScroller:YES];
