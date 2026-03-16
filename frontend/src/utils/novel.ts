@@ -87,6 +87,19 @@ export function buildHighlightedHtml(content: string, keyword: string) {
     .join('')
 }
 
+export function stripHtmlToText(content: string) {
+  if (!content.includes('<')) {
+    return content
+  }
+
+  if (typeof DOMParser !== 'undefined') {
+    const parsed = new DOMParser().parseFromString(content, 'text/html')
+    return parsed.body.textContent?.replace(/\s+\n/g, '\n').trim() || ''
+  }
+
+  return content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+}
+
 export function findChapterIndexByPosition(chapters: Chapter[], position: number) {
   const chapterIndex = chapters.findIndex(
     (chapter) => position >= chapter.startPos && position < chapter.endPos

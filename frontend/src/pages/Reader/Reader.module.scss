@@ -426,6 +426,89 @@
   }
 }
 
+.epubText {
+  :global(section),
+  :global(div),
+  :global(blockquote),
+  :global(pre),
+  :global(table),
+  :global(ul),
+  :global(ol) {
+    margin: 0 0 1.1em;
+  }
+
+  :global(p) {
+    margin: 0 0 1.1em;
+    text-indent: 0;
+    text-align: left;
+    white-space: normal;
+  }
+
+  :global(h1),
+  :global(h2),
+  :global(h3),
+  :global(h4),
+  :global(h5),
+  :global(h6) {
+    margin: 1.5em 0 0.8em;
+    line-height: 1.4;
+    text-align: left;
+  }
+
+  :global(ul),
+  :global(ol) {
+    padding-left: 1.6em;
+  }
+
+  :global(li) {
+    margin-bottom: 0.5em;
+  }
+
+  :global(blockquote) {
+    padding-left: 1rem;
+    border-left: 3px solid rgba(var(--text-primary), 0.18);
+    color: rgb(var(--text-secondary));
+  }
+
+  :global(figure.epub-image) {
+    margin: 1.5em auto;
+    text-align: center;
+  }
+
+  :global(img) {
+    display: block;
+    max-width: min(100%, 720px);
+    height: auto;
+    margin: 0 auto;
+    border-radius: 16px;
+    box-shadow: 0 16px 32px rgba(15, 23, 42, 0.12);
+  }
+
+  :global(figcaption) {
+    margin-top: 0.75em;
+    color: rgb(var(--text-secondary));
+    font-size: 0.84em;
+    line-height: 1.5;
+  }
+
+  :global(hr) {
+    margin: 1.6em 0;
+    border: 0;
+    border-top: 1px solid rgba(var(--text-primary), 0.16);
+  }
+
+  :global(td),
+  :global(th) {
+    padding: 0.4em 0.7em;
+    border: 1px solid rgba(var(--text-primary), 0.14);
+  }
+
+  :global(table) {
+    width: 100%;
+    border-collapse: collapse;
+  }
+}
+
 .footer {
   padding: var(--spacing-sm) var(--spacing-xl) var(--spacing-md);
   background: rgb(var(--neo-panel));

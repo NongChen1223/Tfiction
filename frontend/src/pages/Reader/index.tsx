@@ -35,6 +35,7 @@ import {
   mapNovelToBook,
   normalizeNovel,
   resolveReaderFontFamily,
+  stripHtmlToText,
 } from '@/utils/novel'
 import { matchesShortcut } from '@/utils/shortcuts'
 import styles from './Reader.module.scss'
@@ -156,7 +157,13 @@ export default function Reader() {
       ? currentNovel.chapters[currentNovel.currentChapter]
       : null
 
-  const chapterHtml = buildHighlightedHtml(chapterContent, searchKeyword)
+  const isEpubChapterContent = currentNovel?.format === '.epub'
+  const chapterHtml = isEpubChapterContent
+    ? chapterContent || '<p>暂无内容</p>'
+    : buildHighlightedHtml(chapterContent, searchKeyword)
+  const overlayChapterContent = isEpubChapterContent
+    ? stripHtmlToText(chapterContent)
+    : chapterContent
   const routeState = (location.state as
     | { activateBossMode?: boolean; returnDirectoryId?: string }
     | null)
@@ -178,7 +185,7 @@ export default function Reader() {
       return
     }
 
-    const overlayText = buildDesktopOverlayText(currentChapter?.title, chapterContent)
+    const overlayText = buildDesktopOverlayText(currentChapter?.title, overlayChapterContent)
     const { red, green, blue } = parseHexColor(textColor)
 
     await UpdateDesktopReaderOverlay(
@@ -386,7 +393,7 @@ export default function Reader() {
     try {
       if (useDesktopOverlay) {
         if (nextStealthMode) {
-          const overlayText = buildDesktopOverlayText(currentChapter?.title, chapterContent)
+          const overlayText = buildDesktopOverlayText(currentChapter?.title, overlayChapterContent)
           const { red, green, blue } = parseHexColor(textColor)
 
           await ShowDesktopReaderOverlay(
@@ -1016,7 +1023,7 @@ export default function Reader() {
             <div className={styles.loading}>章节内容加载中...</div>
           ) : (
             <div
-              className={styles.text}
+              className={`${styles.text} ${isEpubChapterContent ? styles.epubText : ''}`}
               dangerouslySetInnerHTML={{
                 __html: chapterHtml,
               }}

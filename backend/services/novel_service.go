@@ -25,6 +25,7 @@ import (
 type NovelService struct {
 	ctx             context.Context
 	novels          map[string]*models.Novel // 小说缓存，key 为文件路径
+	epubChapterHTML map[string][]string      // EPUB 章节富文本缓存
 	currentNovel    *models.Novel            // 当前打开的小说
 	progressService *ProgressService
 }
@@ -33,6 +34,7 @@ type NovelService struct {
 func NewNovelService(progressService *ProgressService) *NovelService {
 	return &NovelService{
 		novels:          make(map[string]*models.Novel),
+		epubChapterHTML: make(map[string][]string),
 		progressService: progressService,
 	}
 }
@@ -46,6 +48,7 @@ func (s *NovelService) Init(ctx context.Context) {
 func (s *NovelService) Cleanup() {
 	// 清理缓存
 	s.novels = make(map[string]*models.Novel)
+	s.epubChapterHTML = make(map[string][]string)
 	s.currentNovel = nil
 }
 
@@ -125,6 +128,7 @@ func (s *NovelService) GetCurrentNovel() *models.Novel {
 // CloseNovel 关闭小说
 func (s *NovelService) CloseNovel(filePath string) {
 	delete(s.novels, filePath)
+	delete(s.epubChapterHTML, filePath)
 	if s.currentNovel != nil && s.currentNovel.FilePath == filePath {
 		s.currentNovel = nil
 	}
@@ -148,6 +152,12 @@ func (s *NovelService) GetChapterContent(filePath string, chapterIndex int) (str
 
 	if chapterIndex < 0 || chapterIndex >= len(novel.Chapters) {
 		return "", fmt.Errorf("章节索引越界")
+	}
+
+	if novel.Format == ".epub" {
+		if chapterHTML := s.getEpubChapterHTML(filePath, chapterIndex); chapterHTML != "" {
+			return chapterHTML, nil
+		}
 	}
 
 	chapter := novel.Chapters[chapterIndex]
@@ -356,11 +366,13 @@ func (s *NovelService) parseEpubNovel(novel *models.Novel) error {
 
 	var contentBuilder strings.Builder
 	chapters := make([]models.Chapter, 0, len(pkg.Spine.ItemRefs))
+	chapterHTMLs := make([]string, 0, len(pkg.Spine.ItemRefs))
 	currentOffset := 0
 
-	appendChapter := func(rawTitle, rawText string, fallbackIndex int) {
+	appendChapter := func(rawTitle, rawText, rawHTML string, fallbackIndex int) {
 		chapterText := normalizeEpubText(rawText)
-		if chapterText == "" {
+		chapterHTML := strings.TrimSpace(rawHTML)
+		if chapterText == "" && chapterHTML == "" {
 			return
 		}
 
@@ -368,13 +380,27 @@ func (s *NovelService) parseEpubNovel(novel *models.Novel) error {
 		if chapterTitle == "" {
 			chapterTitle = fmt.Sprintf("第%d章", fallbackIndex)
 		}
+		chapterText = trimLeadingEpubTitle(chapterText, chapterTitle)
+		if chapterHTML == "" {
+			chapterHTML = buildBasicHTMLFromText(chapterText)
+		}
+		if chapterText == "" && strings.Contains(chapterHTML, "<img") {
+			chapterText = "[图片]"
+		}
 
 		if contentBuilder.Len() > 0 {
 			contentBuilder.WriteString("\n\n")
 			currentOffset += runeLen("\n\n")
 		}
 
-		chapterBody := chapterTitle + "\n\n" + chapterText
+		chapterBody := chapterText
+		if chapterBody == "" || !strings.HasPrefix(strings.TrimSpace(chapterBody), chapterTitle) {
+			if chapterBody == "" {
+				chapterBody = chapterTitle
+			} else {
+				chapterBody = chapterTitle + "\n\n" + chapterBody
+			}
+		}
 		startPos := currentOffset
 		contentBuilder.WriteString(chapterBody)
 		currentOffset += runeLen(chapterBody)
@@ -386,6 +412,7 @@ func (s *NovelService) parseEpubNovel(novel *models.Novel) error {
 			EndPos:    currentOffset,
 			WordCount: runeLen(chapterBody),
 		})
+		chapterHTMLs = append(chapterHTMLs, chapterHTML)
 	}
 
 	for index, itemRef := range pkg.Spine.ItemRefs {
@@ -400,8 +427,8 @@ func (s *NovelService) parseEpubNovel(novel *models.Novel) error {
 			continue
 		}
 
-		chapterTitle, chapterText := extractEpubChapterText(chapterMarkup)
-		appendChapter(chapterTitle, chapterText, index+1)
+		chapterTitle, chapterText, chapterHTML := extractEpubChapterContent(fileMap, chapterMarkup, chapterPath)
+		appendChapter(chapterTitle, chapterText, chapterHTML, index+1)
 	}
 
 	// 有些 EPUB 的 spine 不规范，这里退回到 manifest 级别兜底提取正文。
@@ -417,8 +444,8 @@ func (s *NovelService) parseEpubNovel(novel *models.Novel) error {
 				continue
 			}
 
-			chapterTitle, chapterText := extractEpubChapterText(chapterMarkup)
-			appendChapter(chapterTitle, chapterText, len(chapters)+1)
+			chapterTitle, chapterText, chapterHTML := extractEpubChapterContent(fileMap, chapterMarkup, chapterPath)
+			appendChapter(chapterTitle, chapterText, chapterHTML, len(chapters)+1)
 		}
 	}
 
@@ -428,7 +455,17 @@ func (s *NovelService) parseEpubNovel(novel *models.Novel) error {
 
 	novel.Content = contentBuilder.String()
 	novel.Chapters = chapters
+	s.epubChapterHTML[novel.FilePath] = chapterHTMLs
 	return nil
+}
+
+func (s *NovelService) getEpubChapterHTML(filePath string, chapterIndex int) string {
+	chapterHTMLs, exists := s.epubChapterHTML[filePath]
+	if !exists || chapterIndex < 0 || chapterIndex >= len(chapterHTMLs) {
+		return ""
+	}
+
+	return chapterHTMLs[chapterIndex]
 }
 
 // parsePdfNovel 解析 PDF 格式小说
@@ -673,6 +710,37 @@ func extractEpubChapterText(markup string) (string, string) {
 	return title, normalizeEpubText(builder.String())
 }
 
+func extractEpubChapterContent(
+	fileMap map[string]*zip.File,
+	markup string,
+	markupPath string,
+) (string, string, string) {
+	title, text := extractEpubChapterText(markup)
+	text = trimLeadingEpubTitle(text, title)
+
+	doc, err := xhtml.Parse(strings.NewReader(markup))
+	if err != nil {
+		return title, text, buildBasicHTMLFromText(text)
+	}
+
+	body := findEpubBodyNode(doc)
+	if body == nil {
+		body = doc
+	}
+
+	renderer := &epubHTMLRenderer{
+		fileMap:      fileMap,
+		baseDir:      normalizeZipPath(path.Dir(markupPath)),
+		chapterTitle: title,
+	}
+	htmlContent := strings.TrimSpace(renderer.renderChildren(body))
+	if htmlContent == "" {
+		htmlContent = buildBasicHTMLFromText(text)
+	}
+
+	return title, text, htmlContent
+}
+
 func extractNodeText(node *xhtml.Node) string {
 	var builder strings.Builder
 	var walk func(*xhtml.Node)
@@ -689,6 +757,264 @@ func extractNodeText(node *xhtml.Node) string {
 	}
 	walk(node)
 	return stdhtml.UnescapeString(strings.TrimSpace(builder.String()))
+}
+
+func findEpubBodyNode(node *xhtml.Node) *xhtml.Node {
+	if node == nil {
+		return nil
+	}
+	if node.Type == xhtml.ElementNode && strings.EqualFold(node.Data, "body") {
+		return node
+	}
+	for child := node.FirstChild; child != nil; child = child.NextSibling {
+		if found := findEpubBodyNode(child); found != nil {
+			return found
+		}
+	}
+	return nil
+}
+
+type epubHTMLRenderer struct {
+	fileMap             map[string]*zip.File
+	baseDir             string
+	chapterTitle        string
+	skippedTitleHeading bool
+}
+
+func (r *epubHTMLRenderer) renderChildren(parent *xhtml.Node) string {
+	if parent == nil {
+		return ""
+	}
+
+	var builder strings.Builder
+	for child := parent.FirstChild; child != nil; child = child.NextSibling {
+		builder.WriteString(r.renderNode(child))
+	}
+	return builder.String()
+}
+
+func (r *epubHTMLRenderer) renderNode(node *xhtml.Node) string {
+	if node == nil {
+		return ""
+	}
+
+	switch node.Type {
+	case xhtml.TextNode:
+		return normalizeEpubHTMLText(node.Data)
+	case xhtml.ElementNode:
+		tag := strings.ToLower(node.Data)
+		if isSkippedEpubHTMLTag(tag) {
+			return ""
+		}
+
+		if isEpubHeadingTag(tag) {
+			headingText := strings.TrimSpace(extractNodeText(node))
+			if !r.skippedTitleHeading && compareEpubTitle(headingText, r.chapterTitle) {
+				r.skippedTitleHeading = true
+				return ""
+			}
+		}
+
+		switch tag {
+		case "img", "image":
+			return r.renderImageNode(node)
+		case "br":
+			return "<br />"
+		case "hr":
+			return "<hr />"
+		case "svg":
+			return ""
+		case "a":
+			return wrapEpubHTMLTag("span", r.renderChildren(node))
+		}
+
+		childrenHTML := r.renderChildren(node)
+		if strings.TrimSpace(stripHTMLTags(childrenHTML)) == "" && !strings.Contains(childrenHTML, "<img") {
+			return ""
+		}
+
+		switch tag {
+		case "body", "section", "article", "main":
+			return wrapEpubHTMLTag("section", childrenHTML)
+		case "div":
+			return wrapEpubHTMLTag("div", childrenHTML)
+		case "p":
+			return wrapEpubHTMLTag("p", childrenHTML)
+		case "blockquote":
+			return wrapEpubHTMLTag("blockquote", childrenHTML)
+		case "pre":
+			return wrapEpubHTMLTag("pre", childrenHTML)
+		case "code":
+			return wrapEpubHTMLTag("code", childrenHTML)
+		case "ul", "ol", "li", "table", "thead", "tbody", "tr", "td", "th":
+			return wrapEpubHTMLTag(tag, childrenHTML)
+		case "h1", "h2", "h3", "h4", "h5", "h6":
+			return wrapEpubHTMLTag(tag, childrenHTML)
+		case "strong", "b":
+			return wrapEpubHTMLTag("strong", childrenHTML)
+		case "em", "i":
+			return wrapEpubHTMLTag("em", childrenHTML)
+		case "u":
+			return wrapEpubHTMLTag("u", childrenHTML)
+		case "sup":
+			return wrapEpubHTMLTag("sup", childrenHTML)
+		case "sub":
+			return wrapEpubHTMLTag("sub", childrenHTML)
+		case "span", "small":
+			return wrapEpubHTMLTag("span", childrenHTML)
+		default:
+			return childrenHTML
+		}
+	default:
+		return ""
+	}
+}
+
+func (r *epubHTMLRenderer) renderImageNode(node *xhtml.Node) string {
+	src := ""
+	alt := ""
+	for _, attr := range node.Attr {
+		key := strings.ToLower(attr.Key)
+		if key == "src" || key == "href" {
+			src = attr.Val
+		}
+		if key == "alt" {
+			alt = strings.TrimSpace(stdhtml.UnescapeString(attr.Val))
+		}
+	}
+
+	dataURL, err := resolveEpubAssetDataURL(r.fileMap, r.baseDir, src)
+	if err != nil || dataURL == "" {
+		return ""
+	}
+
+	escapedAlt := escapeHTMLAttribute(alt)
+	if escapedAlt != "" {
+		return fmt.Sprintf(
+			`<figure class="epub-image"><img src="%s" alt="%s" loading="lazy" /><figcaption>%s</figcaption></figure>`,
+			dataURL,
+			escapedAlt,
+			stdhtml.EscapeString(alt),
+		)
+	}
+
+	return fmt.Sprintf(`<figure class="epub-image"><img src="%s" alt="" loading="lazy" /></figure>`, dataURL)
+}
+
+func resolveEpubAssetDataURL(fileMap map[string]*zip.File, baseDir, reference string) (string, error) {
+	assetPath := resolveEpubReference(baseDir, reference)
+	if assetPath == "" {
+		return "", nil
+	}
+
+	mediaType := inferEpubMediaType(assetPath)
+	if !isSupportedEpubCoverMediaType(mediaType) {
+		return "", nil
+	}
+
+	assetBytes, err := readZipFileBytes(fileMap, assetPath)
+	if err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("data:%s;base64,%s", mediaType, base64.StdEncoding.EncodeToString(assetBytes)), nil
+}
+
+func isSkippedEpubHTMLTag(tag string) bool {
+	switch tag {
+	case "script", "style", "head", "meta", "link", "title":
+		return true
+	default:
+		return false
+	}
+}
+
+func isEpubHeadingTag(tag string) bool {
+	switch tag {
+	case "h1", "h2", "h3", "h4", "h5", "h6":
+		return true
+	default:
+		return false
+	}
+}
+
+func wrapEpubHTMLTag(tag, content string) string {
+	if strings.TrimSpace(content) == "" {
+		return ""
+	}
+	return "<" + tag + ">" + content + "</" + tag + ">"
+}
+
+func normalizeEpubHTMLText(content string) string {
+	normalized := regexp.MustCompile(`\s+`).ReplaceAllString(stdhtml.UnescapeString(content), " ")
+	return stdhtml.EscapeString(normalized)
+}
+
+func trimLeadingEpubTitle(content, title string) string {
+	trimmedContent := strings.TrimSpace(content)
+	trimmedTitle := strings.TrimSpace(title)
+	if trimmedContent == "" || trimmedTitle == "" {
+		return trimmedContent
+	}
+
+	if !compareEpubTitle(trimmedContent, trimmedTitle) && !strings.HasPrefix(trimmedContent, trimmedTitle+"\n") {
+		return trimmedContent
+	}
+
+	trimmedContent = strings.TrimSpace(strings.TrimPrefix(trimmedContent, trimmedTitle))
+	return strings.TrimLeft(trimmedContent, "\n\r\t ")
+}
+
+func compareEpubTitle(left, right string) bool {
+	return normalizeComparableEpubText(left) == normalizeComparableEpubText(right)
+}
+
+func normalizeComparableEpubText(content string) string {
+	return strings.Join(strings.Fields(strings.ToLower(strings.TrimSpace(content))), "")
+}
+
+func buildBasicHTMLFromText(content string) string {
+	trimmed := strings.TrimSpace(content)
+	if trimmed == "" {
+		return ""
+	}
+
+	paragraphs := strings.Split(trimmed, "\n\n")
+	var builder strings.Builder
+	for _, paragraph := range paragraphs {
+		normalizedParagraph := strings.TrimSpace(paragraph)
+		if normalizedParagraph == "" {
+			continue
+		}
+
+		lines := strings.Split(normalizedParagraph, "\n")
+		escapedLines := make([]string, 0, len(lines))
+		for _, line := range lines {
+			escapedLine := stdhtml.EscapeString(strings.TrimSpace(line))
+			if escapedLine != "" {
+				escapedLines = append(escapedLines, escapedLine)
+			}
+		}
+		if len(escapedLines) == 0 {
+			continue
+		}
+
+		builder.WriteString("<p>")
+		builder.WriteString(strings.Join(escapedLines, "<br />"))
+		builder.WriteString("</p>")
+	}
+
+	return builder.String()
+}
+
+func escapeHTMLAttribute(content string) string {
+	replacer := strings.NewReplacer(
+		"&", "&amp;",
+		`"`, "&quot;",
+		"<", "&lt;",
+		">", "&gt;",
+	)
+	return replacer.Replace(content)
 }
 
 func isEpubBlockTag(tag string) bool {
