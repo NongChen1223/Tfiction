@@ -33,6 +33,8 @@ static NSView *tfictionOverlayChapterListContentView = nil;
 static NSWindow *tfictionMainAppWindow = nil;
 static BOOL tfictionOverlayVisible = NO;
 static BOOL tfictionOverlayChromeVisible = NO;
+static BOOL tfictionOverlayControlsVisible = NO;
+static BOOL tfictionOverlayFooterVisible = NO;
 static BOOL tfictionOverlayChapterPanelVisible = NO;
 static NSMutableArray<NSDictionary *> *tfictionOverlayActionQueue = nil;
 static NSArray<NSString *> *tfictionOverlayChapterTitles = nil;
@@ -62,6 +64,8 @@ static const CGFloat TFictionOverlayChromeRevealDistance = 14.0;
 static const CGFloat TFictionOverlayControlsHeight = 42.0;
 static const CGFloat TFictionOverlayFooterHeight = 28.0;
 static const CGFloat TFictionOverlayControlsGap = 8.0;
+static const CGFloat TFictionOverlayTopRevealHeight = 76.0;
+static const CGFloat TFictionOverlayBottomRevealHeight = 52.0;
 static const CGFloat TFictionOverlayChapterPanelWidth = 220.0;
 static const CGFloat TFictionOverlayChapterRowHeight = 30.0;
 static const CGFloat TFictionOverlayChapterRowGap = 6.0;
@@ -71,8 +75,12 @@ static void TFictionLayoutDesktopReaderOverlayViews(void);
 static NSRect TFictionPreferredDesktopReaderOverlayFrame(void);
 static NSRect TFictionClampDesktopReaderOverlayFrame(NSRect frame, NSScreen *preferredScreen);
 static void TFictionSetOverlayChromeVisible(BOOL visible);
-static BOOL TFictionShouldRevealOverlayChromeAtPoint(NSPoint point, NSRect bounds);
+static void TFictionSetOverlayControlsVisible(BOOL visible);
+static void TFictionSetOverlayFooterVisible(BOOL visible);
+static BOOL TFictionShouldRevealOverlayUIAtPoint(NSPoint point, NSRect bounds);
 static void TFictionHandleOverlayMouseTracking(NSView *view, NSEvent *event);
+static void TFictionUpdateOverlayHoverStateAtPoint(NSPoint point);
+static void TFictionUpdateOverlayHoverStateForCurrentMouseLocation(NSWindow *window);
 static void TFictionPerformOverlayWindowDrag(NSWindow *window, NSEvent *event);
 static void TFictionUpdateDesktopReaderOverlayControls(const char *chaptersJSON, int currentChapter, double progress, double opacity);
 static char *TFictionConsumeDesktopReaderOverlayActions(void);
@@ -696,7 +704,7 @@ static void TFictionSetOverlayChapterPanelVisible(BOOL visible) {
 	tfictionOverlayChapterPanelVisible = visible;
 
 	if (tfictionOverlayChapterPanelView != nil) {
-		[tfictionOverlayChapterPanelView setHidden:!visible];
+		[tfictionOverlayChapterPanelView setHidden:!(visible && tfictionOverlayChromeVisible)];
 	}
 
 	TFictionRefreshOverlayControls();
@@ -814,15 +822,22 @@ static NSColor *TFictionOverlayColor(int red, int green, int blue, double alpha)
 }
 
 static void TFictionSetOverlayChromeVisible(BOOL visible) {
-	if (tfictionOverlayChromeVisible == visible) {
-		return;
-	}
-
 	tfictionOverlayChromeVisible = visible;
+	tfictionOverlayControlsVisible = visible;
+	tfictionOverlayFooterVisible = visible;
 
 	if (tfictionOverlayHeaderView != nil) {
 		[tfictionOverlayHeaderView setHidden:!visible];
 		[tfictionOverlayHeaderView setNeedsDisplay:YES];
+	}
+	if (tfictionOverlayControlsView != nil) {
+		[tfictionOverlayControlsView setHidden:!visible];
+	}
+	if (tfictionOverlayFooterView != nil) {
+		[tfictionOverlayFooterView setHidden:!visible];
+	}
+	if (tfictionOverlayChapterPanelView != nil) {
+		[tfictionOverlayChapterPanelView setHidden:!(visible && tfictionOverlayChapterPanelVisible)];
 	}
 	if (tfictionOverlayResizeHandleView != nil) {
 		[tfictionOverlayResizeHandleView setHidden:!visible];
@@ -833,17 +848,54 @@ static void TFictionSetOverlayChromeVisible(BOOL visible) {
 	}
 }
 
-static BOOL TFictionShouldRevealOverlayChromeAtPoint(NSPoint point, NSRect bounds) {
+static void TFictionSetOverlayControlsVisible(BOOL visible) {
+	TFictionSetOverlayChromeVisible(visible);
+}
+
+static void TFictionSetOverlayFooterVisible(BOOL visible) {
+	TFictionSetOverlayChromeVisible(visible);
+}
+
+static BOOL TFictionShouldRevealOverlayUIAtPoint(NSPoint point, NSRect bounds) {
 	if (NSIsEmptyRect(bounds) || !NSPointInRect(point, bounds)) {
 		return NO;
 	}
 
-	NSRect innerBounds = NSInsetRect(bounds, TFictionOverlayChromeRevealDistance, TFictionOverlayChromeRevealDistance);
-	if (NSWidth(innerBounds) <= 0 || NSHeight(innerBounds) <= 0) {
+	if (tfictionOverlayChapterPanelVisible && tfictionOverlayChapterPanelView != nil &&
+	    NSPointInRect(point, tfictionOverlayChapterPanelView.frame)) {
+		return YES;
+	}
+
+	NSRect innerBounds = NSMakeRect(
+		TFictionOverlayChromeRevealDistance,
+		TFictionOverlayBottomRevealHeight,
+		MAX(0.0, NSWidth(bounds) - (TFictionOverlayChromeRevealDistance * 2.0)),
+		MAX(0.0, NSHeight(bounds) - TFictionOverlayTopRevealHeight - TFictionOverlayBottomRevealHeight)
+	);
+	if (NSWidth(innerBounds) <= 0.0 || NSHeight(innerBounds) <= 0.0) {
 		return YES;
 	}
 
 	return !NSPointInRect(point, innerBounds);
+}
+
+static void TFictionUpdateOverlayHoverStateAtPoint(NSPoint point) {
+	if (tfictionOverlayRootView == nil) {
+		return;
+	}
+
+	NSRect bounds = tfictionOverlayRootView.bounds;
+	TFictionSetOverlayChromeVisible(TFictionShouldRevealOverlayUIAtPoint(point, bounds));
+}
+
+static void TFictionUpdateOverlayHoverStateForCurrentMouseLocation(NSWindow *window) {
+	if (window == nil || tfictionOverlayRootView == nil) {
+		TFictionSetOverlayChromeVisible(NO);
+		return;
+	}
+
+	NSPoint point = [tfictionOverlayRootView convertPoint:[window mouseLocationOutsideOfEventStream] fromView:nil];
+	TFictionUpdateOverlayHoverStateAtPoint(point);
 }
 
 static void TFictionHandleOverlayMouseTracking(NSView *view, NSEvent *event) {
@@ -852,7 +904,7 @@ static void TFictionHandleOverlayMouseTracking(NSView *view, NSEvent *event) {
 	}
 
 	NSPoint point = [tfictionOverlayRootView convertPoint:event.locationInWindow fromView:nil];
-	TFictionSetOverlayChromeVisible(TFictionShouldRevealOverlayChromeAtPoint(point, tfictionOverlayRootView.bounds));
+	TFictionUpdateOverlayHoverStateAtPoint(point);
 }
 
 static void TFictionPerformOverlayWindowDrag(NSWindow *window, NSEvent *event) {
@@ -1034,6 +1086,7 @@ static void TFictionEnsureDesktopReaderOverlayWindow(void) {
 	tfictionOverlayControlsView.layer.borderWidth = 1.0;
 	tfictionOverlayControlsView.layer.borderColor = [[NSColor whiteColor] colorWithAlphaComponent:0.16].CGColor;
 	tfictionOverlayControlsView.layer.backgroundColor = [[NSColor blackColor] colorWithAlphaComponent:0.18].CGColor;
+	[tfictionOverlayControlsView setHidden:YES];
 	[tfictionOverlayRootView addSubview:tfictionOverlayControlsView];
 
 	tfictionOverlayFooterView = [[NSView alloc] initWithFrame:NSZeroRect];
@@ -1042,6 +1095,7 @@ static void TFictionEnsureDesktopReaderOverlayWindow(void) {
 	tfictionOverlayFooterView.layer.borderWidth = 1.0;
 	tfictionOverlayFooterView.layer.borderColor = [[NSColor whiteColor] colorWithAlphaComponent:0.12].CGColor;
 	tfictionOverlayFooterView.layer.backgroundColor = [[NSColor blackColor] colorWithAlphaComponent:0.24].CGColor;
+	[tfictionOverlayFooterView setHidden:YES];
 	[tfictionOverlayRootView addSubview:tfictionOverlayFooterView];
 
 	tfictionOverlayPrevButton = TFictionCreateOverlayActionButton(@"上章", @selector(handlePrevChapter:));
@@ -1130,6 +1184,8 @@ static void TFictionEnsureDesktopReaderOverlayWindow(void) {
 	tfictionOverlayChapterTitles = @[];
 	tfictionOverlayChapterButtons = [[NSMutableArray alloc] init];
 	tfictionOverlayActionQueue = [[NSMutableArray alloc] init];
+	tfictionOverlayControlsVisible = NO;
+	tfictionOverlayFooterVisible = NO;
 	TFictionRefreshOverlayControls();
 	TFictionSetOverlayChromeVisible(NO);
 	TFictionLayoutDesktopReaderOverlayViews();
@@ -1308,6 +1364,8 @@ static void TFictionShowDesktopReaderOverlayWindow(const char *text, int fontSiz
 
 		tfictionOverlayVisible = YES;
 		TFictionSetOverlayChromeVisible(NO);
+		TFictionSetOverlayControlsVisible(NO);
+		TFictionSetOverlayFooterVisible(NO);
 		[tfictionOverlayWindow makeKeyAndOrderFront:nil];
 		[tfictionOverlayWindow makeFirstResponder:[tfictionOverlayScrollView documentView]];
 		[NSApp activateIgnoringOtherApps:YES];
@@ -1343,6 +1401,8 @@ static void TFictionHideDesktopReaderOverlayWindow(void) {
 		tfictionOverlayVisible = NO;
 		TFictionSetOverlayChapterPanelVisible(NO);
 		TFictionSetOverlayChromeVisible(NO);
+		TFictionSetOverlayControlsVisible(NO);
+		TFictionSetOverlayFooterVisible(NO);
 
 		if (tfictionMainAppWindow != nil) {
 			[tfictionMainAppWindow makeKeyAndOrderFront:nil];
