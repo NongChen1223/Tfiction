@@ -5,6 +5,21 @@ import Slider from '@/components/common/Slider'
 import Toggle from '@/components/common/Toggle'
 import styles from './ReadingSettings.module.scss'
 
+const MIN_STEALTH_OPACITY = 0.02
+const MAX_STEALTH_OPACITY = 1
+
+function clampStealthOpacity(value: number) {
+  return Math.max(MIN_STEALTH_OPACITY, Math.min(MAX_STEALTH_OPACITY, Number(value || 0)))
+}
+
+function opacityToTransparencySliderValue(opacity: number) {
+  return Number((MIN_STEALTH_OPACITY + MAX_STEALTH_OPACITY - clampStealthOpacity(opacity)).toFixed(2))
+}
+
+function transparencySliderValueToOpacity(value: number) {
+  return clampStealthOpacity(MIN_STEALTH_OPACITY + MAX_STEALTH_OPACITY - Number(value || 0))
+}
+
 /**
  * 阅读设置选项卡
  * 字体、行高、页宽等阅读相关设置
@@ -166,12 +181,12 @@ export default function ReadingSettings() {
 
         <div className={styles.settingItem}>
           <Slider
-            label={`文字可见度：${bossOpacity.toFixed(2)}`}
+            label={`文字透明度：${opacityToTransparencySliderValue(bossOpacity).toFixed(2)}`}
             min={0.02}
             max={1}
             step={0.02}
-            value={bossOpacity}
-            onChange={setBossOpacity}
+            value={opacityToTransparencySliderValue(bossOpacity)}
+            onChange={(value) => setBossOpacity(transparencySliderValueToOpacity(value))}
             showValue={false}
           />
         </div>

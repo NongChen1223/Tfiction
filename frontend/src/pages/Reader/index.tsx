@@ -71,6 +71,21 @@ function parseHexColor(value: string) {
   return { red: 34, green: 34, blue: 34 }
 }
 
+const MIN_STEALTH_OPACITY = 0.02
+const MAX_STEALTH_OPACITY = 1
+
+function clampStealthOpacity(value: number) {
+  return Math.max(MIN_STEALTH_OPACITY, Math.min(MAX_STEALTH_OPACITY, Number(value || 0)))
+}
+
+function opacityToTransparencySliderValue(opacity: number) {
+  return Number((MIN_STEALTH_OPACITY + MAX_STEALTH_OPACITY - clampStealthOpacity(opacity)).toFixed(2))
+}
+
+function transparencySliderValueToOpacity(value: number) {
+  return clampStealthOpacity(MIN_STEALTH_OPACITY + MAX_STEALTH_OPACITY - Number(value || 0))
+}
+
 function setReaderStealthRoot(enabled: boolean) {
   document.documentElement.classList.toggle('reader-stealth-active', enabled)
   document.body.classList.toggle('reader-stealth-active', enabled)
@@ -179,6 +194,10 @@ export default function Reader() {
 
   const syncDesktopOverlayControls = async (nextOpacity = opacity) => {
     if (!useDesktopOverlay || !currentNovel) {
+      return
+    }
+
+    if (currentNovel.chapters.length === 0) {
       return
     }
 
@@ -885,10 +904,12 @@ export default function Reader() {
               min="0.02"
               max="1"
               step="0.02"
-              value={opacity}
-              onChange={(event) => handleOpacityChange(Number(event.target.value))}
+              value={opacityToTransparencySliderValue(opacity)}
+              onChange={(event) =>
+                handleOpacityChange(transparencySliderValueToOpacity(Number(event.target.value)))
+              }
               className={styles.opacitySlider}
-              title="文字可见度"
+              title="文字透明度"
             />
           )}
         </div>
@@ -1054,15 +1075,17 @@ export default function Reader() {
 
           <div className={styles.bossPanelSection}>
             <span className={styles.bossPanelLabel}>
-              文字可见度 {bossOpacity.toFixed(2)}
+              文字透明度 {opacityToTransparencySliderValue(bossOpacity).toFixed(2)}
             </span>
             <input
               type="range"
               min="0.02"
               max="1"
               step="0.02"
-              value={bossOpacity}
-              onChange={(event) => handleOpacityChange(Number(event.target.value))}
+              value={opacityToTransparencySliderValue(bossOpacity)}
+              onChange={(event) =>
+                handleOpacityChange(transparencySliderValueToOpacity(Number(event.target.value)))
+              }
               className={styles.panelSlider}
             />
           </div>
