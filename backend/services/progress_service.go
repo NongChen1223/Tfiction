@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -33,13 +34,26 @@ type ProgressService struct {
 	filePath string
 }
 
+func resolveProgressDataDir(dataDir string) string {
+	trimmedDir := strings.TrimSpace(dataDir)
+	if trimmedDir != "" {
+		return trimmedDir
+	}
+
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "./data"
+	}
+
+	return filepath.Join(homeDir, ".tfiction")
+}
+
 // NewProgressService 创建进度服务实例
-func NewProgressService() *ProgressService {
-	homeDir, _ := os.UserHomeDir()
-	dataDir := filepath.Join(homeDir, ".tfiction")
+func NewProgressService(dataDir string) *ProgressService {
+	resolvedDataDir := resolveProgressDataDir(dataDir)
 	return &ProgressService{
-		dataDir:  dataDir,
-		filePath: filepath.Join(dataDir, "progress.json"),
+		dataDir:  resolvedDataDir,
+		filePath: filepath.Join(resolvedDataDir, "progress.json"),
 		data:     ProgressData{Novels: []ReadingProgressEntry{}},
 	}
 }
@@ -61,6 +75,36 @@ func (s *ProgressService) ensureDataDir() {
 	if _, err := os.Stat(s.dataDir); os.IsNotExist(err) {
 		os.MkdirAll(s.dataDir, 0755)
 	}
+}
+
+// SetDataDir 更新进度存储目录
+func (s *ProgressService) SetDataDir(dataDir string) error {
+	nextDataDir := resolveProgressDataDir(dataDir)
+	nextFilePath := filepath.Join(nextDataDir, "progress.json")
+
+	s.mu.Lock()
+	if nextDataDir == s.dataDir && nextFilePath == s.filePath {
+		s.mu.Unlock()
+		return nil
+	}
+
+	currentData := s.data
+	s.dataDir = nextDataDir
+	s.filePath = nextFilePath
+	s.mu.Unlock()
+
+	s.ensureDataDir()
+
+	if _, err := os.Stat(nextFilePath); err == nil {
+		s.load()
+		return nil
+	}
+
+	s.mu.Lock()
+	s.data = currentData
+	s.mu.Unlock()
+
+	return s.save()
 }
 
 // load 从文件加载进度

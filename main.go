@@ -25,7 +25,7 @@ func main() {
 	}
 
 	// 初始化服务
-	progressService := services.NewProgressService()
+	progressService := services.NewProgressService(cfg.DataDir)
 	novelService := services.NewNovelService(progressService)
 	windowService := services.NewWindowService()
 	searchService := services.NewSearchService()

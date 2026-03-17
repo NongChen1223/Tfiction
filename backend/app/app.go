@@ -2,6 +2,10 @@ package app
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/nongchen1223/tfiction/backend/config"
 	"github.com/nongchen1223/tfiction/backend/services"
@@ -74,4 +78,65 @@ func (a *App) GetAppInfo() map[string]interface{} {
 // GetConfig 获取配置信息
 func (a *App) GetConfig() *config.Config {
 	return a.config
+}
+
+func (a *App) resolveDirectoryDialogDefaultPath() string {
+	if currentDir := strings.TrimSpace(a.config.DataDir); currentDir != "" {
+		if info, err := os.Stat(currentDir); err == nil && info.IsDir() {
+			return currentDir
+		}
+	}
+
+	homeDir, err := os.UserHomeDir()
+	if err == nil {
+		return homeDir
+	}
+
+	return "."
+}
+
+// SelectDataDir 打开目录选择器，选择新的应用数据目录
+func (a *App) SelectDataDir() (string, error) {
+	selectedDir, err := runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
+		Title:                "选择应用数据目录",
+		DefaultDirectory:     a.resolveDirectoryDialogDefaultPath(),
+		CanCreateDirectories: true,
+		ShowHiddenFiles:      true,
+	})
+	if err != nil {
+		return "", fmt.Errorf("打开目录选择器失败: %w", err)
+	}
+
+	return strings.TrimSpace(selectedDir), nil
+}
+
+// SetDataDir 更新应用数据目录
+func (a *App) SetDataDir(dataDir string) (*config.Config, error) {
+	trimmedDir := strings.TrimSpace(dataDir)
+	if trimmedDir == "" {
+		return nil, fmt.Errorf("路径不能为空")
+	}
+
+	absoluteDir, err := filepath.Abs(trimmedDir)
+	if err != nil {
+		return nil, fmt.Errorf("解析路径失败: %w", err)
+	}
+
+	if err := os.MkdirAll(absoluteDir, 0755); err != nil {
+		return nil, fmt.Errorf("创建目录失败: %w", err)
+	}
+
+	previousDir := a.config.DataDir
+	if err := a.progressService.SetDataDir(absoluteDir); err != nil {
+		return nil, fmt.Errorf("更新阅读进度目录失败: %w", err)
+	}
+
+	a.config.DataDir = absoluteDir
+	if err := a.config.Save(); err != nil {
+		a.config.DataDir = previousDir
+		_ = a.progressService.SetDataDir(previousDir)
+		return nil, fmt.Errorf("保存配置失败: %w", err)
+	}
+
+	return a.config, nil
 }

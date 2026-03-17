@@ -72,6 +72,12 @@
   word-break: break-all;
 }
 
+.pathHint {
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: rgb(var(--text-secondary));
+}
+
 /* === Storage Grid === */
 
 .storageGrid {
@@ -106,7 +112,8 @@
 }
 
 .storageValue {
-  font-size: 1.5rem;
+  font-size: 1rem;
   font-weight: 700;
   color: rgb(var(--text-primary));
+  text-align: center;
 }
