@@ -163,8 +163,10 @@ export default function Reader() {
   const bossPanelRef = useRef<HTMLDivElement>(null)
   const pendingScrollProgressRef = useRef<number | null>(null)
   const overlayActionPollingRef = useRef(false)
+  const useDesktopOverlay = supportsDesktopOverlay
+  const isWebviewStealthMode = isStealthMode && !useDesktopOverlay
   const bossMode = useBossMode({
-    isStealthMode,
+    isStealthMode: isWebviewStealthMode,
     bossModeType,
     revealDelay: bossRevealDelay,
     hideDelay: bossHideDelay,
@@ -193,14 +195,13 @@ export default function Reader() {
   const activeStealthOpacity = clampStealthOpacity(
     isStealthMode ? bossOpacity : opacity
   )
-  const displayOpacity = isStealthMode
+  const displayOpacity = isWebviewStealthMode
     ? bossMode.isConcealed
       ? Math.min(activeStealthOpacity, 0.04)
       : activeStealthOpacity
     : 1
   const shouldActivateBossMode = Boolean(routeState?.activateBossMode)
   const returnDirectoryId = routeState?.returnDirectoryId
-  const useDesktopOverlay = supportsDesktopOverlay
   const contentStyle: CSSProperties = {
     maxWidth: `${pageWidth}%`,
     fontSize: `${fontSize}px`,
@@ -208,7 +209,7 @@ export default function Reader() {
     lineHeight,
   }
 
-  useClickOutside(bossPanelRef, isStealthMode && bossMode.isPanelOpen, () => {
+  useClickOutside(bossPanelRef, isWebviewStealthMode && bossMode.isPanelOpen, () => {
     bossMode.closePanel()
   })
   useClickOutside(appearancePanelRef, showAppearancePanel, () => {
@@ -591,17 +592,12 @@ export default function Reader() {
   ])
 
   useEffect(() => {
-    if (useDesktopOverlay) {
-      setReaderStealthRoot(false)
-      return
-    }
-
-    setReaderStealthRoot(isStealthMode)
+    setReaderStealthRoot(isWebviewStealthMode)
 
     return () => {
       setReaderStealthRoot(false)
     }
-  }, [isStealthMode, useDesktopOverlay])
+  }, [isWebviewStealthMode])
 
   useEffect(() => {
     return () => {
@@ -633,10 +629,10 @@ export default function Reader() {
       return
     }
 
-    if (isStealthMode || !bossMode.isChromeVisible) {
+    if (isWebviewStealthMode || !bossMode.isChromeVisible) {
       setShowAppearancePanel(false)
     }
-  }, [bossMode.isChromeVisible, isStealthMode, showAppearancePanel])
+  }, [bossMode.isChromeVisible, isWebviewStealthMode, showAppearancePanel])
 
   useEffect(() => {
     if (!useDesktopOverlay || !isStealthMode || !currentNovel) {
@@ -879,7 +875,7 @@ export default function Reader() {
 
   return (
     <div
-      className={`${styles.reader} ${isStealthMode ? styles.stealthMode : ''}`}
+      className={`${styles.reader} ${isWebviewStealthMode ? styles.stealthMode : ''}`}
       onMouseEnter={() => {
         bossMode.handlePointerEnter()
         void OnMouseEnter()
@@ -891,7 +887,7 @@ export default function Reader() {
       onMouseMove={bossMode.bumpPanelTimer}
       onContextMenu={bossMode.handleContextMenu}
       style={{
-        backgroundColor: isStealthMode ? 'transparent' : backgroundColor,
+        backgroundColor: isWebviewStealthMode ? 'transparent' : backgroundColor,
         color: textColor,
       }}
     >
@@ -948,7 +944,7 @@ export default function Reader() {
         </div>
 
         <div className={styles.toolbarRight}>
-          {!isStealthMode && (
+          {!isWebviewStealthMode && (
             <div ref={appearancePanelRef} className={styles.toolbarPopover}>
               <button
                 type="button"
@@ -1009,7 +1005,7 @@ export default function Reader() {
           >
             {isStealthMode ? '退出摸鱼' : '摸鱼模式'}
           </button>
-          {isStealthMode && (
+          {isWebviewStealthMode && (
             <input
               type="range"
               min="0.02"
@@ -1130,11 +1126,11 @@ export default function Reader() {
         </div>
       </div>
 
-      {isStealthMode && bossMode.isConcealed && (
+      {isWebviewStealthMode && bossMode.isConcealed && (
         <div className={styles.concealedHint}>悬停唤出阅读内容</div>
       )}
 
-      {isStealthMode && bossMode.isPanelOpen && (
+      {isWebviewStealthMode && bossMode.isPanelOpen && (
         <div
           ref={bossPanelRef}
           className={styles.bossPanel}
