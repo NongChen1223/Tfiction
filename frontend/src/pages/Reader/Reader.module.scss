@@ -375,7 +375,8 @@
 .content {
   flex: 1;
   width: 100%;
-  margin: 0 auto;
+  min-height: 0;
+  margin: calc(var(--neo-shadow-offset-md) + 2px) auto;
   padding: min(6vh, 56px) clamp(24px, 5vw, 72px);
   overflow-y: auto;
   transition:
