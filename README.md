@@ -1,384 +1,174 @@
-# Tfiction - 摸鱼小说阅读器
+# Tfiction
 
-一款基于 Wails + React + TypeScript + Go 开发的跨平台桌面小说阅读器，支持多种小说格式、窗口置顶、摸鱼模式等特性。
+Tfiction 是一个基于 Wails 的桌面小说阅读器项目，前端使用 React + TypeScript，后端使用 Go。
+当前主线能力是本地小说书架、TXT / EPUB 阅读、阅读外观设置、全文搜索、阅读进度持久化，以及阅读页摸鱼模式。
 
-## 项目特点
+详细功能和设计说明见 [docs/功能需求说明.md](docs/功能需求说明.md)。
 
-- 🚀 **跨平台支持**：支持 Windows、macOS 多平台运行
-- 📚 **多格式支持**：支持 TXT、EPUB、PDF、MOBI、AZW3 等多种格式
-- 👁️ **摸鱼模式**：支持基础隐身 / 完全隐身、悬停唤出、右键快捷控制面板、透明背景阅读和文字透明度调节
-- 🔍 **全文搜索**：支持全文搜索、结果侧栏浏览、章节内跳转和阅读区高亮
-- 🎨 **自定义主题**：支持亮色、暗色、护眼色等多种主题
-- 💾 **阅读进度**：滚动时自动保存阅读进度，重新打开后恢复章节和进度
-- 🪟 **窗口置顶**：支持窗口置顶和阅读态摸鱼切换
-- 🗂️ **真实书架**：首页书架已接入本地持久化，可导入单文件、创建目录、移动文件
-- ⌨️ **快捷键自定义**：快捷键设置页支持录制式修改，阅读器会即时读取新配置
-- 🚪 **打开链路完善**：支持导入后直接入库，书架卡片和目录快速阅读再进入阅读器，也支持一键以老板模式打开
-- 📖 **EPUB 导入可读**：已接通 EPUB 解包、目录定位、章节提取和正文兜底解析
-- 🖼️ **EPUB 封面可读**：已支持 metadata / manifest / guide / cover.xhtml / 扉页背景图等常见封面来源，若无封面才回退默认图标
-- 📂 **目录层级可浏览**：目录支持进入下一层查看文件，阅读页可直接返回书架或原目录
-- 🎯 **目录头部更克制**：二级目录只保留箭头和路径标题，位置更贴近顶部且与封面区留出呼吸感
-- ▭ **搜索框纯色边框**：首页搜索框去掉发散感和模糊，只保留纯色边框线
-- 🪟 **弹窗风格统一**：已抽出项目内通用 Dialog，导入弹窗保持现有风格，删除确认改为会跟随三套主题配色的硬边自定义弹窗
-- 🗑️ **删除交互已打通**：删除目录会单独确认，删除书籍会带上书名和文件后缀再确认，确认后会立即从书架移除并清理阅读进度
-- 🛠️ **删除入口已补稳**：书架卡片上的删除按钮已补上独立事件链，点击不会再误触卡片打开，删除确认会稳定弹出
-- 📥 **导入体验已收敛**：导入成功后只刷新书架或目录，不再强制跳进阅读页；导入选项卡片整块区域都可点击
-- ↕️ **设置切换更顺手**：左侧切换设置分类时，右侧内容区会自动回到顶部，不会停留在上一个分类的滚动位置
-- 🌙 **夜间配色已收敛**：暗色主题从高亮紫压到更柔和的夜间靛紫，封面底部标题区也改成跟随主题的渐变，不再在白天和护眼模式下发黑
-- 🧾 **阅读页控件更克制**：阅读模式先收掉杂乱图标，顶部工具栏和侧边面板改成更统一的纯文字按钮
-- 🫥 **摸鱼效果已隔离**：摸鱼模式的透明背景和文字透明度现在只作用于阅读页，离开阅读页会自动恢复，不会再串到书架和设置页
-- 🎼 **桌面歌词浮窗**：macOS 阅读摸鱼模式已改为原生桌面浮窗，正文继续保持透明悬浮，同时浮窗内直接提供上下章、目录、底部进度条和文字透明度控件
-- 🗂️ **浮窗目录可直接选章**：目录弹层会浮在正文之上显示，滚轮会优先滚动目录列表，不再穿透到底层正文
-- ↔️ **浮窗拖拽缩放可见**：桌面浮窗默认贴近主阅读窗口打开，鼠标进入窗口边缘触发区时会一起显示边框、顶部按钮和底部进度条，透明时也不容易丢失
-- 🖱️ **浮窗交互更稳**：阅读浮窗支持正文区域左键按住直接拖拽，滚轮会优先被浮窗消费，不再轻易穿透到底层软件
-- 🧱 **整版视觉正在统一**：首页、阅读页、设置页、书籍卡片和核心弹窗已切到统一的硬边风格，同时保留 `light / dark / sepia` 三套主题
-- 🎛️ **设置控件去第三方壳**：阅读设置里的字体、滑块、颜色选择和老板模式开关已切成项目内可复用控件，目录“添加文件”弹窗也已统一到同一套设计语言
-- ✏️ **重命名交互已收口**：书籍和目录重命名不再使用系统 `prompt`，改为项目内输入弹窗，支持空值校验和点击空白取消
+## 当前技术栈
 
-## 当前已打通的主流程
+### 桌面与后端
 
-1. 首页导入本地小说文件
-2. 导入完成后刷新书架或目录
-3. 阅读过程中自动保存章节与总进度
-4. 返回书架后显示最近阅读时间与进度
-5. 重新打开同一文件时恢复上次阅读状态
-6. 阅读页可通过 `Ctrl+Shift+H` 快速进入 BOSS 模式
-7. BOSS 模式支持 `Esc` 立即隐藏内容，右键呼出快捷控制面板
-8. 快捷键设置页可自定义 BOSS 模式、快速隐藏、搜索、翻章和返回书架
-9. EPUB 文件导入后会自动提取书名、封面、章节和正文并写入书架
-10. 目录内文件会稳定保存在原目录下，重启后不会再回到顶层书架
-11. 目录页标题支持用单箭头返回，搜索框视觉已收敛为纯边框样式
-12. 设置页阅读控件与目录添加弹窗已接入项目内控件体系，主题切换时会一起保持统一视觉
-13. 书籍与目录重命名已切到项目内弹窗，输入和保存反馈更统一
-14. macOS 阅读摸鱼模式会切到原生桌面浮窗，正文会以歌词式悬浮文本显示，浮窗内部直接带有上下章、目录、底部进度条和文字透明度控件
-15. 桌面浮窗会尽量沿用上一次位置；首次打开会贴近主阅读窗口中心，透明状态下也可拖拽和调整大小
-16. 浮窗在鼠标进入窗口边缘触发区时会一起显示边框、顶部按钮和底部进度条；正文区域左键可直接拖动，滚轮也会优先停留在浮窗内
-
-## 技术栈
-
-### 后端
-- **Go**: 1.21+
-- **Wails**: v2.9+
-- **架构**: 分层架构（app/services/models）
+- Go `1.22.0`
+- toolchain `go1.24.4`
+- Wails `v2.11.0`
 
 ### 前端
-- **React**: 18.3+
-- **TypeScript**: 5.5+
-- **构建工具**: Vite 5.3+
-- **状态管理**: Zustand 4.5+
-- **样式方案**: SCSS Modules + CSS Variables
-- **兼容目标**: ES2015+（支持更多浏览器版本）
+
+- React `18.3.1`
+- TypeScript `5.5.2`
+- Vite `5.3.1`
+- Zustand `4.5.2`
+- Ant Design `6.1.0`
+- SCSS Modules
 
 ### 开发工具
-- **ESLint**: 代码检查
-- **TypeScript**: 类型检查
-- **PostCSS**: CSS 处理
 
-## 环境要求
+- pnpm
+- ESLint
+- Sass
 
-### 系统要求
-- **Windows**: Windows 10/11 (64-bit)
-- **macOS**: macOS 10.15+ (Catalina or later)
+## 当前支持情况
 
-### 开发环境
-- **Go**: 1.21 或更高版本
-- **Node.js**: 18.x 或更高版本
-- **npm**: 9.x 或更高版本
-- **Wails CLI**: v2.9+
+### 已实现
 
-## 快速开始
+- 书架与目录管理
+- 单文件导入、目录创建、目录内继续导入
+- TXT 阅读
+- EPUB 元数据、封面、章节、正文图片渲染
+- 阅读进度保存与恢复
+- 阅读页目录、上一章、下一章
+- 全文搜索与命中跳转
+- 阅读外观设置
+- 快捷键设置
+- 普通摸鱼模式
+- macOS 原生桌面浮窗摸鱼模式
 
-### 1. 安装依赖
+### 未完整实现或仅占位
 
-#### 安装 Go
-访问 [Go 官网](https://golang.org/dl/) 下载并安装 Go 1.21+
+- PDF 阅读
+- MOBI 阅读
+- AZW3 阅读
+- 格式转换
+- 真实阅读统计
+- 漫画主线功能
 
-#### 安装 Node.js
-访问 [Node.js 官网](https://nodejs.org/) 下载并安装 Node.js 18+
+## 平台差异
 
-#### 安装 Wails CLI
-```bash
-go install github.com/wailsapp/wails/v2/cmd/wails@latest
-```
+- macOS：支持原生桌面浮窗式摸鱼模式
+- Windows / 非 darwin：摸鱼模式退化为普通 WebView 隐身模式
 
-#### 安装前端依赖
-```bash
-cd frontend
-npm install
-```
+## 开发命令
 
-#### 安装 Go 依赖
+### 安装依赖
+
 ```bash
 go mod tidy
+pnpm --dir frontend install
 ```
 
-### 2. 配置环境
-
-项目支持三种环境配置：
-
-- **local**: 本地开发环境（默认）
-- **test**: 测试环境
-- **prod**: 生产环境
-
-环境配置文件位于：
-- Go 后端：`config/config.{env}.json`
-- React 前端：`frontend/.env.{env}`
-
-可通过环境变量切换：
-```bash
-# 设置为测试环境
-export TFICTION_ENV=test
-
-# 设置为生产环境
-export TFICTION_ENV=prod
-```
-
-### 3. 开发模式运行
+### 开发模式
 
 ```bash
-# 开发模式（热重载）
 wails dev
-
-# 或者使用 npm 脚本（前端开发）
-cd frontend
-npm run dev
 ```
 
-### 3.1 常用校验命令
+### 前端构建
 
 ```bash
-# 前端类型检查
-cd frontend
-npm run type-check
+pnpm --dir frontend build
+```
 
-# 后端校验（项目内缓存，避免系统目录权限问题）
-cd ..
+### 前端类型检查
+
+```bash
+pnpm --dir frontend type-check
+```
+
+### 后端编译检查
+
+```bash
+go build ./...
+```
+
+### 后端测试
+
+```bash
 GOCACHE=$(pwd)/.gocache go test ./...
 ```
 
-### 4. 构建项目
+### 打包
 
-#### 构建所有平台（当前平台）
 ```bash
 wails build
 ```
 
-#### 构建特定环境
-```bash
-# 本地环境
-wails build -clean
-
-# 测试环境
-TFICTION_ENV=test wails build
-
-# 生产环境
-TFICTION_ENV=prod wails build
-```
-
-#### 仅构建前端
-```bash
-cd frontend
-
-# 本地环境
-npm run build:local
-
-# 测试环境
-npm run build:test
-
-# 生产环境
-npm run build:prod
-```
-
-### 5. 跨平台打包
-
-#### Windows 打包
-在 Windows 系统上运行：
-```bash
-wails build -platform windows/amd64
-```
-
-#### macOS 打包
-在 macOS 系统上运行：
-```bash
-# Intel 芯片
-wails build -platform darwin/amd64
-
-# Apple Silicon (M1/M2)
-wails build -platform darwin/arm64
-
-# Universal Binary (同时支持 Intel 和 Apple Silicon)
-wails build -platform darwin/universal
-```
-
-构建产物位于 `build/bin/` 目录。
-
 ## 项目结构
 
-```
+```text
 GO_Tfiction/
-├── backend/                    # Go 后端代码
-│   ├── app/                   # 应用主逻辑
-│   │   └── app.go            # 应用入口和生命周期管理
-│   ├── config/               # 配置管理
-│   │   └── config.go         # 配置加载和解析
-│   ├── services/             # 业务服务层
-│   │   ├── novel_service.go  # 小说管理服务（选择文件、解析章节、恢复进度）
-│   │   ├── window_service.go # 窗口管理服务（置顶、透明度、摸鱼模式）
-│   │   ├── search_service.go # 搜索服务（全文搜索、关键字定位）
-│   │   └── progress_service.go # 阅读进度持久化服务
-│   ├── models/               # 数据模型
-│   │   └── models.go         # 小说、章节、搜索结果等模型定义
-│   └── utils/                # 工具函数
-│
-├── frontend/                   # React 前端代码
+├── backend/
+│   ├── app/
+│   │   └── app.go                      # 应用生命周期、配置接口、Wails 绑定入口
+│   ├── models/
+│   │   └── models.go                   # 小说、章节、搜索结果等后端模型
+│   └── services/
+│       ├── novel_service.go            # 文件打开、TXT/EPUB 解析、章节读取、进度恢复
+│       ├── progress_service.go         # 阅读进度持久化
+│       ├── search_service.go           # 全文搜索
+│       ├── window_service.go           # 置顶、透明度、摸鱼模式控制
+│       ├── window_overlay_darwin.go    # macOS 原生桌面浮窗实现
+│       └── window_overlay_default.go   # 非 macOS 空实现降级
+├── config/
+│   ├── config.local.json               # 本地环境配置
+│   ├── config.test.json                # 测试环境配置
+│   └── config.prod.json                # 生产环境配置
+├── frontend/
 │   ├── src/
-│   │   ├── components/       # React 组件
-│   │   │   ├── features/BookCard  # 书籍卡片
-│   │   │   ├── features/Sidebar   # 书架侧边栏
-│   │   │   └── common/            # 通用输入、按钮、选择器、开关、颜色选择、Dialog 等
-│   │   ├── stores/           # Zustand 状态管理
-│   │   │   ├── novelStore.ts      # 当前阅读小说状态
-│   │   │   ├── libraryStore.ts    # 书架与目录持久化
-│   │   │   ├── windowStore.ts     # 窗口状态管理
-│   │   │   └── settingsStore.ts   # 阅读设置管理
-│   │   ├── hooks/            # 自定义 React Hooks
-│   │   ├── types/            # TypeScript 类型定义
-│   │   │   └── index.ts           # 公共类型定义
-│   │   ├── utils/novel.ts    # Wails 模型转换与阅读辅助函数
-│   │   ├── assets/           # 静态资源
-│   │   ├── App.tsx           # 应用主组件
-│   │   ├── main.tsx          # 应用入口
-│   │   └── index.scss        # 全局样式
-│   ├── package.json          # 前端依赖配置
-│   ├── tsconfig.json         # TypeScript 配置
-│   ├── vite.config.ts        # Vite 构建配置
-│   ├── tailwind.config.js    # TailwindCSS 配置
-│   └── .env.*                # 环境变量配置
-│
-├── config/                    # 配置文件
-│   ├── config.local.json     # 本地环境配置
-│   ├── config.test.json      # 测试环境配置
-│   └── config.prod.json      # 生产环境配置
-│
-├── build/                     # 构建产物目录
-│   └── bin/                  # 可执行文件
-│
-├── docs/                      # 文档目录
-│
-├── main.go                    # Go 应用入口
-├── go.mod                     # Go 模块依赖
-├── wails.json                 # Wails 配置文件
-├── README.md                  # 项目说明文档（本文件）
-└── FEATURES.md                # 业务功能文档
+│   │   ├── components/
+│   │   │   ├── common/                 # 通用按钮、输入、滑块、选择器、Dialog 等
+│   │   │   └── features/               # 书籍卡片、侧边栏、阅读外观控件等业务组件
+│   │   ├── hooks/                      # 自定义 hooks
+│   │   ├── layouts/                    # 页面布局
+│   │   ├── pages/
+│   │   │   ├── Home/                   # 书架页
+│   │   │   ├── Reader/                 # 阅读页
+│   │   │   └── Settings/               # 设置页
+│   │   ├── router/                     # 路由配置
+│   │   ├── services/                   # 前端 bridge / service 封装
+│   │   ├── stores/                     # Zustand 状态管理
+│   │   ├── styles/                     # 主题变量与全局样式资源
+│   │   ├── types/                      # 前端类型定义
+│   │   ├── utils/                      # 阅读与快捷键相关工具函数
+│   │   └── wailsjs/                    # Wails 生成的前端绑定代码
+│   ├── package.json
+│   └── vite.config.ts
+├── docs/
+│   └── 功能需求说明.md                 # 详细功能、交互和设计说明
+├── main.go                             # Wails 应用启动入口
+├── wails.json                          # Wails 构建配置
+└── AGENTS.md                           # 仓库级协作约束
 ```
 
-## 开发指南
+## 配置与数据
 
-### 代码规范
+### 环境配置
 
-#### Go 代码规范
-- 遵循 Go 官方代码规范
-- 使用 `gofmt` 格式化代码
-- 函数和类型添加清晰的注释
-- 错误处理使用明确的错误信息
+- 环境变量：`TFICTION_ENV`
+- 默认配置文件：
+- `config/config.local.json`
+- `config/config.test.json`
+- `config/config.prod.json`
 
-#### TypeScript/React 规范
-- 使用 ESLint 进行代码检查
-- 遵循 React Hooks 规范
-- 组件添加 JSDoc 注释说明
-- 使用函数式组件和 Hooks
+### 本地数据
 
-### 添加新功能
+- 设置页里的“本地存储路径”对应后端 `Config.DataDir`
+- 阅读进度存储在 `DataDir/progress.json`
+- 书架、阅读设置、主题、快捷键主要保存在前端本地存储
+- 导入书籍默认保留原始本地文件路径，不会复制到应用数据目录
 
-1. **后端服务**：在 `backend/services/` 创建新服务
-2. **前端组件**：在 `frontend/src/components/` 创建新组件
-3. **状态管理**：在 `frontend/src/stores/` 创建新 store
-4. **类型定义**：在 `frontend/src/types/` 添加类型定义
-5. **模型转换**：涉及 Wails 返回结构时，统一走 `frontend/src/utils/novel.ts`
+## 当前注意点
 
-### 调试方法
-
-#### 开发模式调试
-```bash
-wails dev
-```
-开发模式会自动打开浏览器开发者工具，可以查看 console 日志和网络请求。
-
-#### Go 后端调试
-使用日志输出：
-```go
-import "log"
-log.Printf("Debug info: %v", data)
-```
-
-#### React 前端调试
-使用 console 输出：
-```typescript
-console.log('Debug info:', data)
-```
-
-## 常见问题
-
-### 1. Wails 安装失败
-确保已正确安装 Go，并设置了 `GOPATH` 和 `GOBIN` 环境变量。
-
-### 2. 前端依赖安装失败
-尝试清理 npm 缓存：
-```bash
-npm cache clean --force
-npm install
-```
-
-### 3. 构建失败
-确保所有依赖都已正确安装，并检查 Go 和 Node.js 版本是否符合要求。
-
-### 4. 应用无法启动
-检查配置文件是否正确，确保数据目录有写入权限。
-
-## 技术版本兼容性
-
-### 最低版本要求
-- Go: 1.21
-- Node.js: 18.0
-- Wails: 2.9.0
-- React: 18.3
-- TypeScript: 5.5
-
-### 推荐版本
-- Go: 1.21+
-- Node.js: 20.x LTS
-- npm: 10.x
-
-### 浏览器引擎
-- Windows: WebView2 (自动安装)
-- macOS: WKWebView (系统自带)
-
-## 性能优化
-
-- 前端代码分割和懒加载
-- 构建时自动压缩和混淆
-- 资源文件嵌入到可执行文件
-- 阅读内容缓存机制
-
-## 贡献指南
-
-欢迎提交 Issue 和 Pull Request！
-
-## 许可证
-
-MIT License
-
-## 联系方式
-
-- 作者: NongChen
-- 仓库: [https://github.com/NongChen1223/Tfiction](https://github.com/NongChen1223/Tfiction)
-
-## 更新日志
-
-### v1.0.0 (2024-11-27)
-- 初始版本发布
-- 基础框架搭建完成
-- 支持 TXT 格式小说阅读
-- 实现摸鱼模式
-- 实现全文搜索
-- 支持跨平台打包
+- `wails dev` 依赖 Vite 默认端口，若 `5173` 被占用需要先释放
+- Sass 仍有 legacy API / `@import` 警告，但当前不影响构建
+- macOS 测试构建可能出现 Wails private API 警告，这不代表当前可直接用于 App Store 审核
