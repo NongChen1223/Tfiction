@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import type { SearchResult } from '@/types'
 import { useNovelStore } from '@/stores/novelStore'
 import { useSettingsStore } from '@/stores/settingsStore'
+import { getPersistedBossOpacity } from '@/stores/settingsStore'
 import { useWindowStore } from '@/stores/windowStore'
 import { useLibraryStore } from '@/stores/libraryStore'
 import ReadingAppearanceControls from '@/components/features/ReadingAppearanceControls'
@@ -189,10 +190,13 @@ export default function Reader() {
   const routeState = (location.state as
     | { activateBossMode?: boolean; returnDirectoryId?: string }
     | null)
+  const activeStealthOpacity = clampStealthOpacity(
+    isStealthMode ? bossOpacity : opacity
+  )
   const displayOpacity = isStealthMode
     ? bossMode.isConcealed
-      ? Math.min(opacity, 0.04)
-      : opacity
+      ? Math.min(activeStealthOpacity, 0.04)
+      : activeStealthOpacity
     : 1
   const shouldActivateBossMode = Boolean(routeState?.activateBossMode)
   const returnDirectoryId = routeState?.returnDirectoryId
@@ -211,7 +215,7 @@ export default function Reader() {
     setShowAppearancePanel(false)
   })
 
-  const syncDesktopOverlay = async (nextOpacity = opacity) => {
+  const syncDesktopOverlay = async (nextOpacity = activeStealthOpacity) => {
     if (!useDesktopOverlay || !currentNovel) {
       return
     }
@@ -229,7 +233,7 @@ export default function Reader() {
     )
   }
 
-  const syncDesktopOverlayControls = async (nextOpacity = opacity) => {
+  const syncDesktopOverlayControls = async (nextOpacity = activeStealthOpacity) => {
     if (!useDesktopOverlay || !currentNovel) {
       return
     }
@@ -419,28 +423,31 @@ export default function Reader() {
 
   const handleToggleStealthMode = async () => {
     const nextStealthMode = !isStealthMode
+    const rememberedBossOpacity = getPersistedBossOpacity(useSettingsStore.getState().bossOpacity)
 
     try {
       if (useDesktopOverlay) {
         if (nextStealthMode) {
           const { red, green, blue } = parseHexColor(textColor)
+          setBossOpacity(rememberedBossOpacity)
 
           await ShowDesktopReaderOverlay(
             overlayChapterMarkup,
             Math.round(fontSize),
             lineHeight,
-            bossOpacity,
+            rememberedBossOpacity,
             red,
             green,
             blue
           )
-          await syncDesktopOverlayControls(bossOpacity)
+          await syncDesktopOverlayControls(rememberedBossOpacity)
           setStealthMode(true)
-          setOpacity(bossOpacity)
+          setOpacity(rememberedBossOpacity)
           setShowSearch(false)
           setShowSidebar(false)
           bossMode.closePanel()
         } else {
+          setBossOpacity(useWindowStore.getState().opacity)
           await HideDesktopReaderOverlay()
           setStealthMode(false)
           setOpacity(1)
@@ -451,12 +458,14 @@ export default function Reader() {
       }
 
       if (nextStealthMode) {
+        setBossOpacity(rememberedBossOpacity)
         await EnableStealthMode()
-        await SetOpacity(bossOpacity)
+        await SetOpacity(rememberedBossOpacity)
         setStealthMode(true)
-        setOpacity(bossOpacity)
+        setOpacity(rememberedBossOpacity)
         bossMode.revealImmediately()
       } else {
+        setBossOpacity(useWindowStore.getState().opacity)
         await DisableStealthMode()
         setStealthMode(false)
         setOpacity(1)
@@ -489,6 +498,7 @@ export default function Reader() {
   const handleReturnHome = async () => {
     if (isStealthMode) {
       try {
+        setBossOpacity(useWindowStore.getState().opacity)
         if (useDesktopOverlay) {
           await HideDesktopReaderOverlay()
         } else {
@@ -671,6 +681,7 @@ export default function Reader() {
           return
         }
 
+        setBossOpacity(useWindowStore.getState().opacity)
         await HideDesktopReaderOverlay()
         setStealthMode(false)
         setOpacity(1)
@@ -732,6 +743,7 @@ export default function Reader() {
             } else if (action.type === 'opacity' && typeof action.value === 'number') {
               await handleOpacityChange(action.value)
             } else if (action.type === 'close') {
+              setBossOpacity(useWindowStore.getState().opacity)
               await HideDesktopReaderOverlay()
               setStealthMode(false)
               setOpacity(1)
@@ -772,7 +784,11 @@ export default function Reader() {
       setStealthMode(Boolean(enabled))
     })
     const offOpacity = EventsOn('window:opacity', (nextOpacity: number) => {
+      const normalizedOpacity = clampStealthOpacity(Number(nextOpacity))
       setOpacity(Number(nextOpacity))
+      if (useWindowStore.getState().isStealthMode && Number(nextOpacity) < 1) {
+        setBossOpacity(normalizedOpacity)
+      }
     })
 
     return () => {
@@ -999,7 +1015,7 @@ export default function Reader() {
               min="0.02"
               max="1"
               step="0.02"
-              value={opacityToTransparencySliderValue(opacity)}
+              value={opacityToTransparencySliderValue(activeStealthOpacity)}
               onChange={(event) =>
                 handleOpacityChange(transparencySliderValueToOpacity(Number(event.target.value)))
               }

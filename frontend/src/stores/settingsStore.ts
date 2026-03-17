@@ -7,6 +7,7 @@ const MIN_PAGE_WIDTH_PERCENT = 55
 const MAX_PAGE_WIDTH_PERCENT = 100
 const LEGACY_MIN_PAGE_WIDTH_PX = 400
 const LEGACY_MAX_PAGE_WIDTH_PX = 1200
+const SETTINGS_STORAGE_NAME = 'tfiction-settings'
 
 export function normalizePageWidth(value: number) {
   const numericValue = Number(value || 0)
@@ -69,6 +70,31 @@ const defaultBossSettings = {
   bossOpacity: 0.3,
 }
 
+function normalizeBossOpacity(value: number) {
+  return Math.max(0.02, Math.min(1, Number(value || 0.3)))
+}
+
+export function getPersistedBossOpacity(fallback = defaultBossSettings.bossOpacity) {
+  if (typeof window === 'undefined') {
+    return normalizeBossOpacity(fallback)
+  }
+
+  try {
+    const rawValue = window.localStorage.getItem(SETTINGS_STORAGE_NAME)
+    if (!rawValue) {
+      return normalizeBossOpacity(fallback)
+    }
+
+    const parsed = JSON.parse(rawValue) as {
+      state?: { bossOpacity?: number }
+    }
+
+    return normalizeBossOpacity(parsed.state?.bossOpacity ?? fallback)
+  } catch {
+    return normalizeBossOpacity(fallback)
+  }
+}
+
 /**
  * 阅读设置状态管理
  * 管理字体、行高、页宽等阅读相关设置
@@ -92,7 +118,7 @@ export const useSettingsStore = create<SettingsState>()(
       setBossRevealDelay: (bossRevealDelay) => set({ bossRevealDelay }),
       setBossHideDelay: (bossHideDelay) => set({ bossHideDelay }),
       setBossMode: (bossMode) => set({ bossMode }),
-      setBossOpacity: (bossOpacity) => set({ bossOpacity }),
+      setBossOpacity: (bossOpacity) => set({ bossOpacity: normalizeBossOpacity(bossOpacity) }),
       setKeyboardShortcut: (action, shortcut) =>
         set((state) => ({
           keyboardShortcuts: {
@@ -110,13 +136,16 @@ export const useSettingsStore = create<SettingsState>()(
         }),
     }),
     {
-      name: 'tfiction-settings',
+      name: SETTINGS_STORAGE_NAME,
       merge: (persistedState, currentState) => {
         const typedPersistedState = (persistedState || {}) as Partial<SettingsState>
 
         return {
           ...currentState,
           ...typedPersistedState,
+          bossOpacity: normalizeBossOpacity(
+            typedPersistedState.bossOpacity ?? currentState.bossOpacity
+          ),
           pageWidth: normalizePageWidth(
             typedPersistedState.pageWidth ?? currentState.pageWidth
           ),
