@@ -41,6 +41,8 @@ static BOOL tfictionOverlayFooterVisible = NO;
 static BOOL tfictionOverlayChapterPanelVisible = NO;
 static BOOL tfictionOverlayCamouflageEnabled = NO;
 static BOOL tfictionOverlayCamouflageCollapsed = NO;
+static BOOL tfictionOverlayIsResizing = NO;
+static BOOL tfictionOverlaySuppressCamouflageCollapseUntilReenter = NO;
 static NSMutableArray<NSDictionary *> *tfictionOverlayActionQueue = nil;
 static NSArray<NSString *> *tfictionOverlayChapterTitles = nil;
 static NSMutableArray<NSButton *> *tfictionOverlayChapterButtons = nil;
@@ -64,7 +66,8 @@ static const CGFloat TFictionOverlayHeaderHeight = 20.0;
 static const CGFloat TFictionOverlayHeaderTopInset = 8.0;
 static const CGFloat TFictionOverlayContentInset = 10.0;
 static const CGFloat TFictionOverlayBottomInset = 20.0;
-static const CGFloat TFictionOverlayResizeHandleSize = 18.0;
+static const CGFloat TFictionOverlayResizeHandleVisualSize = 18.0;
+static const CGFloat TFictionOverlayResizeHandleHitSize = 42.0;
 static const CGFloat TFictionOverlayChromeRevealDistance = 14.0;
 static const CGFloat TFictionOverlayControlsHeight = 42.0;
 static const CGFloat TFictionOverlayFooterHeight = 28.0;
@@ -101,6 +104,9 @@ static void TFictionSetOverlayCamouflageCollapsed(BOOL collapsed, BOOL animated)
 static NSRect TFictionOverlayExpandedFrameForRestore(void);
 static CGFloat TFictionOverlayCurrentMinimumWidth(void);
 static CGFloat TFictionOverlayCurrentMinimumHeight(void);
+static void TFictionMarkOverlayPointerReentered(void);
+static BOOL TFictionShouldCollapseOverlayToCamouflage(void);
+static BOOL TFictionOverlayWindowContainsCurrentMouseLocation(NSWindow *window);
 static NSColor *TFictionOverlayColor(int red, int green, int blue, double alpha);
 static NSColor *TFictionOverlayCurrentThemeColor(void);
 static NSColor *TFictionOverlayMixColor(NSColor *baseColor, NSColor *targetColor, CGFloat ratio);
@@ -204,7 +210,11 @@ static double TFictionOverlayOpacityFromSliderValue(double sliderValue) {
 		return;
 	}
 
-	if (tfictionOverlayCamouflageEnabled && tfictionOverlayVisible) {
+	if (tfictionOverlayIsResizing) {
+		return;
+	}
+
+	if (TFictionShouldCollapseOverlayToCamouflage()) {
 		TFictionSetOverlayCamouflageCollapsed(YES, NO);
 		return;
 	}
@@ -428,6 +438,7 @@ static double TFictionOverlayOpacityFromSliderValue(double sliderValue) {
 - (void)mouseDown:(NSEvent *)event {
 	[super mouseDown:event];
 	TFictionSetOverlayChromeVisible(YES);
+	tfictionOverlayIsResizing = YES;
 	self.initialMouseLocation = [NSEvent mouseLocation];
 	self.initialWindowFrame = self.window.frame;
 }
@@ -453,6 +464,14 @@ static double TFictionOverlayOpacityFromSliderValue(double sliderValue) {
 	[self.window.contentView setNeedsDisplay:YES];
 }
 
+- (void)mouseUp:(NSEvent *)event {
+	[super mouseUp:event];
+	tfictionOverlayIsResizing = NO;
+	tfictionOverlaySuppressCamouflageCollapseUntilReenter =
+		!TFictionOverlayWindowContainsCurrentMouseLocation(self.window);
+	TFictionUpdateOverlayHoverStateForCurrentMouseLocation(self.window);
+}
+
 - (void)drawRect:(NSRect)dirtyRect {
 	[super drawRect:dirtyRect];
 
@@ -462,12 +481,19 @@ static double TFictionOverlayOpacityFromSliderValue(double sliderValue) {
 
 	[[[NSColor whiteColor] colorWithAlphaComponent:0.55] setStroke];
 
+	NSRect visualRect = NSMakeRect(
+		MAX(0.0, NSWidth(self.bounds) - TFictionOverlayResizeHandleVisualSize - 4.0),
+		4.0,
+		MIN(TFictionOverlayResizeHandleVisualSize, NSWidth(self.bounds)),
+		MIN(TFictionOverlayResizeHandleVisualSize, NSHeight(self.bounds))
+	);
+
 	for (NSInteger index = 0; index < 3; index++) {
 		CGFloat inset = 3.0 + (CGFloat)index * 4.0;
 		NSBezierPath *line = [NSBezierPath bezierPath];
 		[line setLineWidth:1.2];
-		[line moveToPoint:NSMakePoint(inset, 2.0)];
-		[line lineToPoint:NSMakePoint(NSWidth(self.bounds) - 2.0, NSHeight(self.bounds) - inset)];
+		[line moveToPoint:NSMakePoint(NSMinX(visualRect) + inset, NSMinY(visualRect) + 2.0)];
+		[line lineToPoint:NSMakePoint(NSMaxX(visualRect) - 2.0, NSMaxY(visualRect) - inset)];
 		[line stroke];
 	}
 }
@@ -551,7 +577,11 @@ static double TFictionOverlayOpacityFromSliderValue(double sliderValue) {
 }
 
 - (void)mouseExited:(NSEvent *)event {
-	TFictionSetOverlayChromeVisible(NO);
+	if (tfictionOverlayIsResizing) {
+		return;
+	}
+
+	TFictionUpdateOverlayHoverStateForCurrentMouseLocation(self.window);
 }
 
 - (void)scrollWheel:(NSEvent *)event {
@@ -688,7 +718,11 @@ static double TFictionOverlayOpacityFromSliderValue(double sliderValue) {
 }
 
 - (void)mouseExited:(NSEvent *)event {
-	TFictionSetOverlayChromeVisible(NO);
+	if (tfictionOverlayIsResizing) {
+		return;
+	}
+
+	TFictionUpdateOverlayHoverStateForCurrentMouseLocation(self.window);
 }
 
 - (void)keyDown:(NSEvent *)event {
@@ -849,6 +883,31 @@ static CGFloat TFictionOverlayCurrentMinimumHeight(void) {
 	return tfictionOverlayCamouflageCollapsed ? TFictionOverlayCamouflageHeight : TFictionOverlayMinHeight;
 }
 
+static void TFictionMarkOverlayPointerReentered(void) {
+	if (tfictionOverlayCamouflageCollapsed || tfictionOverlayIsResizing) {
+		return;
+	}
+
+	tfictionOverlaySuppressCamouflageCollapseUntilReenter = NO;
+}
+
+static BOOL TFictionShouldCollapseOverlayToCamouflage(void) {
+	return tfictionOverlayCamouflageEnabled &&
+		tfictionOverlayVisible &&
+		!tfictionOverlayCamouflageCollapsed &&
+		!tfictionOverlayIsResizing &&
+		!tfictionOverlaySuppressCamouflageCollapseUntilReenter;
+}
+
+static BOOL TFictionOverlayWindowContainsCurrentMouseLocation(NSWindow *window) {
+	if (window == nil || tfictionOverlayRootView == nil) {
+		return NO;
+	}
+
+	NSPoint point = [tfictionOverlayRootView convertPoint:[window mouseLocationOutsideOfEventStream] fromView:nil];
+	return NSPointInRect(point, tfictionOverlayRootView.bounds);
+}
+
 static NSColor *TFictionOverlayCurrentThemeColor(void) {
 	NSColor *themeColor = TFictionOverlayColor(
 		tfictionOverlayCurrentRed,
@@ -908,6 +967,8 @@ static void TFictionSetOverlayCamouflageCollapsed(BOOL collapsed, BOOL animated)
 
 		tfictionOverlayExpandedFrame = tfictionOverlayWindow.frame;
 		tfictionOverlayCamouflageCollapsed = YES;
+		tfictionOverlayIsResizing = NO;
+		tfictionOverlaySuppressCamouflageCollapseUntilReenter = NO;
 		TFictionSetOverlayChapterPanelVisible(NO);
 		[tfictionOverlayWindow setMinSize:NSMakeSize(TFictionOverlayCamouflageWidth, TFictionOverlayCamouflageHeight)];
 		[tfictionOverlayScrollView setHidden:YES];
@@ -936,6 +997,8 @@ static void TFictionSetOverlayCamouflageCollapsed(BOOL collapsed, BOOL animated)
 	NSRect expandedFrame = TFictionOverlayExpandedFrameForRestore();
 	tfictionOverlayExpandedFrame = expandedFrame;
 	tfictionOverlayCamouflageCollapsed = NO;
+	tfictionOverlayIsResizing = NO;
+	tfictionOverlaySuppressCamouflageCollapseUntilReenter = NO;
 	[tfictionOverlayWindow setMinSize:NSMakeSize(TFictionOverlayMinWidth, TFictionOverlayMinHeight)];
 	[tfictionOverlayScrollView setHidden:NO];
 	[tfictionOverlayWindow setFrame:expandedFrame display:YES animate:animated];
@@ -1494,6 +1557,7 @@ static void TFictionHandleOverlayMouseTracking(NSView *view, NSEvent *event) {
 		return;
 	}
 
+	TFictionMarkOverlayPointerReentered();
 	NSPoint point = [tfictionOverlayRootView convertPoint:event.locationInWindow fromView:nil];
 	TFictionUpdateOverlayHoverStateAtPoint(point);
 }
@@ -1574,10 +1638,10 @@ static void TFictionLayoutDesktopReaderOverlayViews(void) {
 		TFictionOverlayFooterHeight
 	)];
 	[tfictionOverlayResizeHandleView setFrame:NSMakeRect(
-		NSWidth(bounds) - TFictionOverlayResizeHandleSize - 8.0,
-		6.0,
-		TFictionOverlayResizeHandleSize,
-		TFictionOverlayResizeHandleSize
+		NSWidth(bounds) - TFictionOverlayResizeHandleHitSize - 2.0,
+		0.0,
+		TFictionOverlayResizeHandleHitSize,
+		TFictionOverlayResizeHandleHitSize
 	)];
 
 	CGFloat controlsWidth = NSWidth(tfictionOverlayControlsView.bounds);
@@ -2000,6 +2064,8 @@ static void TFictionShowDesktopReaderOverlayWindow(const char *text, int fontSiz
 	dispatch_async(dispatch_get_main_queue(), ^{
 		tfictionMainAppWindow = TFictionResolveMainAppWindow();
 		[tfictionOverlayActionQueue removeAllObjects];
+		tfictionOverlayIsResizing = NO;
+		tfictionOverlaySuppressCamouflageCollapseUntilReenter = NO;
 		TFictionSetOverlayChapterPanelVisible(NO);
 		TFictionApplyDesktopReaderOverlayContent(textCopy, fontSize, lineHeight, opacity, red, green, blue);
 
@@ -2059,6 +2125,8 @@ static void TFictionUpdateDesktopReaderOverlayOpacity(double opacity) {
 
 static void TFictionHideDesktopReaderOverlayWindow(void) {
 	dispatch_async(dispatch_get_main_queue(), ^{
+		tfictionOverlayIsResizing = NO;
+		tfictionOverlaySuppressCamouflageCollapseUntilReenter = NO;
 		if (tfictionOverlayCamouflageCollapsed && tfictionOverlayWindow != nil) {
 			NSRect expandedFrame = TFictionOverlayExpandedFrameForRestore();
 			tfictionOverlayExpandedFrame = expandedFrame;
