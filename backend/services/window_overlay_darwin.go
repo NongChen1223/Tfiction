@@ -96,6 +96,11 @@ static void TFictionUpdateDesktopReaderOverlayOpacity(double opacity);
 static void TFictionDismissOverlayChapterPanel(void);
 static BOOL TFictionOverlayPointInView(NSPoint point, NSView *view);
 static void TFictionHandleOverlayMouseDownEvent(NSEvent *event);
+static BOOL TFictionOverlayStringLooksLikeHTML(NSString *string);
+static NSMutableAttributedString *TFictionCreateOverlayAttributedString(NSString *string);
+static NSFont *TFictionOverlayTextFont(NSFont *existingFont, CGFloat pointSize);
+static void TFictionApplyOverlayTextAttributes(NSMutableAttributedString *attributedText, int fontSize, double lineHeight, double opacity, int red, int green, int blue);
+static void TFictionResizeOverlayTextAttachments(NSTextStorage *textStorage, CGFloat availableWidth);
 
 static double TFictionClampOverlayOpacity(double opacity) {
 	return MAX(0.02, MIN(opacity, 1.0));
@@ -963,6 +968,144 @@ static NSColor *TFictionOverlayColor(int red, int green, int blue, double alpha)
 	                                 alpha:MAX(0.0, MIN(alpha, 1.0))];
 }
 
+static BOOL TFictionOverlayStringLooksLikeHTML(NSString *string) {
+	if (string == nil || string.length == 0) {
+		return NO;
+	}
+
+	NSRange leftBracket = [string rangeOfString:@"<"];
+	NSRange rightBracket = [string rangeOfString:@">"];
+	return leftBracket.location != NSNotFound && rightBracket.location != NSNotFound;
+}
+
+static NSMutableAttributedString *TFictionCreateOverlayAttributedString(NSString *string) {
+	if (!TFictionOverlayStringLooksLikeHTML(string)) {
+		return nil;
+	}
+
+	NSData *htmlData = [string dataUsingEncoding:NSUTF8StringEncoding];
+	if (htmlData == nil || htmlData.length == 0) {
+		return nil;
+	}
+
+	NSError *error = nil;
+	NSAttributedString *importedText = [[NSAttributedString alloc] initWithData:htmlData
+	                                                            options:@{
+	                                                                NSDocumentTypeDocumentOption: NSHTMLTextDocumentType,
+	                                                                NSCharacterEncodingDocumentOption: @(NSUTF8StringEncoding),
+	                                                            }
+	                                                 documentAttributes:nil
+	                                                              error:&error];
+	if (error != nil || importedText == nil) {
+		return nil;
+	}
+
+	return [[NSMutableAttributedString alloc] initWithAttributedString:importedText];
+}
+
+static NSFont *TFictionOverlayTextFont(NSFont *existingFont, CGFloat pointSize) {
+	NSString *fontName = existingFont.fontName.lowercaseString ?: @"";
+	BOOL wantsBold = NO;
+	BOOL wantsItalic = NO;
+	BOOL wantsMonospace = NO;
+
+	if (existingFont != nil) {
+		NSFontDescriptorSymbolicTraits traits = existingFont.fontDescriptor.symbolicTraits;
+		wantsBold = (traits & NSFontBoldTrait) == NSFontBoldTrait;
+		wantsItalic = [fontName containsString:@"italic"] || [fontName containsString:@"oblique"];
+		wantsMonospace =
+			[fontName containsString:@"mono"] ||
+			[fontName containsString:@"courier"] ||
+			[fontName containsString:@"menlo"] ||
+			[fontName containsString:@"code"];
+	}
+
+	NSFont *font = wantsMonospace
+		? [NSFont monospacedSystemFontOfSize:pointSize weight:wantsBold ? NSFontWeightSemibold : NSFontWeightRegular]
+		: [NSFont systemFontOfSize:pointSize weight:wantsBold ? NSFontWeightSemibold : NSFontWeightMedium];
+
+	if (wantsItalic) {
+		NSFont *italicFont = [[NSFontManager sharedFontManager] convertFont:font toHaveTrait:NSItalicFontMask];
+		if (italicFont != nil) {
+			font = italicFont;
+		}
+	}
+
+	return font ?: [NSFont systemFontOfSize:pointSize weight:NSFontWeightMedium];
+}
+
+static void TFictionApplyOverlayTextAttributes(NSMutableAttributedString *attributedText, int fontSize, double lineHeight, double opacity, int red, int green, int blue) {
+	if (attributedText == nil || attributedText.length == 0) {
+		return;
+	}
+
+	NSMutableParagraphStyle *paragraphStyle = [[NSMutableParagraphStyle alloc] init];
+	[paragraphStyle setLineBreakMode:NSLineBreakByWordWrapping];
+	[paragraphStyle setParagraphSpacing:MAX(8.0, fontSize * 0.55)];
+	[paragraphStyle setLineSpacing:MAX(0.0, fontSize * (MAX(lineHeight, 1.0) - 1.0))];
+
+	NSShadow *shadow = [[NSShadow alloc] init];
+	[shadow setShadowBlurRadius:8.0];
+	[shadow setShadowOffset:NSMakeSize(0, 1)];
+	[shadow setShadowColor:[[NSColor blackColor] colorWithAlphaComponent:0.15]];
+
+	NSRange fullRange = NSMakeRange(0, attributedText.length);
+	NSAttributedString *fontSnapshot = [attributedText copy];
+	[attributedText beginEditing];
+	[attributedText addAttribute:NSForegroundColorAttributeName
+	                       value:TFictionOverlayColor(red, green, blue, opacity)
+	                       range:fullRange];
+	[attributedText addAttribute:NSParagraphStyleAttributeName value:paragraphStyle range:fullRange];
+	[attributedText addAttribute:NSShadowAttributeName value:shadow range:fullRange];
+	[fontSnapshot enumerateAttribute:NSFontAttributeName
+	                         inRange:fullRange
+	                         options:0
+	                      usingBlock:^(id value, NSRange range, BOOL *stop) {
+		NSFont *existingFont = [value isKindOfClass:[NSFont class]] ? (NSFont *)value : nil;
+		NSFont *nextFont = TFictionOverlayTextFont(existingFont, MAX(fontSize, 12));
+		[attributedText addAttribute:NSFontAttributeName value:nextFont range:range];
+	}];
+	[attributedText endEditing];
+}
+
+static void TFictionResizeOverlayTextAttachments(NSTextStorage *textStorage, CGFloat availableWidth) {
+	if (textStorage == nil || textStorage.length == 0 || availableWidth <= 0) {
+		return;
+	}
+
+	CGFloat maxWidth = MAX(120.0, availableWidth);
+	NSRange fullRange = NSMakeRange(0, textStorage.length);
+	[textStorage enumerateAttribute:NSAttachmentAttributeName
+	                        inRange:fullRange
+	                        options:0
+	                     usingBlock:^(id value, NSRange range, BOOL *stop) {
+		if (![value isKindOfClass:[NSTextAttachment class]]) {
+			return;
+		}
+
+		NSTextAttachment *attachment = (NSTextAttachment *)value;
+		NSImage *image = attachment.image;
+		if (image == nil && attachment.contents != nil) {
+			image = [[NSImage alloc] initWithData:attachment.contents];
+			if (image != nil) {
+				attachment.image = image;
+			}
+		}
+
+		if (image == nil || image.size.width <= 0 || image.size.height <= 0) {
+			return;
+		}
+
+		CGFloat scale = MIN(1.0, maxWidth / image.size.width);
+		attachment.bounds = CGRectMake(
+			0,
+			0,
+			floor(image.size.width * scale),
+			floor(image.size.height * scale)
+		);
+	}];
+}
+
 static void TFictionSetOverlayChromeVisible(BOOL visible) {
 	tfictionOverlayChromeVisible = visible;
 	tfictionOverlayControlsVisible = visible;
@@ -1168,6 +1311,10 @@ static void TFictionLayoutDesktopReaderOverlayViews(void) {
 	if (textView != nil) {
 		[textView setFrame:NSMakeRect(0, 0, scrollFrame.size.width, scrollFrame.size.height)];
 		[textView.textContainer setContainerSize:NSMakeSize(scrollFrame.size.width, CGFLOAT_MAX)];
+		TFictionResizeOverlayTextAttachments(
+			textView.textStorage,
+			MAX(120.0, scrollFrame.size.width - (textView.textContainerInset.width * 2.0) - 8.0)
+		);
 	}
 
 	if (tfictionOverlayChapterPanelView != nil && tfictionOverlayChapterListScrollView != nil && tfictionOverlayChapterListContentView != nil) {
@@ -1343,8 +1490,8 @@ static void TFictionEnsureDesktopReaderOverlayWindow(void) {
 	[textView setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
 	[textView setEditable:NO];
 	[textView setSelectable:NO];
-	[textView setRichText:NO];
-	[textView setImportsGraphics:NO];
+	[textView setRichText:YES];
+	[textView setImportsGraphics:YES];
 	[textView setDrawsBackground:NO];
 	[textView setHorizontallyResizable:NO];
 	[textView setVerticallyResizable:YES];
@@ -1503,27 +1650,16 @@ static void TFictionApplyDesktopReaderOverlayContent(const char *text, int fontS
 	tfictionOverlayCurrentBlue = blue;
 
 	TFictionOverlayTextView *textView = (TFictionOverlayTextView *)[tfictionOverlayScrollView documentView];
-
-	NSMutableParagraphStyle *paragraphStyle = [[NSMutableParagraphStyle alloc] init];
-	[paragraphStyle setLineBreakMode:NSLineBreakByWordWrapping];
-	[paragraphStyle setParagraphSpacing:MAX(8.0, fontSize * 0.55)];
-	[paragraphStyle setMinimumLineHeight:MAX(18.0, fontSize * lineHeight)];
-	[paragraphStyle setMaximumLineHeight:MAX(18.0, fontSize * lineHeight)];
-
-	NSShadow *shadow = [[NSShadow alloc] init];
-	[shadow setShadowBlurRadius:8.0];
-	[shadow setShadowOffset:NSMakeSize(0, 1)];
-	[shadow setShadowColor:[[NSColor blackColor] colorWithAlphaComponent:0.15]];
-
-	NSDictionary *attributes = @{
-		NSFontAttributeName: [NSFont systemFontOfSize:MAX(fontSize, 12) weight:NSFontWeightMedium],
-		NSForegroundColorAttributeName: TFictionOverlayColor(red, green, blue, opacity),
-		NSParagraphStyleAttributeName: paragraphStyle,
-		NSShadowAttributeName: shadow,
-	};
-
-	NSAttributedString *attributedText = [[NSAttributedString alloc] initWithString:string attributes:attributes];
+	NSMutableAttributedString *attributedText = TFictionCreateOverlayAttributedString(string);
+	if (attributedText == nil) {
+		attributedText = [[NSMutableAttributedString alloc] initWithString:string ?: @""];
+	}
+	TFictionApplyOverlayTextAttributes(attributedText, fontSize, lineHeight, opacity, red, green, blue);
 	[[textView textStorage] setAttributedString:attributedText];
+	TFictionResizeOverlayTextAttachments(
+		[textView textStorage],
+		MAX(120.0, NSWidth(tfictionOverlayScrollView.contentView.bounds) - (textView.textContainerInset.width * 2.0) - 8.0)
+	);
 	if (shouldPreserveScroll && tfictionOverlayScrollView != nil) {
 		[tfictionOverlayScrollView.contentView scrollToPoint:preservedScrollOrigin];
 		[tfictionOverlayScrollView reflectScrolledClipView:tfictionOverlayScrollView.contentView];

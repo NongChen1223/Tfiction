@@ -31,24 +31,19 @@ import { openNovel, saveReadingProgress, setCurrentChapter } from '@/services/no
 import { useBossMode } from '@/hooks/useBossMode'
 import { useClickOutside } from '@/hooks/useClickOutside'
 import {
+  buildDesktopOverlayMarkup,
   buildHighlightedHtml,
   calculateProgressFromPosition,
   findChapterIndexByPosition,
   mapNovelToBook,
   normalizeNovel,
   resolveReaderFontFamily,
-  stripHtmlToText,
 } from '@/utils/novel'
 import { matchesShortcut } from '@/utils/shortcuts'
 import styles from './Reader.module.scss'
 
 function isPickerCancelled(error: unknown) {
   return error instanceof Error && error.message.includes('未选择文件')
-}
-
-function buildDesktopOverlayText(title?: string | null, content = '') {
-  const sections = [title?.trim(), content.trim()].filter(Boolean)
-  return sections.join('\n\n')
 }
 
 function parseHexColor(value: string) {
@@ -183,9 +178,14 @@ export default function Reader() {
   const chapterHtml = isEpubChapterContent
     ? chapterContent || '<p>暂无内容</p>'
     : buildHighlightedHtml(chapterContent, searchKeyword)
-  const overlayChapterContent = isEpubChapterContent
-    ? stripHtmlToText(chapterContent)
-    : chapterContent
+  const overlayChapterMarkup = buildDesktopOverlayMarkup(
+    currentChapter?.title,
+    chapterContent,
+    Boolean(isEpubChapterContent)
+  )
+  const overlayChapterTitlesSignature = currentNovel
+    ? currentNovel.chapters.map((chapter) => chapter.title).join('\u0000')
+    : ''
   const routeState = (location.state as
     | { activateBossMode?: boolean; returnDirectoryId?: string }
     | null)
@@ -216,11 +216,10 @@ export default function Reader() {
       return
     }
 
-    const overlayText = buildDesktopOverlayText(currentChapter?.title, overlayChapterContent)
     const { red, green, blue } = parseHexColor(textColor)
 
     await UpdateDesktopReaderOverlay(
-      overlayText,
+      overlayChapterMarkup,
       Math.round(fontSize),
       lineHeight,
       nextOpacity,
@@ -424,11 +423,10 @@ export default function Reader() {
     try {
       if (useDesktopOverlay) {
         if (nextStealthMode) {
-          const overlayText = buildDesktopOverlayText(currentChapter?.title, overlayChapterContent)
           const { red, green, blue } = parseHexColor(textColor)
 
           await ShowDesktopReaderOverlay(
-            overlayText,
+            overlayChapterMarkup,
             Math.round(fontSize),
             lineHeight,
             bossOpacity,
@@ -637,11 +635,10 @@ export default function Reader() {
 
     void syncDesktopOverlay()
   }, [
-    chapterContent,
-    currentChapter?.title,
-    currentNovel,
     fontSize,
+    currentNovel?.filePath,
     lineHeight,
+    overlayChapterMarkup,
     textColor,
     useDesktopOverlay,
     isStealthMode,
@@ -654,9 +651,10 @@ export default function Reader() {
 
     void syncDesktopOverlayControls()
   }, [
-    currentNovel,
     currentNovel?.currentChapter,
+    currentNovel?.filePath,
     currentNovel?.readProgress,
+    overlayChapterTitlesSignature,
     useDesktopOverlay,
     isStealthMode,
   ])

@@ -87,6 +87,39 @@ export function buildHighlightedHtml(content: string, keyword: string) {
     .join('')
 }
 
+export function buildDesktopOverlayMarkup(
+  title: string | null | undefined,
+  content: string,
+  contentIsHtml = false
+) {
+  const safeTitle = title?.trim()
+  const contentMarkup = contentIsHtml
+    ? normalizeDesktopOverlayHtml(content)
+    : buildDesktopOverlayPlainTextMarkup(content)
+
+  const titleMarkup = safeTitle ? `<p><strong>${escapeHtml(safeTitle)}</strong></p>` : ''
+  const articleMarkup = `${titleMarkup}${contentMarkup || '<p>暂无内容</p>'}`
+
+  return [
+    '<!DOCTYPE html>',
+    '<html>',
+    '<head>',
+    '<meta charset="utf-8" />',
+    '<style>',
+    'body { margin: 0; padding: 0; }',
+    'article { margin: 0; padding: 0; }',
+    'p, div, section, blockquote, pre, ul, ol, figure { margin: 0 0 1em; }',
+    'img { display: block; max-width: 100%; height: auto; margin: 0 auto; }',
+    'figcaption { margin-top: 0.4em; }',
+    '</style>',
+    '</head>',
+    '<body>',
+    `<article>${articleMarkup}</article>`,
+    '</body>',
+    '</html>',
+  ].join('')
+}
+
 export function stripHtmlToText(content: string) {
   if (!content.includes('<')) {
     return content
@@ -128,6 +161,54 @@ export function calculateProgressFromPosition(
 
 function clampProgress(progress: number) {
   return Math.max(0, Math.min(100, Number(progress || 0)))
+}
+
+function buildDesktopOverlayPlainTextMarkup(content: string) {
+  const paragraphSource = content.trim() ? content : '暂无内容'
+  const paragraphs = paragraphSource.split(/\n{2,}/)
+
+  return paragraphs
+    .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, '<br />')}</p>`)
+    .join('')
+}
+
+function normalizeDesktopOverlayHtml(content: string) {
+  const trimmedContent = content.trim()
+  if (!trimmedContent) {
+    return ''
+  }
+
+  if (typeof DOMParser === 'undefined') {
+    return trimmedContent
+  }
+
+  const parsed = new DOMParser().parseFromString(trimmedContent, 'text/html')
+  parsed.querySelectorAll('script,style,link,meta,svg').forEach((node) => node.remove())
+
+  parsed.querySelectorAll('img').forEach((image) => {
+    const currentStyle = image.getAttribute('style')?.trim()
+    const styles = [
+      currentStyle?.replace(/;$/, ''),
+      'display:block',
+      'max-width:100%',
+      'height:auto',
+      'margin:0 auto',
+    ].filter(Boolean)
+
+    image.removeAttribute('loading')
+    image.setAttribute('style', styles.join('; '))
+    if (!image.getAttribute('alt')) {
+      image.setAttribute('alt', '')
+    }
+  })
+
+  parsed.querySelectorAll('figure').forEach((figure) => {
+    const currentStyle = figure.getAttribute('style')?.trim()
+    const styles = [currentStyle?.replace(/;$/, ''), 'margin:0 0 1em'].filter(Boolean)
+    figure.setAttribute('style', styles.join('; '))
+  })
+
+  return parsed.body.innerHTML.trim()
 }
 
 function escapeHtml(content: string) {
