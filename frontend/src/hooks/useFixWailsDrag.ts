@@ -28,7 +28,7 @@ export function useFixWailsDrag() {
         '[class*="header"]',
         '[class*="Header"]',
         '.header',
-        'header'
+        'header',
       ]
 
       const elements = new Set<HTMLElement>()
@@ -41,7 +41,7 @@ export function useFixWailsDrag() {
               elements.add(el)
             }
           })
-        } catch (e) {
+        } catch {
           // 忽略无效选择器
         }
       })
@@ -53,9 +53,11 @@ export function useFixWailsDrag() {
           currentStyle.getPropertyValue('--wails-draggable') === 'drag' ||
           currentStyle.getPropertyValue('app-region') === 'drag'
 
-        if (hasAppRegion ||
-            element.classList.contains('header') ||
-            element.tagName.toLowerCase() === 'header') {
+        if (
+          hasAppRegion ||
+          element.classList.contains('header') ||
+          element.tagName.toLowerCase() === 'header'
+        ) {
 
           // 先设置为 no-drag
           element.style.setProperty('--wails-draggable', 'no-drag')
@@ -75,27 +77,22 @@ export function useFixWailsDrag() {
           }, 10)
         }
       })
-
-      console.log('[DragFix] Refreshed drag regions')
     }
 
     // 监听窗口焦点事件
     const handleFocus = () => {
-      console.log('[DragFix] Window focused, refreshing...')
       setTimeout(refreshDraggableRegions, 100)
     }
 
     // 监听可见性变化
     const handleVisibilityChange = () => {
       if (!document.hidden) {
-        console.log('[DragFix] Window visible, refreshing...')
         setTimeout(refreshDraggableRegions, 100)
       }
     }
 
     // 监听页面显示事件（从后台返回）
     const handlePageShow = () => {
-      console.log('[DragFix] Page show, refreshing...')
       setTimeout(refreshDraggableRegions, 100)
     }
 
@@ -107,15 +104,11 @@ export function useFixWailsDrag() {
     // 首次加载时也刷新一次
     setTimeout(refreshDraggableRegions, 200)
 
-    console.log('[DragFix] Hook initialized')
-
     // 清理
     return () => {
       window.removeEventListener('focus', handleFocus)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       window.removeEventListener('pageshow', handlePageShow)
-
-      console.log('[DragFix] Hook cleaned up')
     }
   }, [])
 }

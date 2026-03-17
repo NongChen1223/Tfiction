@@ -80,6 +80,7 @@ func (a *App) GetConfig() *config.Config {
 	return a.config
 }
 
+// resolveDirectoryDialogDefaultPath 为目录选择器提供一个稳定且存在的默认路径。
 func (a *App) resolveDirectoryDialogDefaultPath() string {
 	if currentDir := strings.TrimSpace(a.config.DataDir); currentDir != "" {
 		if info, err := os.Stat(currentDir); err == nil && info.IsDir() {
@@ -110,7 +111,7 @@ func (a *App) SelectDataDir() (string, error) {
 	return strings.TrimSpace(selectedDir), nil
 }
 
-// SetDataDir 更新应用数据目录
+// SetDataDir 更新应用数据目录，并同步刷新依赖该目录的进度存储配置。
 func (a *App) SetDataDir(dataDir string) (*config.Config, error) {
 	trimmedDir := strings.TrimSpace(dataDir)
 	if trimmedDir == "" {

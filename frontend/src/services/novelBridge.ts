@@ -7,6 +7,7 @@ import {
 const BRIDGE_RETRY_DELAY_MS = 120
 const BRIDGE_RETRY_MAX_ATTEMPTS = 25
 
+// Wails 绑定在窗口刚初始化时可能尚未挂载完成，这类错误允许短暂重试。
 function shouldRetryNovelService(error: unknown) {
   if (!(error instanceof Error)) {
     return false
@@ -22,6 +23,7 @@ function shouldRetryNovelService(error: unknown) {
   )
 }
 
+// 统一处理前端调用小说服务时的短暂未就绪状态，避免页面首次进入时偶发失败。
 async function callNovelServiceWithRetry<T>(operation: () => Promise<T>): Promise<T> {
   let lastError: unknown
 
@@ -44,10 +46,12 @@ async function callNovelServiceWithRetry<T>(operation: () => Promise<T>): Promis
   throw lastError instanceof Error ? lastError : new Error('小说服务调用失败')
 }
 
+// 打开小说文件；传空路径时由后端弹出系统文件选择器。
 export function openNovel(filePath: string) {
   return callNovelServiceWithRetry(() => rawOpenNovel(filePath))
 }
 
+// 持久化当前章节和进度，供继续阅读、书架进度展示等场景复用。
 export function saveReadingProgress(
   filePath: string,
   chapterIndex: number,
@@ -59,6 +63,7 @@ export function saveReadingProgress(
   )
 }
 
+// 仅同步后端记录的当前章节，不负责加载正文内容。
 export function setCurrentChapter(filePath: string, chapterIndex: number) {
   return callNovelServiceWithRetry(() => rawSetCurrentChapter(filePath, chapterIndex))
 }

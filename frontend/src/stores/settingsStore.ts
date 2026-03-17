@@ -74,6 +74,7 @@ function normalizeBossOpacity(value: number) {
   return Math.max(0.02, Math.min(1, Number(value || 0.3)))
 }
 
+// 从持久化配置中读取上一次摸鱼模式使用的透明度，避免重新进入时出现视觉跳变。
 export function getPersistedBossOpacity(fallback = defaultBossSettings.bossOpacity) {
   if (typeof window === 'undefined') {
     return normalizeBossOpacity(fallback)

@@ -40,6 +40,8 @@ Thumbs.db
 
 # Go
 *.sum
+.gocache/
+.gocache-dev/
 
 # 临时文件
 tmp/

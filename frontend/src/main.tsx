@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { ConfigProvider, theme as antdTheme } from 'antd'
 import { useThemeStore, initTheme } from './stores/themeStore'
@@ -11,7 +11,7 @@ initTheme()
 function Root() {
   const theme = useThemeStore((state) => state.theme)
 
-  // 根据主题选择主色调
+  // 根据当前主题同步 Ant Design 的视觉 token，保证系统控件和阅读界面风格一致。
   const getPrimaryColor = () => {
     switch (theme) {
       case 'light':

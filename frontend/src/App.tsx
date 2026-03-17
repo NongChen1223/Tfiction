@@ -3,8 +3,8 @@ import { router } from './router'
 import { useFixWailsDrag } from './hooks/useFixWailsDrag'
 
 /**
- * App 根组件
- * 使用 React Router 进行路由管理
+ * App 根组件。
+ * 负责挂载全局路由，并在桌面端补上 Wails 窗口拖拽区域修复。
  */
 export default function App() {
   useFixWailsDrag()

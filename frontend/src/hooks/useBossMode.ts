@@ -13,6 +13,10 @@ interface PanelPosition {
   y: number
 }
 
+/**
+ * 管理摸鱼模式下控制条、悬浮面板和显隐延时。
+ * 这里只负责交互状态，不直接处理阅读内容或原生窗口逻辑。
+ */
 export function useBossMode({
   isStealthMode,
   bossModeType,

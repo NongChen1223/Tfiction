@@ -216,6 +216,7 @@ export default function Reader() {
     setShowAppearancePanel(false)
   })
 
+  // 把当前章节正文、字体和文字颜色同步到原生桌面浮窗，用于摸鱼模式渲染正文。
   const syncDesktopOverlay = async (nextOpacity = activeStealthOpacity) => {
     if (!useDesktopOverlay || !currentNovel) {
       return
@@ -234,6 +235,7 @@ export default function Reader() {
     )
   }
 
+  // 同步浮窗顶部/底部控制区需要的章节列表、当前章节和透明度状态。
   const syncDesktopOverlayControls = async (nextOpacity = activeStealthOpacity) => {
     if (!useDesktopOverlay || !currentNovel) {
       return
@@ -252,6 +254,7 @@ export default function Reader() {
     )
   }
 
+  // 从后端读取指定章节正文，并在内容更新后恢复到顶部或既有滚动位置。
   const loadChapterContent = async (
     novelFilePath: string,
     chapterIndex: number,
@@ -290,6 +293,7 @@ export default function Reader() {
     }
   }
 
+  // 统一保存阅读进度，同时更新阅读页状态和书架展示所依赖的数据。
   const persistReadingProgress = async (chapterIndex: number, chapterScrollProgress: number) => {
     if (!currentNovel) {
       return
@@ -318,6 +322,7 @@ export default function Reader() {
     updateProgressByFilePath(currentNovel.filePath, { progress, lastReadTime: now })
   }
 
+  // 执行章节切换或搜索跳转，并尽量保留章节内对应的滚动百分比。
   const moveToReadingLocation = async (
     chapterIndex: number,
     chapterScrollProgress: number
@@ -422,6 +427,7 @@ export default function Reader() {
     await moveToReadingLocation(chapterIndex, localProgress)
   }
 
+  // 在普通阅读和摸鱼模式之间切换，同时处理桌面浮窗与 WebView 内透明阅读两套实现。
   const handleToggleStealthMode = async () => {
     const nextStealthMode = !isStealthMode
     const rememberedBossOpacity = getPersistedBossOpacity(useSettingsStore.getState().bossOpacity)
