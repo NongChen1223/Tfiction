@@ -61,14 +61,22 @@ export default function BookCard({
     event.stopPropagation()
     onDelete?.(book)
   }
+
+  const clampProgress = (progress: number) =>
+    Math.max(0, Math.min(100, Number(progress || 0)))
+  const formatProgress = (progress: number) => {
+    const normalized = clampProgress(progress)
+    return Number.isInteger(normalized) ? String(normalized) : normalized.toFixed(1)
+  }
   const directoryProgress =
     book.isDirectory && book.files && book.files.length > 0
       ? Math.round(
-          book.files.reduce((total, file) => total + (file.progress || 0), 0) /
+          book.files.reduce((total, file) => total + clampProgress(file.progress || 0), 0) /
             book.files.length
         )
       : 0
-  const progressValue = book.isDirectory ? directoryProgress : book.progress || 0
+  const progressValue = clampProgress(book.isDirectory ? directoryProgress : book.progress || 0)
+  const progressLabel = formatProgress(progressValue)
   const cardClasses = [styles.card, styles[viewMode]].filter(Boolean).join(' ')
 
   if (viewMode === 'list') {
@@ -106,7 +114,7 @@ export default function BookCard({
                   style={{ width: `${progressValue}%` }}
                 />
               </div>
-              <span className={styles.listProgressText}>{progressValue}%</span>
+              <span className={styles.listProgressText}>{progressLabel}%</span>
             </div>
           </div>
 
@@ -218,7 +226,7 @@ export default function BookCard({
                   strokeDasharray={`${progressValue}, 100`}
                 />
               </svg>
-              <span className={styles.progressText}>{progressValue}%</span>
+              <span className={styles.progressText}>{progressLabel}%</span>
             </div>
           )}
 

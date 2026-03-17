@@ -20,6 +20,10 @@ interface LibraryState {
 
 const DEFAULT_AUTHOR = '未知作者'
 
+function clampProgress(progress: number) {
+  return Math.max(0, Math.min(100, Number(progress || 0)))
+}
+
 function normalizeDirectoryFiles(files: BookFile[] = []) {
   const seenKeys = new Set<string>()
 
@@ -33,6 +37,7 @@ function normalizeDirectoryFiles(files: BookFile[] = []) {
     result.push({
       ...file,
       author: file.author || DEFAULT_AUTHOR,
+      progress: clampProgress(file.progress),
       order: result.length + 1,
     })
 
@@ -45,7 +50,11 @@ function normalizeLibraryBooks(books: Book[]) {
 
   const normalizedBooks = books.map((book) => {
     if (!book.isDirectory) {
-      return book
+      return {
+        ...book,
+        author: book.author || DEFAULT_AUTHOR,
+        progress: clampProgress(book.progress),
+      }
     }
 
     const normalizedFiles = normalizeDirectoryFiles(book.files)
@@ -91,7 +100,7 @@ function mapBookToDirectoryFile(book: Book, order: number): BookFile {
     filePath: book.filePath || '',
     format: book.format || '',
     fileSize: book.fileSize || 0,
-    progress: book.progress || 0,
+    progress: clampProgress(book.progress || 0),
     lastReadTime: book.lastReadTime,
     order,
   }
@@ -261,7 +270,7 @@ export const useLibraryStore = create<LibraryState>()(
                     file.filePath === filePath
                       ? {
                           ...file,
-                          progress: payload.progress,
+                          progress: clampProgress(payload.progress),
                           lastReadTime: payload.lastReadTime,
                         }
                       : file
@@ -286,7 +295,7 @@ export const useLibraryStore = create<LibraryState>()(
 
               return {
                 ...book,
-                progress: payload.progress,
+                progress: clampProgress(payload.progress),
                 lastReadTime: payload.lastReadTime,
               }
             })
