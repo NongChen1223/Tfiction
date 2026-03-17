@@ -176,12 +176,19 @@ func (s *WindowService) UpdateDesktopReaderOverlayControls(
 	currentChapter int,
 	progress float64,
 	opacity float64,
+	camouflageEnabled bool,
 ) error {
 	if !desktopReaderOverlaySupported() || !s.isDesktopOverlay {
 		return nil
 	}
 
-	updateDesktopReaderOverlayControls(chaptersJSON, currentChapter, progress, opacity)
+	updateDesktopReaderOverlayControls(
+		chaptersJSON,
+		currentChapter,
+		progress,
+		opacity,
+		camouflageEnabled,
+	)
 	return nil
 }
 

@@ -1,5 +1,6 @@
 import { useSettingsStore } from '@/stores/settingsStore'
 import ReadingAppearanceControls from '@/components/features/ReadingAppearanceControls'
+import CamouflagePreview from '@/components/features/CamouflagePreview'
 import Slider from '@/components/common/Slider'
 import Toggle from '@/components/common/Toggle'
 import styles from './ReadingSettings.module.scss'
@@ -35,6 +36,7 @@ export default function ReadingSettings() {
     bossHideDelay,
     bossMode,
     bossOpacity,
+    bossCamouflageEnabled,
     setFontSize,
     setFontFamily,
     setLineHeight,
@@ -45,9 +47,8 @@ export default function ReadingSettings() {
     setBossHideDelay,
     setBossMode,
     setBossOpacity,
+    setBossCamouflageEnabled,
   } = useSettingsStore()
-
-
 
   return (
     <div className={styles.container}>
@@ -120,6 +121,17 @@ export default function ReadingSettings() {
           />
         </div>
 
+        <div className={styles.settingItem}>
+          <div className={styles.switchLabel}>
+            <div className={styles.switchCopy}>
+              <span>收纳伪装</span>
+              <p className={styles.switchDescription}>
+                摸鱼模式下移出阅读方块后自动收纳为挂件，双击挂件时恢复；正式模式里还能拖动挂件位置。
+              </p>
+            </div>
+            <Toggle checked={bossCamouflageEnabled} onChange={setBossCamouflageEnabled} />
+          </div>
+        </div>
 
         <div className={styles.settingItem}>
           <Slider
@@ -156,6 +168,11 @@ export default function ReadingSettings() {
               透明背景，仅保留文字
             </div>
           </div>
+        </div>
+
+        <div className={styles.bossModePreview}>
+          <p className={styles.previewLabel}>收纳伪装演示：</p>
+          <CamouflagePreview />
         </div>
       </section>
     </div>

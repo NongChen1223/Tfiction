@@ -10,6 +10,24 @@
     color var(--transition-base);
 }
 
+.readerShell {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.readerShellCollapsing {
+  pointer-events: none;
+  animation: camouflageCollapse 0.24s cubic-bezier(0.24, 0.84, 0.34, 1) forwards;
+}
+
+.readerShellExpanding {
+  animation: camouflageExpand 0.26s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
 .stealthMode {
   background: transparent !important;
 
@@ -565,6 +583,25 @@
   box-shadow: 4px 4px 0 rgb(var(--neo-shadow));
 }
 
+.camouflageWidget {
+  position: fixed;
+  z-index: 40;
+  width: 156px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate3d(0, 10px, 0) scale(0.92);
+}
+
+.camouflageWidgetVisible {
+  pointer-events: auto;
+  animation: camouflagePendantIn 0.22s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.camouflageWidgetLeaving {
+  pointer-events: none;
+  animation: camouflagePendantOut 0.18s ease forwards;
+}
+
 .appearancePanel {
   position: absolute;
   top: calc(100% + 12px);
@@ -686,6 +723,58 @@
   gap: 8px;
 }
 
+@keyframes camouflageCollapse {
+  from {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0);
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(0.18);
+    filter: blur(14px);
+  }
+}
+
+@keyframes camouflageExpand {
+  from {
+    opacity: 0;
+    transform: scale(0.18);
+    filter: blur(14px);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes camouflagePendantIn {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 12px, 0) scale(0.9);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes camouflagePendantOut {
+  from {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0) scale(0.94);
+  }
+}
+
 @media (max-width: 960px) {
   .toolbar {
     grid-template-columns: 1fr;
@@ -714,5 +803,9 @@
     right: 16px;
     left: 16px;
     width: auto;
+  }
+
+  .camouflageWidget {
+    width: min(156px, calc(100vw - 24px));
   }
 }

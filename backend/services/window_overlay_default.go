@@ -12,7 +12,7 @@ func updateDesktopReaderOverlay(_ string, _ int, _ float64, _ float64, _, _, _ i
 
 func updateDesktopReaderOverlayOpacity(_ float64) {}
 
-func updateDesktopReaderOverlayControls(_ string, _ int, _, _ float64) {}
+func updateDesktopReaderOverlayControls(_ string, _ int, _, _ float64, _ bool) {}
 
 func hideDesktopReaderOverlay() {}
 

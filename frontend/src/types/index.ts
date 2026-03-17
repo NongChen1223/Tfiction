@@ -30,6 +30,11 @@ export interface SearchResult {
   keyword: string
 }
 
+export interface CamouflageWidgetPosition {
+  x: number
+  y: number
+}
+
 // ReadingSettings 阅读设置类型
 export interface ReadingSettings {
   fontSize: number
@@ -42,6 +47,8 @@ export interface ReadingSettings {
   bossModeType: 'basic' | 'full'
   bossRevealDelay: number
   bossHideDelay: number
+  bossCamouflageEnabled: boolean
+  bossCamouflageWidgetPosition: CamouflageWidgetPosition
 }
 
 export type ShortcutAction =

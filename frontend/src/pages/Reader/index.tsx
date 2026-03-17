@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
-import type { CSSProperties } from 'react'
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import type { SearchResult } from '@/types'
+import type { CamouflageWidgetPosition, SearchResult } from '@/types'
 import { useNovelStore } from '@/stores/novelStore'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { getPersistedBossOpacity } from '@/stores/settingsStore'
 import { useWindowStore } from '@/stores/windowStore'
 import { useLibraryStore } from '@/stores/libraryStore'
 import ReadingAppearanceControls from '@/components/features/ReadingAppearanceControls'
+import CamouflagePendant from '@/components/features/CamouflagePendant'
 import {
   GetChapterContent,
 } from '@/wailsjs/go/services/NovelService'
@@ -72,6 +73,12 @@ function parseHexColor(value: string) {
 
 const MIN_STEALTH_OPACITY = 0.02
 const MAX_STEALTH_OPACITY = 1
+const CAMOUFLAGE_ANIMATION_MS = 240
+const CAMOUFLAGE_WIDGET_WIDTH = 156
+const CAMOUFLAGE_WIDGET_HEIGHT = 92
+const CAMOUFLAGE_VIEWPORT_PADDING = 16
+
+type CamouflageStage = 'expanded' | 'collapsing' | 'collapsed' | 'expanding'
 
 function clampStealthOpacity(value: number) {
   return Math.max(MIN_STEALTH_OPACITY, Math.min(MAX_STEALTH_OPACITY, Number(value || 0)))
@@ -92,13 +99,57 @@ function setReaderStealthRoot(enabled: boolean) {
 }
 
 interface DesktopOverlayAction {
-  type: 'prev' | 'next' | 'chapter' | 'opacity' | 'close'
+  type: 'prev' | 'next' | 'chapter' | 'opacity' | 'close' | 'camouflage'
   chapterIndex?: number
   value?: number
 }
 
 function clampUnitInterval(value: number) {
   return Math.max(0, Math.min(1, Number(value || 0)))
+}
+
+
+function clampCamouflageRatio(value: number) {
+  return Math.max(0, Math.min(1, Number(value || 0)))
+}
+
+function normalizeCamouflageWidgetPosition(position: CamouflageWidgetPosition) {
+  return {
+    x: clampCamouflageRatio(position.x),
+    y: clampCamouflageRatio(position.y),
+  }
+}
+
+function getCamouflageTravelSize() {
+  if (typeof window === 'undefined') {
+    return { x: 1, y: 1 }
+  }
+
+  return {
+    x: Math.max(
+      window.innerWidth - CAMOUFLAGE_WIDGET_WIDTH - CAMOUFLAGE_VIEWPORT_PADDING * 2,
+      1
+    ),
+    y: Math.max(
+      window.innerHeight - CAMOUFLAGE_WIDGET_HEIGHT - CAMOUFLAGE_VIEWPORT_PADDING * 2,
+      1
+    ),
+  }
+}
+
+function buildCamouflageWidgetStyle(position: CamouflageWidgetPosition): CSSProperties {
+  const normalized = normalizeCamouflageWidgetPosition(position)
+
+  return {
+    left: `calc(${CAMOUFLAGE_VIEWPORT_PADDING}px + ${normalized.x} * (100vw - ${CAMOUFLAGE_WIDGET_WIDTH}px - ${CAMOUFLAGE_VIEWPORT_PADDING * 2}px))`,
+    top: `calc(${CAMOUFLAGE_VIEWPORT_PADDING}px + ${normalized.y} * (100vh - ${CAMOUFLAGE_WIDGET_HEIGHT}px - ${CAMOUFLAGE_VIEWPORT_PADDING * 2}px))`,
+  }
+}
+
+function buildCamouflageTransformOrigin(position: CamouflageWidgetPosition) {
+  const normalized = normalizeCamouflageWidgetPosition(position)
+
+  return `calc(${CAMOUFLAGE_VIEWPORT_PADDING}px + ${normalized.x} * (100vw - ${CAMOUFLAGE_WIDGET_WIDTH}px - ${CAMOUFLAGE_VIEWPORT_PADDING * 2}px) + ${CAMOUFLAGE_WIDGET_WIDTH / 2}px) calc(${CAMOUFLAGE_VIEWPORT_PADDING}px + ${normalized.y} * (100vh - ${CAMOUFLAGE_WIDGET_HEIGHT}px - ${CAMOUFLAGE_VIEWPORT_PADDING * 2}px) + ${CAMOUFLAGE_WIDGET_HEIGHT / 2}px)`
 }
 
 function hasWailsRuntimeEvents() {
@@ -133,6 +184,8 @@ export default function Reader() {
     bossRevealDelay,
     bossHideDelay,
     bossOpacity,
+    bossCamouflageEnabled,
+    bossCamouflageWidgetPosition,
     keyboardShortcuts,
     setFontSize,
     setFontFamily,
@@ -144,6 +197,8 @@ export default function Reader() {
     setBossRevealDelay,
     setBossHideDelay,
     setBossOpacity,
+    setBossCamouflageEnabled,
+    setBossCamouflageWidgetPosition,
   } = useSettingsStore()
   const { opacity, isStealthMode, setOpacity, setStealthMode } = useWindowStore()
   const { upsertBook, updateProgressByFilePath } = useLibraryStore()
@@ -156,6 +211,11 @@ export default function Reader() {
   const [chapterContent, setChapterContent] = useState('')
   const [isLoadingChapter, setIsLoadingChapter] = useState(false)
   const [supportsDesktopOverlay, setSupportsDesktopOverlay] = useState(false)
+  const [camouflageStage, setCamouflageStage] = useState<CamouflageStage>('expanded')
+  const [camouflageWidgetPosition, setCamouflageWidgetPosition] = useState<CamouflageWidgetPosition>(
+    normalizeCamouflageWidgetPosition(bossCamouflageWidgetPosition)
+  )
+  const [isDraggingCamouflageWidget, setIsDraggingCamouflageWidget] = useState(false)
 
   const contentRef = useRef<HTMLDivElement>(null)
   const saveTimerRef = useRef<number | null>(null)
@@ -163,6 +223,8 @@ export default function Reader() {
   const bossPanelRef = useRef<HTMLDivElement>(null)
   const pendingScrollProgressRef = useRef<number | null>(null)
   const overlayActionPollingRef = useRef(false)
+  const camouflageTimerRef = useRef<number | null>(null)
+  const camouflageDragCleanupRef = useRef<(() => void) | null>(null)
   const useDesktopOverlay = supportsDesktopOverlay
   const isWebviewStealthMode = isStealthMode && !useDesktopOverlay
   const bossMode = useBossMode({
@@ -209,6 +271,27 @@ export default function Reader() {
     lineHeight,
   }
 
+const isCamouflageFeatureActive = isWebviewStealthMode && bossCamouflageEnabled
+const showCamouflageWidget =
+  isCamouflageFeatureActive &&
+  (camouflageStage === 'collapsed' || camouflageStage === 'expanding')
+const readerShellStyle = isCamouflageFeatureActive
+  ? ({
+      transformOrigin: buildCamouflageTransformOrigin(camouflageWidgetPosition),
+    } as CSSProperties)
+  : undefined
+const camouflageWidgetStyle = buildCamouflageWidgetStyle(camouflageWidgetPosition)
+const readerShellClassName = `${styles.readerShell} ${
+  camouflageStage === 'collapsing' ? styles.readerShellCollapsing : ''
+} ${camouflageStage === 'expanding' ? styles.readerShellExpanding : ''}`
+const camouflageWidgetClassName = `${styles.camouflageWidget} ${
+  camouflageStage === 'collapsed'
+    ? styles.camouflageWidgetVisible
+    : camouflageStage === 'expanding'
+    ? styles.camouflageWidgetLeaving
+    : ''
+}`
+
   useClickOutside(bossPanelRef, isWebviewStealthMode && bossMode.isPanelOpen, () => {
     bossMode.closePanel()
   })
@@ -250,7 +333,8 @@ export default function Reader() {
       JSON.stringify(chapterTitles),
       currentNovel.currentChapter,
       Number(currentNovel.readProgress || 0),
-      nextOpacity
+      nextOpacity,
+      bossCamouflageEnabled
     )
   }
 
@@ -356,6 +440,142 @@ export default function Reader() {
       console.error('跳转阅读位置失败:', error)
     }
   }
+
+
+const clearCamouflageTimers = () => {
+  if (camouflageTimerRef.current) {
+    window.clearTimeout(camouflageTimerRef.current)
+    camouflageTimerRef.current = null
+  }
+}
+
+const closeTransientPanels = () => {
+  setShowSidebar(false)
+  setShowSearch(false)
+  setShowAppearancePanel(false)
+  bossMode.closePanel()
+}
+
+// 鼠标移出阅读方块后，把整个摸鱼阅读框收纳为一个小挂件。
+const startCamouflageCollapse = () => {
+  if (!isCamouflageFeatureActive || camouflageStage !== 'expanded') {
+    return
+  }
+
+  clearCamouflageTimers()
+  closeTransientPanels()
+  setCamouflageStage('collapsing')
+  camouflageTimerRef.current = window.setTimeout(() => {
+    bossMode.concealImmediately()
+    setCamouflageStage('collapsed')
+  }, CAMOUFLAGE_ANIMATION_MS)
+}
+
+// 挂件双击后恢复阅读框，章节、滚动位置和透明度都保持原样。
+const restoreCamouflageReader = () => {
+  if (!isCamouflageFeatureActive || camouflageStage !== 'collapsed') {
+    return
+  }
+
+  if (isDraggingCamouflageWidget) {
+    return
+  }
+
+  clearCamouflageTimers()
+  setCamouflageStage('expanding')
+  bossMode.revealImmediately()
+  camouflageTimerRef.current = window.setTimeout(() => {
+    setCamouflageStage('expanded')
+  }, CAMOUFLAGE_ANIMATION_MS)
+}
+
+// 挂件支持拖拽，位置会持久化到设置里，方便下次继续使用。
+const handleCamouflageWidgetPointerDown = (
+  event: ReactPointerEvent<HTMLButtonElement>
+) => {
+  if (event.button !== 0) {
+    return
+  }
+
+  setIsDraggingCamouflageWidget(true)
+
+  const startX = event.clientX
+  const startY = event.clientY
+  const startPosition = camouflageWidgetPosition
+  let latestPosition = startPosition
+  let moved = false
+
+  const cleanup = () => {
+    window.removeEventListener('pointermove', handlePointerMove)
+    window.removeEventListener('pointerup', finishDrag)
+    window.removeEventListener('pointercancel', finishDrag)
+    camouflageDragCleanupRef.current = null
+    setIsDraggingCamouflageWidget(false)
+
+    if (moved) {
+      setBossCamouflageWidgetPosition(latestPosition)
+    }
+  }
+
+  const handlePointerMove = (moveEvent: PointerEvent) => {
+    const travelSize = getCamouflageTravelSize()
+    const deltaX = (moveEvent.clientX - startX) / travelSize.x
+    const deltaY = (moveEvent.clientY - startY) / travelSize.y
+
+    latestPosition = normalizeCamouflageWidgetPosition({
+      x: startPosition.x + deltaX,
+      y: startPosition.y + deltaY,
+    })
+    moved =
+      moved ||
+      Math.abs(moveEvent.clientX - startX) > 3 ||
+      Math.abs(moveEvent.clientY - startY) > 3
+    setCamouflageWidgetPosition(latestPosition)
+  }
+
+  const finishDrag = () => {
+    cleanup()
+  }
+
+  camouflageDragCleanupRef.current = cleanup
+  event.preventDefault()
+  window.addEventListener('pointermove', handlePointerMove)
+  window.addEventListener('pointerup', finishDrag)
+  window.addEventListener('pointercancel', finishDrag)
+}
+
+const handleReaderShellMouseEnter = () => {
+  if (isCamouflageFeatureActive && camouflageStage === 'collapsing') {
+    clearCamouflageTimers()
+    setCamouflageStage('expanded')
+  }
+
+  bossMode.handlePointerEnter()
+  void OnMouseEnter()
+}
+
+const handleReaderShellMouseLeave = () => {
+  void OnMouseLeave()
+
+  if (isCamouflageFeatureActive) {
+    startCamouflageCollapse()
+    return
+  }
+
+  bossMode.handlePointerLeave()
+}
+
+const handleToggleCamouflage = () => {
+  const nextEnabled = !bossCamouflageEnabled
+  setBossCamouflageEnabled(nextEnabled)
+
+  if (!nextEnabled) {
+    clearCamouflageTimers()
+    bossMode.revealImmediately()
+    setCamouflageStage('expanded')
+    setIsDraggingCamouflageWidget(false)
+  }
+}
 
   const handleOpenFile = async () => {
     try {
@@ -521,6 +741,40 @@ export default function Reader() {
     navigate(returnDirectoryId ? `/home?directory=${encodeURIComponent(returnDirectoryId)}` : '/home')
   }
 
+
+useEffect(() => {
+  setCamouflageWidgetPosition(
+    normalizeCamouflageWidgetPosition(bossCamouflageWidgetPosition)
+  )
+}, [bossCamouflageWidgetPosition.x, bossCamouflageWidgetPosition.y])
+
+useEffect(() => {
+  if (isCamouflageFeatureActive) {
+    return
+  }
+
+  clearCamouflageTimers()
+  if (camouflageDragCleanupRef.current) {
+    camouflageDragCleanupRef.current()
+  }
+  setIsDraggingCamouflageWidget(false)
+
+  if (camouflageStage !== 'expanded') {
+    bossMode.revealImmediately()
+    setCamouflageStage('expanded')
+  }
+}, [camouflageStage, isCamouflageFeatureActive])
+
+useEffect(
+  () => () => {
+    clearCamouflageTimers()
+    if (camouflageDragCleanupRef.current) {
+      camouflageDragCleanupRef.current()
+    }
+  },
+  []
+)
+
   useEffect(() => {
     if (!currentNovel) {
       setChapterContent('')
@@ -666,6 +920,7 @@ export default function Reader() {
     currentNovel?.currentChapter,
     currentNovel?.filePath,
     currentNovel?.readProgress,
+    bossCamouflageEnabled,
     overlayChapterTitlesSignature,
     useDesktopOverlay,
     isStealthMode,
@@ -744,6 +999,8 @@ export default function Reader() {
               await handleChapterChange(action.chapterIndex)
             } else if (action.type === 'opacity' && typeof action.value === 'number') {
               await handleOpacityChange(action.value)
+            } else if (action.type === 'camouflage') {
+              setBossCamouflageEnabled(Boolean(action.value))
             } else if (action.type === 'close') {
               setBossOpacity(useWindowStore.getState().opacity)
               await HideDesktopReaderOverlay()
@@ -826,6 +1083,13 @@ export default function Reader() {
         event.preventDefault()
         setShowSearch(false)
         setShowSidebar(false)
+        setShowAppearancePanel(false)
+
+        if (isCamouflageFeatureActive) {
+          startCamouflageCollapse()
+          return
+        }
+
         bossMode.concealImmediately()
       }
     }
@@ -879,393 +1143,426 @@ export default function Reader() {
     )
   }
 
-  return (
-    <div
-      className={`${styles.reader} ${isWebviewStealthMode ? styles.stealthMode : ''}`}
-      onMouseEnter={() => {
-        bossMode.handlePointerEnter()
-        void OnMouseEnter()
-      }}
-      onMouseLeave={() => {
-        bossMode.handlePointerLeave()
-        void OnMouseLeave()
-      }}
-      onMouseMove={bossMode.bumpPanelTimer}
-      onContextMenu={bossMode.handleContextMenu}
-      style={{
-        backgroundColor: isWebviewStealthMode ? 'transparent' : backgroundColor,
-        color: textColor,
-      }}
-    >
 
+return (
+  <div
+    className={`${styles.reader} ${isWebviewStealthMode ? styles.stealthMode : ''}`}
+    style={{
+      backgroundColor: isWebviewStealthMode ? 'transparent' : backgroundColor,
+      color: textColor,
+    }}
+  >
+    {(!isCamouflageFeatureActive || camouflageStage !== 'collapsed') && (
       <div
-        className={`${styles.toolbar} ${
-          !bossMode.isChromeVisible ? styles.chromeHidden : ''
-        }`}
+        className={readerShellClassName}
+        style={readerShellStyle}
+        onMouseEnter={handleReaderShellMouseEnter}
+        onMouseLeave={handleReaderShellMouseLeave}
+        onMouseMove={bossMode.bumpPanelTimer}
+        onContextMenu={bossMode.handleContextMenu}
       >
-        <div className={styles.toolbarLeft}>
-          <button
-            type="button"
-            onClick={() => void handleReturnHome()}
-            className={`${styles.toolbarButton} ${styles.backButton}`}
-            title={returnDirectoryId ? '返回目录' : '返回书架'}
-          >
-            <span>{returnDirectoryId ? '返回目录' : '返回书架'}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowSidebar((value) => !value)}
-            className={styles.toolbarButton}
-            title="目录"
-          >
-            目录
-          </button>
-          <div className={styles.chapterMeta}>
-            <span className={styles.chapterInfo}>
-              {currentChapter?.title || '正文'} ({currentNovel.currentChapter + 1} /{' '}
-              {currentNovel.chapters.length})
-            </span>
-            <span className={styles.bookInfo}>{currentNovel.title}</span>
-          </div>
-        </div>
-        <div className={styles.toolbarCenter}>
-          <button
-            type="button"
-            onClick={handlePrevChapter}
-            className={styles.toolbarButton}
-            disabled={currentNovel.currentChapter <= 0}
-            title="上一章"
-          >
-            上一章
-          </button>
-          <button
-            type="button"
-            onClick={handleNextChapter}
-            className={styles.toolbarButton}
-            disabled={currentNovel.currentChapter >= currentNovel.chapters.length - 1}
-            title="下一章"
-          >
-            下一章
-          </button>
-        </div>
-
-        <div className={styles.toolbarRight}>
-          {!isWebviewStealthMode && (
-            <div ref={appearancePanelRef} className={styles.toolbarPopover}>
-              <button
-                type="button"
-                onClick={() => setShowAppearancePanel((value) => !value)}
-                className={`${styles.toolbarButton} ${
-                  showAppearancePanel ? styles.active : ''
-                }`}
-                title="阅读外观"
-              >
-                外观
-              </button>
-              {showAppearancePanel && bossMode.isChromeVisible && (
-                <div className={styles.appearancePanel}>
-                  <div className={styles.appearancePanelHeader}>
-                    <span>阅读外观</span>
-                    <button
-                      type="button"
-                      onClick={() => setShowAppearancePanel(false)}
-                      className={styles.panelCloseButton}
-                    >
-                      收起
-                    </button>
-                  </div>
-                  <div className={styles.appearancePanelBody}>
-                    <ReadingAppearanceControls
-                      variant="panel"
-                      fontSize={fontSize}
-                      fontFamily={fontFamily}
-                      lineHeight={lineHeight}
-                      pageWidth={pageWidth}
-                      backgroundColor={backgroundColor}
-                      textColor={textColor}
-                      onFontSizeChange={setFontSize}
-                      onFontFamilyChange={setFontFamily}
-                      onLineHeightChange={setLineHeight}
-                      onPageWidthChange={setPageWidth}
-                      onBackgroundColorChange={setBackgroundColor}
-                      onTextColorChange={setTextColor}
-                    />
-                  </div>
-                </div>
-              )}
+        <div
+          className={`${styles.toolbar} ${
+            !bossMode.isChromeVisible ? styles.chromeHidden : ''
+          }`}
+        >
+          <div className={styles.toolbarLeft}>
+            <button
+              type="button"
+              onClick={() => void handleReturnHome()}
+              className={`${styles.toolbarButton} ${styles.backButton}`}
+              title={returnDirectoryId ? '返回目录' : '返回书架'}
+            >
+              <span>{returnDirectoryId ? '返回目录' : '返回书架'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowSidebar((value) => !value)}
+              className={styles.toolbarButton}
+              title="目录"
+            >
+              目录
+            </button>
+            <div className={styles.chapterMeta}>
+              <span className={styles.chapterInfo}>
+                {currentChapter?.title || '正文'} ({currentNovel.currentChapter + 1} /{' '}
+                {currentNovel.chapters.length})
+              </span>
+              <span className={styles.bookInfo}>{currentNovel.title}</span>
             </div>
-          )}
-          <button
-            type="button"
-            onClick={() => setShowSearch(true)}
-            className={styles.toolbarButton}
-            title="搜索 (Ctrl+F)"
-          >
-            搜索
-          </button>
-          <button
-            type="button"
-            onClick={() => void handleToggleStealthMode()}
-            className={`${styles.toolbarButton} ${isStealthMode ? styles.active : ''}`}
-            title="摸鱼模式"
-          >
-            {isStealthMode ? '退出摸鱼' : '摸鱼模式'}
-          </button>
-          {isWebviewStealthMode && (
-            <input
-              type="range"
-              min="0.02"
-              max="1"
-              step="0.02"
-              value={opacityToTransparencySliderValue(activeStealthOpacity)}
-              onChange={(event) =>
-                handleOpacityChange(transparencySliderValueToOpacity(Number(event.target.value)))
-              }
-              className={styles.opacitySlider}
-              title="文字透明度"
-            />
-          )}
-        </div>
-      </div>
-      {showSidebar && bossMode.isChromeVisible && (
-        <aside className={styles.sidebar}>
-          <div className={styles.sidebarHeader}>
-            <h3>目录</h3>
+          </div>
+          <div className={styles.toolbarCenter}>
             <button
               type="button"
-              onClick={() => setShowSidebar(false)}
-              className={styles.closeButton}
+              onClick={handlePrevChapter}
+              className={styles.toolbarButton}
+              disabled={currentNovel.currentChapter <= 0}
+              title="上一章"
             >
-              关闭
+              上一章
+            </button>
+            <button
+              type="button"
+              onClick={handleNextChapter}
+              className={styles.toolbarButton}
+              disabled={currentNovel.currentChapter >= currentNovel.chapters.length - 1}
+              title="下一章"
+            >
+              下一章
             </button>
           </div>
-          <div className={styles.chapterList}>
-            {currentNovel.chapters.map((chapter, index) => (
-              <button
-                key={`${chapter.title}-${chapter.index}`}
-                className={`${styles.chapterItem} ${
-                  index === currentNovel.currentChapter ? styles.active : ''
-                }`}
-                onClick={() => void handleChapterChange(index)}
-              >
-                <span className={styles.chapterItemTitle}>{chapter.title}</span>
-                <span className={styles.chapterItemMeta}>{chapter.wordCount} 字</span>
-              </button>
-            ))}
-          </div>
-        </aside>
-      )}
 
-      {showSearch && bossMode.isChromeVisible && (
-        <aside className={styles.searchPanel}>
-          <div className={styles.searchHeader}>
-            <h3>全文搜索</h3>
+          <div className={styles.toolbarRight}>
+            {!isWebviewStealthMode && (
+              <div ref={appearancePanelRef} className={styles.toolbarPopover}>
+                <button
+                  type="button"
+                  onClick={() => setShowAppearancePanel((value) => !value)}
+                  className={`${styles.toolbarButton} ${
+                    showAppearancePanel ? styles.active : ''
+                  }`}
+                  title="阅读外观"
+                >
+                  外观
+                </button>
+                {showAppearancePanel && bossMode.isChromeVisible && (
+                  <div className={styles.appearancePanel}>
+                    <div className={styles.appearancePanelHeader}>
+                      <span>阅读外观</span>
+                      <button
+                        type="button"
+                        onClick={() => setShowAppearancePanel(false)}
+                        className={styles.panelCloseButton}
+                      >
+                        收起
+                      </button>
+                    </div>
+                    <div className={styles.appearancePanelBody}>
+                      <ReadingAppearanceControls
+                        variant="panel"
+                        fontSize={fontSize}
+                        fontFamily={fontFamily}
+                        lineHeight={lineHeight}
+                        pageWidth={pageWidth}
+                        backgroundColor={backgroundColor}
+                        textColor={textColor}
+                        onFontSizeChange={setFontSize}
+                        onFontFamilyChange={setFontFamily}
+                        onLineHeightChange={setLineHeight}
+                        onPageWidthChange={setPageWidth}
+                        onBackgroundColorChange={setBackgroundColor}
+                        onTextColorChange={setTextColor}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
             <button
               type="button"
-              onClick={() => setShowSearch(false)}
-              className={styles.closeButton}
+              onClick={() => setShowSearch(true)}
+              className={styles.toolbarButton}
+              title="搜索 (Ctrl+F)"
             >
-              关闭
-            </button>
-          </div>
-          <div className={styles.searchInput}>
-            <input
-              type="text"
-              value={searchKeyword}
-              onChange={(event) => setSearchKeyword(event.target.value)}
-              placeholder="输入搜索关键字"
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  void handleSearch()
-                }
-              }}
-            />
-            <button type="button" onClick={() => void handleSearch()} className={styles.searchButton}>
               搜索
             </button>
-          </div>
-          <div className={styles.searchResults}>
-            <p>{searchResults.length > 0 ? `找到 ${searchResults.length} 个匹配` : '暂无结果'}</p>
-            {searchResults.map((result, index) => {
-              const chapterIndex = findChapterIndexByPosition(
-                currentNovel.chapters,
-                result.position
-              )
-              const chapterTitle = currentNovel.chapters[chapterIndex]?.title || '正文'
-
-              return (
-                <button
-                  key={`${result.position}-${index}`}
-                  className={styles.searchResultItem}
-                  onClick={() => void jumpToSearchResult(result)}
-                >
-                  <span className={styles.searchResultMeta}>
-                    {chapterTitle} · 第 {result.line} 行
-                  </span>
-                  <span className={styles.searchResultText}>{result.context}</span>
-                </button>
-              )
-            })}
-          </div>
-        </aside>
-      )}
-
-      <div
-        ref={contentRef}
-        className={`${styles.content} ${
-          bossMode.isConcealed ? styles.contentConcealed : ''
-        }`}
-        style={contentStyle}
-      >
-        <div className={styles.contentBody} style={{ opacity: displayOpacity }}>
-          {currentChapter && <h2 className={styles.chapterTitle}>{currentChapter.title}</h2>}
-          {isLoadingChapter ? (
-            <div className={styles.loading}>章节内容加载中...</div>
-          ) : (
-            <div
-              className={`${styles.text} ${isEpubChapterContent ? styles.epubText : ''}`}
-              dangerouslySetInnerHTML={{
-                __html: chapterHtml,
-              }}
-            />
-          )}
-        </div>
-      </div>
-
-      {isWebviewStealthMode && bossMode.isConcealed && (
-        <div className={styles.concealedHint}>悬停唤出阅读内容</div>
-      )}
-
-      {isWebviewStealthMode && bossMode.isPanelOpen && (
-        <div
-          ref={bossPanelRef}
-          className={styles.bossPanel}
-          style={{
-            left: `${Math.min(bossMode.panelPosition.x, window.innerWidth - 260)}px`,
-            top: `${Math.min(bossMode.panelPosition.y, window.innerHeight - 280)}px`,
-          }}
-          onMouseEnter={bossMode.bumpPanelTimer}
-          onMouseMove={bossMode.bumpPanelTimer}
-        >
-          <div className={styles.bossPanelHeader}>
-            <span>隐身控制</span>
             <button
               type="button"
-              onClick={bossMode.closePanel}
-              className={styles.panelCloseButton}
+              onClick={() => void handleToggleStealthMode()}
+              className={`${styles.toolbarButton} ${isStealthMode ? styles.active : ''}`}
+              title="摸鱼模式"
             >
-              收起
+              {isStealthMode ? '退出摸鱼' : '摸鱼模式'}
             </button>
-          </div>
-
-          <div className={styles.bossPanelSection}>
-            <span className={styles.bossPanelLabel}>当前模式</span>
-            <div className={styles.segmented}>
+            {isWebviewStealthMode && (
               <button
-                className={`${styles.segmentButton} ${
-                  bossModeType === 'basic' ? styles.segmentActive : ''
+                type="button"
+                onClick={handleToggleCamouflage}
+                className={`${styles.toolbarButton} ${
+                  bossCamouflageEnabled ? styles.active : ''
                 }`}
-                onClick={() => setBossModeType('basic')}
+                title="收纳伪装"
               >
-                基础
+                收纳伪装
+              </button>
+            )}
+            {isWebviewStealthMode && (
+              <input
+                type="range"
+                min="0.02"
+                max="1"
+                step="0.02"
+                value={opacityToTransparencySliderValue(activeStealthOpacity)}
+                onChange={(event) =>
+                  handleOpacityChange(transparencySliderValueToOpacity(Number(event.target.value)))
+                }
+                className={styles.opacitySlider}
+                title="文字透明度"
+              />
+            )}
+          </div>
+        </div>
+        {showSidebar && bossMode.isChromeVisible && (
+          <aside className={styles.sidebar}>
+            <div className={styles.sidebarHeader}>
+              <h3>目录</h3>
+              <button
+                type="button"
+                onClick={() => setShowSidebar(false)}
+                className={styles.closeButton}
+              >
+                关闭
+              </button>
+            </div>
+            <div className={styles.chapterList}>
+              {currentNovel.chapters.map((chapter, index) => (
+                <button
+                  key={`${chapter.title}-${chapter.index}`}
+                  className={`${styles.chapterItem} ${
+                    index === currentNovel.currentChapter ? styles.active : ''
+                  }`}
+                  onClick={() => void handleChapterChange(index)}
+                >
+                  <span className={styles.chapterItemTitle}>{chapter.title}</span>
+                  <span className={styles.chapterItemMeta}>{chapter.wordCount} 字</span>
+                </button>
+              ))}
+            </div>
+          </aside>
+        )}
+
+        {showSearch && bossMode.isChromeVisible && (
+          <aside className={styles.searchPanel}>
+            <div className={styles.searchHeader}>
+              <h3>全文搜索</h3>
+              <button
+                type="button"
+                onClick={() => setShowSearch(false)}
+                className={styles.closeButton}
+              >
+                关闭
+              </button>
+            </div>
+            <div className={styles.searchInput}>
+              <input
+                type="text"
+                value={searchKeyword}
+                onChange={(event) => setSearchKeyword(event.target.value)}
+                placeholder="输入搜索关键字"
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    void handleSearch()
+                  }
+                }}
+              />
+              <button type="button" onClick={() => void handleSearch()} className={styles.searchButton}>
+                搜索
+              </button>
+            </div>
+            <div className={styles.searchResults}>
+              <p>{searchResults.length > 0 ? `找到 ${searchResults.length} 个匹配` : '暂无结果'}</p>
+              {searchResults.map((result, index) => {
+                const chapterIndex = findChapterIndexByPosition(
+                  currentNovel.chapters,
+                  result.position
+                )
+                const chapterTitle = currentNovel.chapters[chapterIndex]?.title || '正文'
+
+                return (
+                  <button
+                    key={`${result.position}-${index}`}
+                    className={styles.searchResultItem}
+                    onClick={() => void jumpToSearchResult(result)}
+                  >
+                    <span className={styles.searchResultMeta}>
+                      {chapterTitle} · 第 {result.line} 行
+                    </span>
+                    <span className={styles.searchResultText}>{result.context}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </aside>
+        )}
+
+        <div
+          ref={contentRef}
+          className={`${styles.content} ${
+            bossMode.isConcealed ? styles.contentConcealed : ''
+          }`}
+          style={contentStyle}
+        >
+          <div className={styles.contentBody} style={{ opacity: displayOpacity }}>
+            {currentChapter && <h2 className={styles.chapterTitle}>{currentChapter.title}</h2>}
+            {isLoadingChapter ? (
+              <div className={styles.loading}>章节内容加载中...</div>
+            ) : (
+              <div
+                className={`${styles.text} ${isEpubChapterContent ? styles.epubText : ''}`}
+                dangerouslySetInnerHTML={{
+                  __html: chapterHtml,
+                }}
+              />
+            )}
+          </div>
+        </div>
+
+        {isWebviewStealthMode && bossMode.isConcealed && (
+          <div className={styles.concealedHint}>悬停唤出阅读内容</div>
+        )}
+
+        {isWebviewStealthMode && bossMode.isPanelOpen && (
+          <div
+            ref={bossPanelRef}
+            className={styles.bossPanel}
+            style={{
+              left: `${Math.min(bossMode.panelPosition.x, window.innerWidth - 260)}px`,
+              top: `${Math.min(bossMode.panelPosition.y, window.innerHeight - 280)}px`,
+            }}
+            onMouseEnter={bossMode.bumpPanelTimer}
+            onMouseMove={bossMode.bumpPanelTimer}
+          >
+            <div className={styles.bossPanelHeader}>
+              <span>隐身控制</span>
+              <button
+                type="button"
+                onClick={bossMode.closePanel}
+                className={styles.panelCloseButton}
+              >
+                收起
+              </button>
+            </div>
+
+            <div className={styles.bossPanelSection}>
+              <span className={styles.bossPanelLabel}>当前模式</span>
+              <div className={styles.segmented}>
+                <button
+                  className={`${styles.segmentButton} ${
+                    bossModeType === 'basic' ? styles.segmentActive : ''
+                  }`}
+                  onClick={() => setBossModeType('basic')}
+                >
+                  基础
+                </button>
+                <button
+                  className={`${styles.segmentButton} ${
+                    bossModeType === 'full' ? styles.segmentActive : ''
+                  }`}
+                  onClick={() => setBossModeType('full')}
+                >
+                  完全
+                </button>
+              </div>
+            </div>
+
+            <div className={styles.bossPanelSection}>
+              <span className={styles.bossPanelLabel}>
+                文字透明度 {opacityToTransparencySliderValue(bossOpacity).toFixed(2)}
+              </span>
+              <input
+                type="range"
+                min="0.02"
+                max="1"
+                step="0.02"
+                value={opacityToTransparencySliderValue(bossOpacity)}
+                onChange={(event) =>
+                  handleOpacityChange(transparencySliderValueToOpacity(Number(event.target.value)))
+                }
+                className={styles.panelSlider}
+              />
+            </div>
+
+            <div className={styles.bossPanelSection}>
+              <span className={styles.bossPanelLabel}>唤出延迟 {bossRevealDelay}ms</span>
+              <input
+                type="range"
+                min="0"
+                max="400"
+                step="20"
+                value={bossRevealDelay}
+                onChange={(event) => setBossRevealDelay(Number(event.target.value))}
+                className={styles.panelSlider}
+              />
+            </div>
+
+            <div className={styles.bossPanelSection}>
+              <span className={styles.bossPanelLabel}>隐藏延迟 {bossHideDelay}ms</span>
+              <input
+                type="range"
+                min="80"
+                max="1200"
+                step="40"
+                value={bossHideDelay}
+                onChange={(event) => setBossHideDelay(Number(event.target.value))}
+                className={styles.panelSlider}
+              />
+            </div>
+
+            <div className={styles.bossPanelActions}>
+              <button
+                type="button"
+                className={styles.panelActionButton}
+                onClick={handleToggleCamouflage}
+              >
+                {bossCamouflageEnabled ? '关闭收纳伪装' : '开启收纳伪装'}
               </button>
               <button
-                className={`${styles.segmentButton} ${
-                  bossModeType === 'full' ? styles.segmentActive : ''
-                }`}
-                onClick={() => setBossModeType('full')}
+                type="button"
+                className={styles.panelActionButton}
+                onClick={() => bossMode.pinVisible(!bossMode.isForceVisible)}
               >
-                完全
+                {bossMode.isForceVisible ? '取消常显' : '锁定常显'}
+              </button>
+              <button
+                type="button"
+                className={styles.panelActionButton}
+                onClick={bossMode.concealImmediately}
+              >
+                立即隐藏
+              </button>
+              <button
+                type="button"
+                className={styles.panelActionButton}
+                onClick={() => void handleToggleStealthMode()}
+              >
+                退出模式
               </button>
             </div>
           </div>
+        )}
 
-          <div className={styles.bossPanelSection}>
-            <span className={styles.bossPanelLabel}>
-              文字透明度 {opacityToTransparencySliderValue(bossOpacity).toFixed(2)}
-            </span>
-            <input
-              type="range"
-              min="0.02"
-              max="1"
-              step="0.02"
-              value={opacityToTransparencySliderValue(bossOpacity)}
-              onChange={(event) =>
-                handleOpacityChange(transparencySliderValueToOpacity(Number(event.target.value)))
-              }
-              className={styles.panelSlider}
+        <footer
+          className={`${styles.footer} ${
+            !bossMode.isChromeVisible ? styles.chromeHidden : ''
+          }`}
+        >
+          <div className={styles.progressBar}>
+            <div
+              className={styles.progressFill}
+              style={{ width: `${currentNovel.readProgress || 0}%` }}
             />
           </div>
-
-          <div className={styles.bossPanelSection}>
-            <span className={styles.bossPanelLabel}>唤出延迟 {bossRevealDelay}ms</span>
-            <input
-              type="range"
-              min="0"
-              max="400"
-              step="20"
-              value={bossRevealDelay}
-              onChange={(event) => setBossRevealDelay(Number(event.target.value))}
-              className={styles.panelSlider}
-            />
+          <div className={styles.progressInfo}>
+            <span>总进度 {Number(currentNovel.readProgress || 0).toFixed(1)}%</span>
+            <span>章节 {currentNovel.currentChapter + 1} / {currentNovel.chapters.length}</span>
+            <span>{currentChapter?.wordCount || 0} 字</span>
           </div>
+        </footer>
+      </div>
+    )}
 
-          <div className={styles.bossPanelSection}>
-            <span className={styles.bossPanelLabel}>隐藏延迟 {bossHideDelay}ms</span>
-            <input
-              type="range"
-              min="80"
-              max="1200"
-              step="40"
-              value={bossHideDelay}
-              onChange={(event) => setBossHideDelay(Number(event.target.value))}
-              className={styles.panelSlider}
-            />
-          </div>
+    {showCamouflageWidget && (
+      <CamouflagePendant
+        className={camouflageWidgetClassName}
+        style={camouflageWidgetStyle}
+        title="伪装中"
+        subtitle={isDraggingCamouflageWidget ? '拖动挂件位置' : '双击展开阅读框'}
+        dragging={isDraggingCamouflageWidget}
+        onDoubleClick={restoreCamouflageReader}
+        onPointerDown={handleCamouflageWidgetPointerDown}
+      />
+    )}
+  </div>
+)
 
-          <div className={styles.bossPanelActions}>
-            <button
-              type="button"
-              className={styles.panelActionButton}
-              onClick={() => bossMode.pinVisible(!bossMode.isForceVisible)}
-            >
-              {bossMode.isForceVisible ? '取消常显' : '锁定常显'}
-            </button>
-            <button
-              type="button"
-              className={styles.panelActionButton}
-              onClick={bossMode.concealImmediately}
-            >
-              立即隐藏
-            </button>
-            <button
-              type="button"
-              className={styles.panelActionButton}
-              onClick={() => void handleToggleStealthMode()}
-            >
-              退出模式
-            </button>
-          </div>
-        </div>
-      )}
-
-      <footer
-        className={`${styles.footer} ${
-          !bossMode.isChromeVisible ? styles.chromeHidden : ''
-        }`}
-      >
-        <div className={styles.progressBar}>
-          <div
-            className={styles.progressFill}
-            style={{ width: `${currentNovel.readProgress || 0}%` }}
-          />
-        </div>
-        <div className={styles.progressInfo}>
-          <span>总进度 {Number(currentNovel.readProgress || 0).toFixed(1)}%</span>
-          <span>章节 {currentNovel.currentChapter + 1} / {currentNovel.chapters.length}</span>
-          <span>{currentChapter?.wordCount || 0} 字</span>
-        </div>
-      </footer>
-    </div>
-  )
 }

@@ -1,6 +1,11 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { ReadingSettings, ShortcutAction, ShortcutMap } from '@/types'
+import type {
+  CamouflageWidgetPosition,
+  ReadingSettings,
+  ShortcutAction,
+  ShortcutMap,
+} from '@/types'
 import { DEFAULT_SHORTCUTS } from '@/utils/shortcuts'
 
 const MIN_PAGE_WIDTH_PERCENT = 55
@@ -8,6 +13,10 @@ const MAX_PAGE_WIDTH_PERCENT = 100
 const LEGACY_MIN_PAGE_WIDTH_PX = 400
 const LEGACY_MAX_PAGE_WIDTH_PX = 1200
 const SETTINGS_STORAGE_NAME = 'tfiction-settings'
+const DEFAULT_CAMOUFLAGE_WIDGET_POSITION: CamouflageWidgetPosition = {
+  x: 0.84,
+  y: 0.16,
+}
 
 export function normalizePageWidth(value: number) {
   const numericValue = Number(value || 0)
@@ -31,6 +40,19 @@ export function normalizePageWidth(value: number) {
   )
 }
 
+function clampUnitInterval(value: number) {
+  return Math.max(0, Math.min(1, Number(value || 0)))
+}
+
+function normalizeCamouflageWidgetPosition(
+  value?: Partial<CamouflageWidgetPosition>
+): CamouflageWidgetPosition {
+  return {
+    x: clampUnitInterval(value?.x ?? DEFAULT_CAMOUFLAGE_WIDGET_POSITION.x),
+    y: clampUnitInterval(value?.y ?? DEFAULT_CAMOUFLAGE_WIDGET_POSITION.y),
+  }
+}
+
 interface SettingsState extends ReadingSettings {
   bossMode: boolean
   bossOpacity: number
@@ -45,6 +67,8 @@ interface SettingsState extends ReadingSettings {
   setBossModeType: (bossModeType: 'basic' | 'full') => void
   setBossRevealDelay: (delay: number) => void
   setBossHideDelay: (delay: number) => void
+  setBossCamouflageEnabled: (enabled: boolean) => void
+  setBossCamouflageWidgetPosition: (position: CamouflageWidgetPosition) => void
   setBossMode: (enabled: boolean) => void
   setBossOpacity: (opacity: number) => void
   setKeyboardShortcut: (action: ShortcutAction, shortcut: string) => void
@@ -63,6 +87,8 @@ const defaultSettings: ReadingSettings = {
   bossModeType: 'basic',
   bossRevealDelay: 80,
   bossHideDelay: 260,
+  bossCamouflageEnabled: false,
+  bossCamouflageWidgetPosition: DEFAULT_CAMOUFLAGE_WIDGET_POSITION,
 }
 
 const defaultBossSettings = {
@@ -118,6 +144,13 @@ export const useSettingsStore = create<SettingsState>()(
       setBossModeType: (bossModeType) => set({ bossModeType }),
       setBossRevealDelay: (bossRevealDelay) => set({ bossRevealDelay }),
       setBossHideDelay: (bossHideDelay) => set({ bossHideDelay }),
+      setBossCamouflageEnabled: (bossCamouflageEnabled) => set({ bossCamouflageEnabled }),
+      setBossCamouflageWidgetPosition: (bossCamouflageWidgetPosition) =>
+        set({
+          bossCamouflageWidgetPosition: normalizeCamouflageWidgetPosition(
+            bossCamouflageWidgetPosition
+          ),
+        }),
       setBossMode: (bossMode) => set({ bossMode }),
       setBossOpacity: (bossOpacity) => set({ bossOpacity: normalizeBossOpacity(bossOpacity) }),
       setKeyboardShortcut: (action, shortcut) =>
@@ -149,6 +182,13 @@ export const useSettingsStore = create<SettingsState>()(
           ),
           pageWidth: normalizePageWidth(
             typedPersistedState.pageWidth ?? currentState.pageWidth
+          ),
+          bossCamouflageEnabled: Boolean(
+            typedPersistedState.bossCamouflageEnabled ?? currentState.bossCamouflageEnabled
+          ),
+          bossCamouflageWidgetPosition: normalizeCamouflageWidgetPosition(
+            typedPersistedState.bossCamouflageWidgetPosition ??
+              currentState.bossCamouflageWidgetPosition
           ),
         }
       },
