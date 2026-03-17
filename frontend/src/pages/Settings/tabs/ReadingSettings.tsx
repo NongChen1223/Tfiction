@@ -1,6 +1,5 @@
 import { useSettingsStore } from '@/stores/settingsStore'
 import ReadingAppearanceControls from '@/components/features/ReadingAppearanceControls'
-import Select from '@/components/common/Select'
 import Slider from '@/components/common/Slider'
 import Toggle from '@/components/common/Toggle'
 import styles from './ReadingSettings.module.scss'
@@ -32,7 +31,6 @@ export default function ReadingSettings() {
     pageWidth,
     backgroundColor,
     textColor,
-    bossModeType,
     bossRevealDelay,
     bossHideDelay,
     bossMode,
@@ -43,17 +41,13 @@ export default function ReadingSettings() {
     setPageWidth,
     setBackgroundColor,
     setTextColor,
-    setBossModeType,
     setBossRevealDelay,
     setBossHideDelay,
     setBossMode,
     setBossOpacity,
   } = useSettingsStore()
 
-  const bossModeOptions = [
-    { value: 'basic', label: '基础隐身：保留内容，隐藏控件' },
-    { value: 'full', label: '完全隐身：移出后内容也淡出' },
-  ]
+
 
   return (
     <div className={styles.container}>
@@ -126,14 +120,6 @@ export default function ReadingSettings() {
           />
         </div>
 
-        <div className={styles.settingItem}>
-          <Select
-            label="隐身级别"
-            options={bossModeOptions}
-            value={bossModeType}
-            onChange={setBossModeType}
-          />
-        </div>
 
         <div className={styles.settingItem}>
           <Slider
@@ -164,12 +150,10 @@ export default function ReadingSettings() {
           <div className={styles.bossPreviewBox}>
             <div className={styles.bossPreviewContent}>正常内容显示</div>
             <div
-              className={`${styles.bossPreviewOverlay} ${
-                bossModeType === 'full' ? styles.fullMode : ''
-              }`}
+              className={styles.bossPreviewOverlay}
               style={{ opacity: bossMode ? bossOpacity : 0 }}
             >
-              {bossModeType === 'full' ? '透明背景，仅保留极弱文字' : '透明背景，仅保留文字'}
+              透明背景，仅保留文字
             </div>
           </div>
         </div>
