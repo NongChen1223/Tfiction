@@ -6,6 +6,7 @@ import { useNovelStore } from '@/stores/novelStore'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { useWindowStore } from '@/stores/windowStore'
 import { useLibraryStore } from '@/stores/libraryStore'
+import ReadingAppearanceControls from '@/components/features/ReadingAppearanceControls'
 import {
   GetChapterContent,
 } from '@/wailsjs/go/services/NovelService'
@@ -137,6 +138,12 @@ export default function Reader() {
     bossHideDelay,
     bossOpacity,
     keyboardShortcuts,
+    setFontSize,
+    setFontFamily,
+    setLineHeight,
+    setPageWidth,
+    setBackgroundColor,
+    setTextColor,
     setBossModeType,
     setBossRevealDelay,
     setBossHideDelay,
@@ -147,6 +154,7 @@ export default function Reader() {
 
   const [showSidebar, setShowSidebar] = useState(false)
   const [showSearch, setShowSearch] = useState(false)
+  const [showAppearancePanel, setShowAppearancePanel] = useState(false)
   const [searchKeyword, setSearchKeyword] = useState('')
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [chapterContent, setChapterContent] = useState('')
@@ -155,6 +163,7 @@ export default function Reader() {
 
   const contentRef = useRef<HTMLDivElement>(null)
   const saveTimerRef = useRef<number | null>(null)
+  const appearancePanelRef = useRef<HTMLDivElement>(null)
   const bossPanelRef = useRef<HTMLDivElement>(null)
   const pendingScrollProgressRef = useRef<number | null>(null)
   const overlayActionPollingRef = useRef(false)
@@ -189,7 +198,7 @@ export default function Reader() {
   const returnDirectoryId = routeState?.returnDirectoryId
   const useDesktopOverlay = supportsDesktopOverlay
   const contentStyle: CSSProperties = {
-    maxWidth: `${pageWidth}px`,
+    maxWidth: `${pageWidth}%`,
     fontSize: `${fontSize}px`,
     fontFamily: resolveReaderFontFamily(fontFamily),
     lineHeight,
@@ -197,6 +206,9 @@ export default function Reader() {
 
   useClickOutside(bossPanelRef, isStealthMode && bossMode.isPanelOpen, () => {
     bossMode.closePanel()
+  })
+  useClickOutside(appearancePanelRef, showAppearancePanel, () => {
+    setShowAppearancePanel(false)
   })
 
   const syncDesktopOverlay = async (nextOpacity = opacity) => {
@@ -609,6 +621,16 @@ export default function Reader() {
   }, [useDesktopOverlay])
 
   useEffect(() => {
+    if (!showAppearancePanel) {
+      return
+    }
+
+    if (isStealthMode || !bossMode.isChromeVisible) {
+      setShowAppearancePanel(false)
+    }
+  }, [bossMode.isChromeVisible, isStealthMode, showAppearancePanel])
+
+  useEffect(() => {
     if (!useDesktopOverlay || !isStealthMode || !currentNovel) {
       return
     }
@@ -912,6 +934,51 @@ export default function Reader() {
         </div>
 
         <div className={styles.toolbarRight}>
+          {!isStealthMode && (
+            <div ref={appearancePanelRef} className={styles.toolbarPopover}>
+              <button
+                type="button"
+                onClick={() => setShowAppearancePanel((value) => !value)}
+                className={`${styles.toolbarButton} ${
+                  showAppearancePanel ? styles.active : ''
+                }`}
+                title="阅读外观"
+              >
+                外观
+              </button>
+              {showAppearancePanel && bossMode.isChromeVisible && (
+                <div className={styles.appearancePanel}>
+                  <div className={styles.appearancePanelHeader}>
+                    <span>阅读外观</span>
+                    <button
+                      type="button"
+                      onClick={() => setShowAppearancePanel(false)}
+                      className={styles.panelCloseButton}
+                    >
+                      收起
+                    </button>
+                  </div>
+                  <div className={styles.appearancePanelBody}>
+                    <ReadingAppearanceControls
+                      variant="panel"
+                      fontSize={fontSize}
+                      fontFamily={fontFamily}
+                      lineHeight={lineHeight}
+                      pageWidth={pageWidth}
+                      backgroundColor={backgroundColor}
+                      textColor={textColor}
+                      onFontSizeChange={setFontSize}
+                      onFontFamilyChange={setFontFamily}
+                      onLineHeightChange={setLineHeight}
+                      onPageWidthChange={setPageWidth}
+                      onBackgroundColorChange={setBackgroundColor}
+                      onTextColorChange={setTextColor}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           <button
             type="button"
             onClick={() => setShowSearch(true)}

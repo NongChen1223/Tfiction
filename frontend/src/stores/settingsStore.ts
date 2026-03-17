@@ -3,6 +3,33 @@ import { persist } from 'zustand/middleware'
 import type { ReadingSettings, ShortcutAction, ShortcutMap } from '@/types'
 import { DEFAULT_SHORTCUTS } from '@/utils/shortcuts'
 
+const MIN_PAGE_WIDTH_PERCENT = 55
+const MAX_PAGE_WIDTH_PERCENT = 100
+const LEGACY_MIN_PAGE_WIDTH_PX = 400
+const LEGACY_MAX_PAGE_WIDTH_PX = 1200
+
+export function normalizePageWidth(value: number) {
+  const numericValue = Number(value || 0)
+
+  // 兼容旧版本保存的 px 值，按原范围映射到百分比。
+  if (numericValue > MAX_PAGE_WIDTH_PERCENT) {
+    const legacyRatio =
+      (Math.min(Math.max(numericValue, LEGACY_MIN_PAGE_WIDTH_PX), LEGACY_MAX_PAGE_WIDTH_PX) -
+        LEGACY_MIN_PAGE_WIDTH_PX) /
+      (LEGACY_MAX_PAGE_WIDTH_PX - LEGACY_MIN_PAGE_WIDTH_PX)
+
+    return Math.round(
+      MIN_PAGE_WIDTH_PERCENT +
+        legacyRatio * (MAX_PAGE_WIDTH_PERCENT - MIN_PAGE_WIDTH_PERCENT)
+    )
+  }
+
+  return Math.min(
+    MAX_PAGE_WIDTH_PERCENT,
+    Math.max(MIN_PAGE_WIDTH_PERCENT, Math.round(numericValue))
+  )
+}
+
 interface SettingsState extends ReadingSettings {
   bossMode: boolean
   bossOpacity: number
@@ -30,7 +57,7 @@ const defaultSettings: ReadingSettings = {
   lineHeight: 1.8,
   backgroundColor: '#ffffff',
   textColor: '#333333',
-  pageWidth: 800,
+  pageWidth: 78,
   theme: 'light',
   bossModeType: 'basic',
   bossRevealDelay: 80,
@@ -59,7 +86,7 @@ export const useSettingsStore = create<SettingsState>()(
       setLineHeight: (lineHeight) => set({ lineHeight }),
       setBackgroundColor: (backgroundColor) => set({ backgroundColor }),
       setTextColor: (textColor) => set({ textColor }),
-      setPageWidth: (pageWidth) => set({ pageWidth }),
+      setPageWidth: (pageWidth) => set({ pageWidth: normalizePageWidth(pageWidth) }),
       setTheme: (theme) => set({ theme }),
       setBossModeType: (bossModeType) => set({ bossModeType }),
       setBossRevealDelay: (bossRevealDelay) => set({ bossRevealDelay }),
@@ -84,6 +111,17 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: 'tfiction-settings',
+      merge: (persistedState, currentState) => {
+        const typedPersistedState = (persistedState || {}) as Partial<SettingsState>
+
+        return {
+          ...currentState,
+          ...typedPersistedState,
+          pageWidth: normalizePageWidth(
+            typedPersistedState.pageWidth ?? currentState.pageWidth
+          ),
+        }
+      },
     }
   )
 )

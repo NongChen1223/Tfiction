@@ -1,5 +1,5 @@
 import { useSettingsStore } from '@/stores/settingsStore'
-import ColorField from '@/components/common/ColorField'
+import ReadingAppearanceControls from '@/components/features/ReadingAppearanceControls'
 import Select from '@/components/common/Select'
 import Slider from '@/components/common/Slider'
 import Toggle from '@/components/common/Toggle'
@@ -50,12 +50,6 @@ export default function ReadingSettings() {
     setBossOpacity,
   } = useSettingsStore()
 
-  const fontOptions = [
-    { value: 'system', label: '系统默认' },
-    { value: 'serif', label: '衬线字体（宋体）' },
-    { value: 'sans', label: '无衬线字体（黑体）' },
-    { value: 'mono', label: '等宽字体' },
-  ]
   const bossModeOptions = [
     { value: 'basic', label: '基础隐身：保留内容，隐藏控件' },
     { value: 'full', label: '完全隐身：移出后内容也淡出' },
@@ -64,80 +58,21 @@ export default function ReadingSettings() {
   return (
     <div className={styles.container}>
       <section className={styles.section}>
-        <h2 className={styles.sectionTitle}>字体设置</h2>
-
-        <div className={styles.settingItem}>
-          <Select
-            label="字体系列"
-            options={fontOptions}
-            value={fontFamily}
-            onChange={setFontFamily}
-          />
-        </div>
-
-        <div className={styles.settingItem}>
-          <Slider
-            label={`字体大小：${fontSize}px`}
-            min={12}
-            max={32}
-            step={1}
-            value={fontSize}
-            onChange={setFontSize}
-            showValue={false}
-          />
-        </div>
-      </section>
-
-      <section className={styles.section}>
-        <h2 className={styles.sectionTitle}>排版设置</h2>
-
-        <div className={styles.settingItem}>
-          <Slider
-            label={`行高：${lineHeight.toFixed(1)} 倍`}
-            min={1.0}
-            max={3.0}
-            step={0.1}
-            value={lineHeight}
-            onChange={setLineHeight}
-            showValue={false}
-          />
-        </div>
-
-        <div className={styles.settingItem}>
-          <Slider
-            label={`页面宽度：${pageWidth}px`}
-            min={400}
-            max={1200}
-            step={50}
-            value={pageWidth}
-            onChange={setPageWidth}
-            showValue={false}
-          />
-        </div>
-      </section>
-
-      <section className={styles.section}>
-        <h2 className={styles.sectionTitle}>颜色设置</h2>
-
-        <div className={styles.colorRow}>
-          <ColorField
-            id="reader-background-color"
-            className={styles.colorItem}
-            label="背景颜色"
-            value={backgroundColor}
-            onChange={setBackgroundColor}
-            helperText="会直接影响阅读页正文底色。"
-          />
-
-          <ColorField
-            id="reader-text-color"
-            className={styles.colorItem}
-            label="文字颜色"
-            value={textColor}
-            onChange={setTextColor}
-            helperText="建议和背景保持足够对比度。"
-          />
-        </div>
+        <h2 className={styles.sectionTitle}>阅读外观</h2>
+        <ReadingAppearanceControls
+          fontSize={fontSize}
+          fontFamily={fontFamily}
+          lineHeight={lineHeight}
+          pageWidth={pageWidth}
+          backgroundColor={backgroundColor}
+          textColor={textColor}
+          onFontSizeChange={setFontSize}
+          onFontFamilyChange={setFontFamily}
+          onLineHeightChange={setLineHeight}
+          onPageWidthChange={setPageWidth}
+          onBackgroundColorChange={setBackgroundColor}
+          onTextColorChange={setTextColor}
+        />
       </section>
 
       <section className={styles.section}>
@@ -155,13 +90,13 @@ export default function ReadingSettings() {
                 ? 'var(--font-mono)'
                 : 'var(--font-sans)',
             lineHeight: lineHeight,
-            maxWidth: `${pageWidth}px`,
+            maxWidth: `${pageWidth}%`,
             backgroundColor: backgroundColor,
             color: textColor,
           }}
         >
           <p>这是一段示例文本，用于预览当前的阅读设置效果。</p>
-          <p>字体大小、字体系列、行高和页面宽度都会影响阅读体验。</p>
+          <p>字体大小、字体系列、行高和页面宽度百分比都会影响阅读体验。</p>
           <p>请根据您的喜好调整这些参数，找到最舒适的阅读设置。</p>
         </div>
       </section>

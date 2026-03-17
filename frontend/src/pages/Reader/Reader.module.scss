@@ -146,6 +146,10 @@
   justify-content: flex-end;
 }
 
+.toolbarPopover {
+  position: relative;
+}
+
 .toolbarButton {
   min-width: 38px;
   height: 38px;
@@ -561,6 +565,38 @@
   box-shadow: 4px 4px 0 rgb(var(--neo-shadow));
 }
 
+.appearancePanel {
+  position: absolute;
+  top: calc(100% + 12px);
+  right: 0;
+  z-index: 24;
+  width: min(380px, calc(100vw - 32px));
+  padding: var(--spacing-lg);
+  border-radius: var(--neo-radius-lg);
+  background: rgb(var(--neo-panel));
+  border: var(--neo-border-width) solid rgb(var(--neo-ink));
+  box-shadow: var(--neo-shadow-offset-md) var(--neo-shadow-offset-md) 0
+    rgb(var(--neo-shadow));
+  animation: scaleIn 0.18s ease-out;
+}
+
+.appearancePanelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: rgb(var(--neo-ink));
+}
+
+.appearancePanelBody {
+  max-height: min(68vh, 620px);
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
 .bossPanel {
   position: fixed;
   z-index: 30;
@@ -670,5 +706,13 @@
 
   .progressInfo {
     flex-wrap: wrap;
+  }
+
+  .appearancePanel {
+    position: fixed;
+    top: 92px;
+    right: 16px;
+    left: 16px;
+    width: auto;
   }
 }
