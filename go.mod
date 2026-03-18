@@ -1,10 +1,11 @@
 module github.com/nongchen1223/tfiction
 
-go 1.22.0
+go 1.24.1
 
 toolchain go1.24.4
 
 require (
+	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728
 	github.com/wailsapp/wails/v2 v2.11.0
 	golang.org/x/net v0.35.0
 )

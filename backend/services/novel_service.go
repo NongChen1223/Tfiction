@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	stdhtml "html"
 	"io"
@@ -16,6 +17,7 @@ import (
 	"time"
 	"unicode"
 
+	pdf "github.com/ledongthuc/pdf"
 	"github.com/nongchen1223/tfiction/backend/models"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	xhtml "golang.org/x/net/html"
@@ -26,6 +28,7 @@ type NovelService struct {
 	ctx             context.Context
 	novels          map[string]*models.Novel // 小说缓存，key 为文件路径
 	epubChapterHTML map[string][]string      // EPUB 章节富文本缓存
+	pdfChapterHTML  map[string][]string      // 图片型 PDF 页面富文本缓存
 	currentNovel    *models.Novel            // 当前打开的小说
 	progressService *ProgressService
 }
@@ -35,6 +38,7 @@ func NewNovelService(progressService *ProgressService) *NovelService {
 	return &NovelService{
 		novels:          make(map[string]*models.Novel),
 		epubChapterHTML: make(map[string][]string),
+		pdfChapterHTML:  make(map[string][]string),
 		progressService: progressService,
 	}
 }
@@ -49,6 +53,7 @@ func (s *NovelService) Cleanup() {
 	// 清理缓存
 	s.novels = make(map[string]*models.Novel)
 	s.epubChapterHTML = make(map[string][]string)
+	s.pdfChapterHTML = make(map[string][]string)
 	s.currentNovel = nil
 }
 
@@ -129,6 +134,7 @@ func (s *NovelService) GetCurrentNovel() *models.Novel {
 func (s *NovelService) CloseNovel(filePath string) {
 	delete(s.novels, filePath)
 	delete(s.epubChapterHTML, filePath)
+	delete(s.pdfChapterHTML, filePath)
 	if s.currentNovel != nil && s.currentNovel.FilePath == filePath {
 		s.currentNovel = nil
 	}
@@ -156,6 +162,14 @@ func (s *NovelService) GetChapterContent(filePath string, chapterIndex int) (str
 
 	if novel.Format == ".epub" {
 		if chapterHTML := s.getEpubChapterHTML(filePath, chapterIndex); chapterHTML != "" {
+			return chapterHTML, nil
+		}
+	}
+
+	if novel.Format == ".pdf" {
+		if chapterHTML, err := s.getPDFChapterHTML(filePath, chapterIndex); err != nil {
+			return "", err
+		} else if chapterHTML != "" {
 			return chapterHTML, nil
 		}
 	}
@@ -469,9 +483,56 @@ func (s *NovelService) getEpubChapterHTML(filePath string, chapterIndex int) str
 }
 
 // parsePdfNovel 解析 PDF 格式小说
-// TODO: 实现 PDF 解析逻辑
 func (s *NovelService) parsePdfNovel(novel *models.Novel) error {
-	return fmt.Errorf("PDF 格式暂不支持，即将支持")
+	file, reader, err := pdf.Open(novel.FilePath)
+	if err != nil {
+		if errors.Is(err, pdf.ErrInvalidPassword) {
+			return fmt.Errorf("暂不支持受密码保护的 PDF")
+		}
+		return fmt.Errorf("打开 PDF 文件失败: %w", err)
+	}
+	defer file.Close()
+
+	if title := strings.TrimSpace(reader.Trailer().Key("Info").Key("Title").Text()); title != "" {
+		novel.Title = title
+	}
+	if author := strings.TrimSpace(reader.Trailer().Key("Info").Key("Author").Text()); author != "" {
+		novel.Author = author
+	}
+
+	content, err := extractPDFPlainText(reader)
+	if err != nil {
+		return fmt.Errorf("解析 PDF 文本失败: %w", err)
+	}
+	if content == "" {
+		return s.parseImageBasedPDFNovel(novel)
+	}
+
+	novel.Content = content
+	return s.parseTxtNovel(novel)
+}
+
+func (s *NovelService) parseImageBasedPDFNovel(novel *models.Novel) error {
+	pageCount, err := getPDFPageCount(novel.FilePath)
+	if err != nil {
+		return fmt.Errorf("未从 PDF 中提取到可阅读文本，且无法按页渲染 PDF: %w", err)
+	}
+	if pageCount <= 0 {
+		return fmt.Errorf("PDF 中没有可渲染页面")
+	}
+
+	chapterHTMLs := make([]string, pageCount)
+	firstPageHTML, err := renderPDFChapterHTML(novel.FilePath, 0)
+	if err != nil {
+		return fmt.Errorf("未从 PDF 中提取到可阅读文本，且无法渲染 PDF 页面: %w", err)
+	}
+	chapterHTMLs[0] = firstPageHTML
+
+	content, chapters := buildImagePDFStructure(pageCount)
+	novel.Content = content
+	novel.Chapters = chapters
+	s.pdfChapterHTML[novel.FilePath] = chapterHTMLs
+	return nil
 }
 
 // ConvertFormat 格式转换
@@ -486,6 +547,191 @@ func (s *NovelService) ConvertFormat(sourcePath, targetFormat string) (string, e
 // getCurrentTimestamp 获取当前时间戳
 func getCurrentTimestamp() int64 {
 	return time.Now().Unix()
+}
+
+func extractPDFPlainText(reader *pdf.Reader) (string, error) {
+	totalPages := reader.NumPage()
+	if totalPages <= 0 {
+		return "", nil
+	}
+
+	pages := make([]string, 0, totalPages)
+
+	for pageIndex := 1; pageIndex <= totalPages; pageIndex++ {
+		page := reader.Page(pageIndex)
+		if page.V.IsNull() || page.V.Key("Contents").Kind() == pdf.Null {
+			continue
+		}
+
+		rows, err := page.GetTextByRow()
+		if err != nil {
+			return "", err
+		}
+
+		pageLines := make([]string, 0, len(rows))
+		for _, row := range rows {
+			fragments := make([]string, 0, len(row.Content))
+			flushLine := func() {
+				line := joinPDFFragments(fragments)
+				line = normalizePDFText(line)
+				if line != "" {
+					pageLines = append(pageLines, line)
+				}
+				fragments = fragments[:0]
+			}
+
+			for _, text := range row.Content {
+				fragment := normalizePDFText(text.S)
+				if fragment == "" {
+					if len(fragments) > 0 {
+						flushLine()
+					}
+					continue
+				}
+
+				fragments = append(fragments, fragment)
+			}
+
+			if len(fragments) > 0 {
+				flushLine()
+			}
+		}
+
+		if len(pageLines) == 0 {
+			continue
+		}
+
+		pages = append(pages, strings.Join(pageLines, "\n"))
+	}
+
+	return strings.TrimSpace(strings.Join(pages, "\n\n")), nil
+}
+
+func normalizePDFText(content string) string {
+	content = strings.ReplaceAll(content, "\x00", "")
+	content = strings.ReplaceAll(content, "\r\n", "\n")
+	content = strings.ReplaceAll(content, "\r", "\n")
+	content = strings.ReplaceAll(content, "\u00a0", " ")
+
+	lines := strings.Split(content, "\n")
+	normalizedLines := make([]string, 0, len(lines))
+	lastLineBlank := false
+
+	for _, line := range lines {
+		cleaned := strings.Join(strings.Fields(strings.TrimSpace(line)), " ")
+		if cleaned == "" {
+			if !lastLineBlank && len(normalizedLines) > 0 {
+				normalizedLines = append(normalizedLines, "")
+			}
+			lastLineBlank = true
+			continue
+		}
+
+		normalizedLines = append(normalizedLines, cleaned)
+		lastLineBlank = false
+	}
+
+	return strings.TrimSpace(strings.Join(normalizedLines, "\n"))
+}
+
+func buildImagePDFStructure(pageCount int) (string, []models.Chapter) {
+	var contentBuilder strings.Builder
+	chapters := make([]models.Chapter, 0, pageCount)
+	currentOffset := 0
+
+	for pageIndex := 0; pageIndex < pageCount; pageIndex++ {
+		title := fmt.Sprintf("第%d页", pageIndex+1)
+		if contentBuilder.Len() > 0 {
+			contentBuilder.WriteString("\n\n")
+			currentOffset += runeLen("\n\n")
+		}
+
+		startPos := currentOffset
+		contentBuilder.WriteString(title)
+		currentOffset += runeLen(title)
+
+		chapters = append(chapters, models.Chapter{
+			Index:     pageIndex,
+			Title:     title,
+			StartPos:  startPos,
+			EndPos:    currentOffset,
+			WordCount: runeLen(title),
+		})
+	}
+
+	return contentBuilder.String(), chapters
+}
+
+func joinPDFFragments(fragments []string) string {
+	if len(fragments) == 0 {
+		return ""
+	}
+
+	var builder strings.Builder
+	for index, fragment := range fragments {
+		if index > 0 && shouldInsertSpaceBetweenPDFFragments(fragments[index-1], fragment) {
+			builder.WriteByte(' ')
+		}
+		builder.WriteString(fragment)
+	}
+
+	return builder.String()
+}
+
+func shouldInsertSpaceBetweenPDFFragments(left, right string) bool {
+	if left == "" || right == "" {
+		return false
+	}
+
+	leftRunes := []rune(left)
+	rightRunes := []rune(right)
+	if len(leftRunes) == 0 || len(rightRunes) == 0 {
+		return false
+	}
+
+	return isASCIIAlphaNumeric(leftRunes[len(leftRunes)-1]) &&
+		isASCIIAlphaNumeric(rightRunes[0])
+}
+
+func isASCIIAlphaNumeric(value rune) bool {
+	return value >= '0' && value <= '9' ||
+		value >= 'a' && value <= 'z' ||
+		value >= 'A' && value <= 'Z'
+}
+
+func (s *NovelService) getPDFChapterHTML(filePath string, chapterIndex int) (string, error) {
+	chapterHTMLs, exists := s.pdfChapterHTML[filePath]
+	if !exists || chapterIndex < 0 || chapterIndex >= len(chapterHTMLs) {
+		return "", nil
+	}
+
+	if chapterHTMLs[chapterIndex] != "" {
+		return chapterHTMLs[chapterIndex], nil
+	}
+
+	chapterHTML, err := renderPDFChapterHTML(filePath, chapterIndex)
+	if err != nil {
+		return "", err
+	}
+
+	chapterHTMLs[chapterIndex] = chapterHTML
+	s.pdfChapterHTML[filePath] = chapterHTMLs
+	return chapterHTML, nil
+}
+
+func renderPDFChapterHTML(filePath string, chapterIndex int) (string, error) {
+	dataURL, err := renderPDFPageDataURL(filePath, chapterIndex)
+	if err != nil {
+		return "", fmt.Errorf("渲染第 %d 页失败: %w", chapterIndex+1, err)
+	}
+
+	pageLabel := fmt.Sprintf("第%d页", chapterIndex+1)
+	return fmt.Sprintf(
+		`<section class="pdf-image-page" data-chapter-rich="true"><figure class="epub-image pdf-image-page"><img src="%s" alt="%s" loading="lazy" /><figcaption>%s</figcaption></figure></section>`,
+		dataURL,
+		escapeHTMLAttribute(pageLabel),
+		pageLabel,
+	), nil
 }
 
 func (s *NovelService) applySavedProgress(novel *models.Novel) {

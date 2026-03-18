@@ -37,6 +37,7 @@ import {
   buildHighlightedHtml,
   calculateProgressFromPosition,
   findChapterIndexByPosition,
+  isRichChapterContent,
   mapNovelToBook,
   normalizeNovel,
   resolveReaderFontFamily,
@@ -239,14 +240,14 @@ export default function Reader() {
       ? currentNovel.chapters[currentNovel.currentChapter]
       : null
 
-  const isEpubChapterContent = currentNovel?.format === '.epub'
-  const chapterHtml = isEpubChapterContent
+  const isRichContent = currentNovel?.format === '.epub' || isRichChapterContent(chapterContent)
+  const chapterHtml = isRichContent
     ? chapterContent || '<p>暂无内容</p>'
     : buildHighlightedHtml(chapterContent, searchKeyword)
   const overlayChapterMarkup = buildDesktopOverlayMarkup(
     currentChapter?.title,
     chapterContent,
-    Boolean(isEpubChapterContent)
+    Boolean(isRichContent)
   )
   const overlayChapterTitlesSignature = currentNovel
     ? currentNovel.chapters.map((chapter) => chapter.title).join('\u0000')
@@ -1398,7 +1399,7 @@ return (
               <div className={styles.loading}>章节内容加载中...</div>
             ) : (
               <div
-                className={`${styles.text} ${isEpubChapterContent ? styles.epubText : ''}`}
+                className={`${styles.text} ${isRichContent ? styles.epubText : ''}`}
                 dangerouslySetInnerHTML={{
                   __html: chapterHtml,
                 }}

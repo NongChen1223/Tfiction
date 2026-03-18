@@ -2,8 +2,11 @@ package services
 
 import (
 	"archive/zip"
+	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -169,6 +172,88 @@ func TestParseEpubNovelExtractsFrontMatterBackgroundCover(t *testing.T) {
 	}
 }
 
+func TestParsePdfNovelExtractsMetadataTextAndChapters(t *testing.T) {
+	pdfPath := createTestPDF(t, "PDF Sample", "PDF Author", []string{
+		"Chapter 1\nFirst page content.",
+		"Chapter 2\nSecond page content.",
+	})
+
+	service := NewNovelService(nil)
+	novel := &models.Novel{
+		FilePath: pdfPath,
+		Format:   ".pdf",
+		Title:    "fallback-title",
+		Author:   "fallback-author",
+	}
+
+	if err := service.parsePdfNovel(novel); err != nil {
+		t.Fatalf("parsePdfNovel returned error: %v", err)
+	}
+
+	if novel.Title != "PDF Sample" {
+		t.Fatalf("expected PDF metadata title, got %q", novel.Title)
+	}
+
+	if novel.Author != "PDF Author" {
+		t.Fatalf("expected PDF metadata author, got %q", novel.Author)
+	}
+
+	if !strings.Contains(novel.Content, "First page content.") {
+		t.Fatalf("expected extracted text from first page, got %q", novel.Content)
+	}
+
+	if !strings.Contains(novel.Content, "Second page content.") {
+		t.Fatalf("expected extracted text from second page, got %q", novel.Content)
+	}
+
+	if len(novel.Chapters) != 2 {
+		t.Fatalf("expected 2 chapters, got %d", len(novel.Chapters))
+	}
+
+	if novel.Chapters[0].Title != "Chapter 1" {
+		t.Fatalf("expected first chapter title to be parsed, got %q", novel.Chapters[0].Title)
+	}
+}
+
+func TestParsePdfNovelFallsBackToRenderedPagesWhenNoReadableText(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("image-based PDF fallback currently relies on macOS PDF rendering")
+	}
+
+	pdfPath := createTestPDF(t, "Empty PDF", "PDF Author", []string{""})
+
+	service := NewNovelService(nil)
+	novel := &models.Novel{
+		FilePath: pdfPath,
+		Format:   ".pdf",
+	}
+
+	if err := service.parsePdfNovel(novel); err != nil {
+		t.Fatalf("expected image-based PDF fallback to succeed, got %v", err)
+	}
+
+	if len(novel.Chapters) != 1 {
+		t.Fatalf("expected 1 page chapter, got %d", len(novel.Chapters))
+	}
+
+	if novel.Chapters[0].Title != "第1页" {
+		t.Fatalf("expected first page title, got %q", novel.Chapters[0].Title)
+	}
+
+	html, err := service.getPDFChapterHTML(pdfPath, 0)
+	if err != nil {
+		t.Fatalf("expected rendered page HTML, got %v", err)
+	}
+
+	if !strings.Contains(html, `data-chapter-rich="true"`) {
+		t.Fatalf("expected rich page html marker, got %q", html)
+	}
+
+	if !strings.Contains(html, "data:image/png;base64,") {
+		t.Fatalf("expected rendered png data url, got %q", html)
+	}
+}
+
 func createTestEPUB(t *testing.T, files map[string][]byte) string {
 	t.Helper()
 
@@ -197,4 +282,108 @@ func createTestEPUB(t *testing.T, files map[string][]byte) string {
 	}
 
 	return epubPath
+}
+
+func createTestPDF(t *testing.T, title, author string, pageTexts []string) string {
+	t.Helper()
+
+	if len(pageTexts) == 0 {
+		pageTexts = []string{""}
+	}
+
+	tempDir := t.TempDir()
+	pdfPath := filepath.Join(tempDir, "sample.pdf")
+
+	pageObjectStart := 3
+	contentObjectStart := pageObjectStart + len(pageTexts)
+	fontObjectNumber := contentObjectStart + len(pageTexts)
+	infoObjectNumber := fontObjectNumber + 1
+	objectCount := infoObjectNumber
+
+	objects := make([]string, objectCount+1)
+	pageRefs := make([]string, 0, len(pageTexts))
+
+	for index, pageText := range pageTexts {
+		pageObjectNumber := pageObjectStart + index
+		contentObjectNumber := contentObjectStart + index
+		pageRefs = append(pageRefs, fmt.Sprintf("%d 0 R", pageObjectNumber))
+
+		objects[pageObjectNumber] = fmt.Sprintf(
+			"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents %d 0 R /Resources << /Font << /F1 %d 0 R >> >> >>",
+			contentObjectNumber,
+			fontObjectNumber,
+		)
+
+		stream := buildTestPDFContentStream(pageText)
+		objects[contentObjectNumber] = fmt.Sprintf(
+			"<< /Length %d >>\nstream\n%s\nendstream",
+			len(stream),
+			stream,
+		)
+	}
+
+	objects[1] = "<< /Type /Catalog /Pages 2 0 R >>"
+	objects[2] = fmt.Sprintf(
+		"<< /Type /Pages /Kids [%s] /Count %d >>",
+		strings.Join(pageRefs, " "),
+		len(pageTexts),
+	)
+	objects[fontObjectNumber] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"
+	objects[infoObjectNumber] = fmt.Sprintf(
+		"<< /Title (%s) /Author (%s) >>",
+		escapeTestPDFString(title),
+		escapeTestPDFString(author),
+	)
+
+	var buffer bytes.Buffer
+	buffer.WriteString("%PDF-1.4\n")
+
+	offsets := make([]int, objectCount+1)
+	for objectNumber := 1; objectNumber <= objectCount; objectNumber++ {
+		offsets[objectNumber] = buffer.Len()
+		fmt.Fprintf(&buffer, "%d 0 obj\n%s\nendobj\n", objectNumber, objects[objectNumber])
+	}
+
+	xrefOffset := buffer.Len()
+	fmt.Fprintf(&buffer, "xref\n0 %d\n", objectCount+1)
+	buffer.WriteString("0000000000 65535 f \n")
+	for objectNumber := 1; objectNumber <= objectCount; objectNumber++ {
+		fmt.Fprintf(&buffer, "%010d 00000 n \n", offsets[objectNumber])
+	}
+
+	fmt.Fprintf(
+		&buffer,
+		"trailer\n<< /Size %d /Root 1 0 R /Info %d 0 R >>\nstartxref\n%d\n%%%%EOF\n",
+		objectCount+1,
+		infoObjectNumber,
+		xrefOffset,
+	)
+
+	if err := os.WriteFile(pdfPath, buffer.Bytes(), 0644); err != nil {
+		t.Fatalf("write pdf file: %v", err)
+	}
+
+	return pdfPath
+}
+
+func buildTestPDFContentStream(pageText string) string {
+	lines := strings.Split(pageText, "\n")
+	var builder strings.Builder
+	for index, line := range lines {
+		y := 720 - index*24
+		builder.WriteString("BT\n/F1 18 Tf\n")
+		builder.WriteString(fmt.Sprintf("72 %d Td\n", y))
+		builder.WriteString(fmt.Sprintf("(%s) Tj\n", escapeTestPDFString(line)))
+		builder.WriteString("ET\n")
+	}
+	return strings.TrimSpace(builder.String())
+}
+
+func escapeTestPDFString(value string) string {
+	replacer := strings.NewReplacer(
+		"\\", "\\\\",
+		"(", "\\(",
+		")", "\\)",
+	)
+	return replacer.Replace(value)
 }

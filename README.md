@@ -1,7 +1,7 @@
 # Tfiction
 
 Tfiction 是一个基于 Wails 的桌面小说阅读器项目，前端使用 React + TypeScript，后端使用 Go。
-当前主线能力是本地小说书架、TXT / EPUB 阅读、阅读外观设置、全文搜索、阅读进度持久化，以及阅读页摸鱼模式。
+当前主线能力是本地小说书架、TXT / EPUB / PDF 阅读、阅读外观设置、全文搜索、阅读进度持久化，以及阅读页摸鱼模式。
 
 详细功能和设计说明见 [docs/功能需求说明.md](docs/功能需求说明.md)。
 
@@ -9,7 +9,7 @@ Tfiction 是一个基于 Wails 的桌面小说阅读器项目，前端使用 Rea
 
 ### 桌面与后端
 
-- Go `1.22.0`
+- Go `1.24.1`
 - toolchain `go1.24.4`
 - Wails `v2.11.0`
 
@@ -36,6 +36,7 @@ Tfiction 是一个基于 Wails 的桌面小说阅读器项目，前端使用 Rea
 - 单文件导入、目录创建、目录内继续导入
 - TXT 阅读
 - EPUB 元数据、封面、章节、正文图片渲染
+- PDF 阅读（文本型 PDF；macOS 额外支持图片型 PDF 按页阅读）
 - 阅读进度保存与恢复
 - 阅读页目录、上一章、下一章
 - 全文搜索与命中跳转
@@ -46,7 +47,6 @@ Tfiction 是一个基于 Wails 的桌面小说阅读器项目，前端使用 Rea
 
 ### 未完整实现或仅占位
 
-- PDF 阅读
 - MOBI 阅读
 - AZW3 阅读
 - 格式转换
@@ -55,8 +55,8 @@ Tfiction 是一个基于 Wails 的桌面小说阅读器项目，前端使用 Rea
 
 ## 平台差异
 
-- macOS：支持原生桌面浮窗式摸鱼模式
-- Windows / 非 darwin：摸鱼模式退化为普通 WebView 隐身模式
+- macOS：支持原生桌面浮窗式摸鱼模式，也支持图片型 PDF 按页渲染
+- Windows / 非 darwin：摸鱼模式退化为普通 WebView 隐身模式；PDF 当前仅保证文本型文件阅读
 
 ## 开发命令
 
@@ -113,7 +113,7 @@ GO_Tfiction/
 │   ├── models/
 │   │   └── models.go                   # 小说、章节、搜索结果等后端模型
 │   └── services/
-│       ├── novel_service.go            # 文件打开、TXT/EPUB 解析、章节读取、进度恢复
+│       ├── novel_service.go            # 文件打开、TXT/EPUB/PDF 解析、章节读取、进度恢复
 │       ├── progress_service.go         # 阅读进度持久化
 │       ├── search_service.go           # 全文搜索
 │       ├── window_service.go           # 置顶、透明度、摸鱼模式控制
@@ -171,4 +171,5 @@ GO_Tfiction/
 
 - `wails dev` 依赖 Vite 默认端口，若 `5173` 被占用需要先释放
 - Sass 仍有 legacy API / `@import` 警告，但当前不影响构建
+- PDF 支持可提取文本的文本型文件；macOS 也支持漫画 / 扫描版等图片型 PDF 按页阅读；加密 PDF 仍不支持
 - macOS 测试构建可能出现 Wails private API 警告，这不代表当前可直接用于 App Store 审核

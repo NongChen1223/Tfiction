@@ -341,7 +341,7 @@ export default function Home() {
           key: 'import-file',
           icon: <FileText size={48} />,
           title: '导入单文件',
-          description: '支持 TXT、PDF、EPUB、MOBI 等格式',
+          description: '支持 TXT、EPUB、PDF 阅读；MOBI / AZW3 暂不支持解析',
           onClick: handleImportFile,
         },
       ],

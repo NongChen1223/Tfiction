@@ -87,6 +87,11 @@ export function buildHighlightedHtml(content: string, keyword: string) {
     .join('')
 }
 
+export function isRichChapterContent(content: string) {
+  const trimmedContent = content.trim()
+  return trimmedContent.includes('data-chapter-rich="true"')
+}
+
 export function buildDesktopOverlayMarkup(
   title: string | null | undefined,
   content: string,
