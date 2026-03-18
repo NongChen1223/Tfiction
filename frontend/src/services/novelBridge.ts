@@ -7,17 +7,49 @@ import {
 const BRIDGE_RETRY_DELAY_MS = 120
 const BRIDGE_RETRY_MAX_ATTEMPTS = 25
 
-// Wails 绑定在窗口刚初始化时可能尚未挂载完成，这类错误允许短暂重试。
-function shouldRetryNovelService(error: unknown) {
-  if (!(error instanceof Error)) {
-    return false
+function getNovelServiceErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    return error.message
   }
 
-  const message = error.message.toLowerCase()
+  if (typeof error === 'string') {
+    return error
+  }
+
+  if (error && typeof error === 'object') {
+    const message = (error as { message?: unknown }).message
+    if (typeof message === 'string') {
+      return message
+    }
+
+    try {
+      return JSON.stringify(error)
+    } catch {
+      return String(error)
+    }
+  }
+
+  return String(error || '')
+}
+
+function normalizeNovelServiceError(error: unknown, fallbackMessage: string) {
+  if (error instanceof Error && error.message.trim()) {
+    return error
+  }
+
+  const message = getNovelServiceErrorMessage(error).trim()
+  return new Error(message || fallbackMessage)
+}
+
+// Wails 绑定在窗口刚初始化时可能尚未挂载完成，这类错误允许短暂重试。
+function shouldRetryNovelService(error: unknown) {
+  const message = getNovelServiceErrorMessage(error).toLowerCase()
   return (
     message.includes("window['go']") ||
     message.includes('window.go') ||
     message.includes('services') ||
+    message.includes('novelservice') ||
+    message.includes('go is undefined') ||
     message.includes('undefined is not an object') ||
     message.includes('cannot read properties of undefined')
   )
@@ -34,7 +66,7 @@ async function callNovelServiceWithRetry<T>(operation: () => Promise<T>): Promis
       lastError = error
 
       if (!shouldRetryNovelService(error) || attempt === BRIDGE_RETRY_MAX_ATTEMPTS - 1) {
-        throw error
+        throw normalizeNovelServiceError(error, '小说服务调用失败')
       }
 
       await new Promise((resolve) => {
@@ -43,7 +75,7 @@ async function callNovelServiceWithRetry<T>(operation: () => Promise<T>): Promis
     }
   }
 
-  throw lastError instanceof Error ? lastError : new Error('小说服务调用失败')
+  throw normalizeNovelServiceError(lastError, '小说服务调用失败')
 }
 
 // 打开小说文件；传空路径时由后端弹出系统文件选择器。

@@ -59,6 +59,24 @@ func TestParseEpubNovelExtractsDirectCoverImage(t *testing.T) {
 	}
 }
 
+func TestOpenNovelReturnsHelpfulMessageWhenFileMoved(t *testing.T) {
+	service := NewNovelService(nil)
+	missingPath := filepath.Join(t.TempDir(), "missing", "sample.txt")
+
+	_, err := service.OpenNovel(missingPath)
+	if err == nil {
+		t.Fatal("expected missing file error")
+	}
+
+	message := err.Error()
+	if !strings.Contains(message, "修改了目录名称") {
+		t.Fatalf("expected rename hint in error, got %q", message)
+	}
+	if !strings.Contains(message, missingPath) {
+		t.Fatalf("expected missing path in error, got %q", message)
+	}
+}
+
 func TestParseEpubNovelExtractsGuideCoverPageImage(t *testing.T) {
 	epubPath := createTestEPUB(t, map[string][]byte{
 		"META-INF/container.xml": []byte(`<?xml version="1.0" encoding="UTF-8"?>

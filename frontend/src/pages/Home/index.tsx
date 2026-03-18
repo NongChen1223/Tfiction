@@ -36,6 +36,34 @@ function isPickerCancelled(error: unknown) {
   return error instanceof Error && error.message.includes('未选择文件')
 }
 
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message
+  }
+
+  if (typeof error === 'string' && error.trim()) {
+    return error
+  }
+
+  if (error && typeof error === 'object') {
+    const message = (error as { message?: unknown }).message
+    if (typeof message === 'string' && message.trim()) {
+      return message
+    }
+
+    try {
+      const serialized = JSON.stringify(error)
+      if (serialized && serialized !== '{}') {
+        return serialized
+      }
+    } catch {
+      return fallback
+    }
+  }
+
+  return fallback
+}
+
 function normalizeBookExtension(format?: string) {
   const trimmedFormat = (format || '').trim()
   if (!trimmedFormat) {
@@ -366,7 +394,7 @@ export default function Home() {
     } catch (error) {
       if (!isPickerCancelled(error)) {
         console.error('导入文件失败:', error)
-        messageApi.error(error instanceof Error ? error.message : '导入文件失败')
+        messageApi.error(getErrorMessage(error, '导入文件失败'))
       }
     }
   }
@@ -382,7 +410,7 @@ export default function Home() {
       await openNovelAndEnterReader(targetFile.filePath, { sourceDirectoryId: book.id })
     } catch (error) {
       console.error('打开目录失败:', error)
-      messageApi.error(error instanceof Error ? error.message : '打开目录失败')
+      messageApi.error(getErrorMessage(error, '打开目录失败'))
     }
   }
 
@@ -406,7 +434,7 @@ export default function Home() {
     } catch (error) {
       if (!isPickerCancelled(error)) {
         console.error('导入目录文件失败:', error)
-        messageApi.error(error instanceof Error ? error.message : '导入目录文件失败')
+        messageApi.error(getErrorMessage(error, '导入目录文件失败'))
       }
     }
   }
@@ -436,7 +464,7 @@ export default function Home() {
       })
     } catch (error) {
       console.error('打开书籍失败:', error)
-      messageApi.error(error instanceof Error ? error.message : '打开书籍失败')
+      messageApi.error(getErrorMessage(error, '打开书籍失败'))
     }
   }
 
@@ -456,7 +484,7 @@ export default function Home() {
       messageApi.success('已进入老板模式阅读')
     } catch (error) {
       console.error('老板模式打开失败:', error)
-      messageApi.error(error instanceof Error ? error.message : '老板模式打开失败')
+      messageApi.error(getErrorMessage(error, '老板模式打开失败'))
     }
   }
 
@@ -512,7 +540,7 @@ export default function Home() {
       messageApi.success(getDeleteSuccessMessage(targetBook))
     } catch (error) {
       console.error('删除书籍失败:', error)
-      messageApi.error(error instanceof Error ? error.message : '删除失败，请稍后重试')
+      messageApi.error(getErrorMessage(error, '删除失败，请稍后重试'))
       throw error
     }
   }

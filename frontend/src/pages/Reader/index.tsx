@@ -226,6 +226,12 @@ export default function Reader() {
   const overlayActionPollingRef = useRef(false)
   const camouflageTimerRef = useRef<number | null>(null)
   const camouflageDragCleanupRef = useRef<(() => void) | null>(null)
+  const bossOpacityPersistTimerRef = useRef<number | null>(null)
+  const overlayOpacityFrameRef = useRef<number | null>(null)
+  const overlayOpacityQueuedValueRef = useRef<number | null>(null)
+  const overlayOpacityLastSentRef = useRef<number | null>(null)
+  const overlayOpacityRevisionRef = useRef(0)
+  const overlayOpacityInFlightRef = useRef(false)
   const useDesktopOverlay = supportsDesktopOverlay
   const isWebviewStealthMode = isStealthMode && !useDesktopOverlay
   const bossMode = useBossMode({
@@ -256,7 +262,7 @@ export default function Reader() {
     | { activateBossMode?: boolean; returnDirectoryId?: string }
     | null)
   const activeStealthOpacity = clampStealthOpacity(
-    isStealthMode ? bossOpacity : opacity
+    isStealthMode ? opacity : bossOpacity
   )
   const displayOpacity = isWebviewStealthMode
     ? bossMode.isConcealed
@@ -317,6 +323,7 @@ const camouflageWidgetClassName = `${styles.camouflageWidget} ${
       green,
       blue
     )
+    overlayOpacityLastSentRef.current = nextOpacity
   }
 
   // 同步浮窗顶部/底部控制区需要的章节列表、当前章节和透明度状态。
@@ -337,6 +344,104 @@ const camouflageWidgetClassName = `${styles.camouflageWidget} ${
       nextOpacity,
       bossCamouflageEnabled
     )
+  }
+
+  const clearBossOpacityPersistTimer = () => {
+    if (bossOpacityPersistTimerRef.current === null) {
+      return
+    }
+
+    window.clearTimeout(bossOpacityPersistTimerRef.current)
+    bossOpacityPersistTimerRef.current = null
+  }
+
+  const flushBossOpacityPersist = (nextOpacity: number) => {
+    clearBossOpacityPersistTimer()
+    setBossOpacity(nextOpacity)
+  }
+
+  const scheduleBossOpacityPersist = (nextOpacity: number) => {
+    clearBossOpacityPersistTimer()
+    bossOpacityPersistTimerRef.current = window.setTimeout(() => {
+      bossOpacityPersistTimerRef.current = null
+      setBossOpacity(nextOpacity)
+    }, 120)
+  }
+
+  const resetDesktopOverlayOpacitySync = () => {
+    overlayOpacityRevisionRef.current += 1
+
+    if (overlayOpacityFrameRef.current !== null) {
+      window.cancelAnimationFrame(overlayOpacityFrameRef.current)
+      overlayOpacityFrameRef.current = null
+    }
+
+    overlayOpacityQueuedValueRef.current = null
+    overlayOpacityLastSentRef.current = null
+  }
+
+  const flushDesktopOverlayOpacitySync = async (revision: number) => {
+    if (overlayOpacityInFlightRef.current || revision !== overlayOpacityRevisionRef.current) {
+      return
+    }
+
+    overlayOpacityInFlightRef.current = true
+
+    try {
+      while (
+        revision === overlayOpacityRevisionRef.current &&
+        overlayOpacityQueuedValueRef.current !== null
+      ) {
+        const nextOpacity = overlayOpacityQueuedValueRef.current
+        overlayOpacityQueuedValueRef.current = null
+
+        if (
+          overlayOpacityLastSentRef.current !== null &&
+          Math.abs(overlayOpacityLastSentRef.current - nextOpacity) < 0.001
+        ) {
+          continue
+        }
+
+        await UpdateDesktopReaderOverlayOpacity(nextOpacity)
+
+        if (revision !== overlayOpacityRevisionRef.current) {
+          return
+        }
+
+        overlayOpacityLastSentRef.current = nextOpacity
+      }
+    } catch (error) {
+      console.error('同步桌面浮窗透明度失败:', error)
+    } finally {
+      overlayOpacityInFlightRef.current = false
+
+      if (
+        revision !== overlayOpacityRevisionRef.current ||
+        overlayOpacityQueuedValueRef.current === null ||
+        overlayOpacityFrameRef.current !== null
+      ) {
+        return
+      }
+
+      overlayOpacityFrameRef.current = window.requestAnimationFrame(() => {
+        overlayOpacityFrameRef.current = null
+        void flushDesktopOverlayOpacitySync(revision)
+      })
+    }
+  }
+
+  const scheduleDesktopOverlayOpacitySync = (nextOpacity: number) => {
+    overlayOpacityQueuedValueRef.current = nextOpacity
+    const revision = overlayOpacityRevisionRef.current
+
+    if (overlayOpacityFrameRef.current !== null) {
+      return
+    }
+
+    overlayOpacityFrameRef.current = window.requestAnimationFrame(() => {
+      overlayOpacityFrameRef.current = null
+      void flushDesktopOverlayOpacitySync(revision)
+    })
   }
 
   // 从后端读取指定章节正文，并在内容更新后恢复到顶部或既有滚动位置。
@@ -657,6 +762,7 @@ const handleToggleCamouflage = () => {
       if (useDesktopOverlay) {
         if (nextStealthMode) {
           const { red, green, blue } = parseHexColor(textColor)
+          resetDesktopOverlayOpacitySync()
           setBossOpacity(rememberedBossOpacity)
 
           await ShowDesktopReaderOverlay(
@@ -669,13 +775,15 @@ const handleToggleCamouflage = () => {
             blue
           )
           await syncDesktopOverlayControls(rememberedBossOpacity)
+          overlayOpacityLastSentRef.current = rememberedBossOpacity
           setStealthMode(true)
           setOpacity(rememberedBossOpacity)
           setShowSearch(false)
           setShowSidebar(false)
           bossMode.closePanel()
         } else {
-          setBossOpacity(useWindowStore.getState().opacity)
+          flushBossOpacityPersist(useWindowStore.getState().opacity)
+          resetDesktopOverlayOpacitySync()
           await HideDesktopReaderOverlay()
           setStealthMode(false)
           setOpacity(1)
@@ -686,6 +794,7 @@ const handleToggleCamouflage = () => {
       }
 
       if (nextStealthMode) {
+        resetDesktopOverlayOpacitySync()
         setBossOpacity(rememberedBossOpacity)
         await EnableStealthMode()
         await SetOpacity(rememberedBossOpacity)
@@ -693,7 +802,8 @@ const handleToggleCamouflage = () => {
         setOpacity(rememberedBossOpacity)
         bossMode.revealImmediately()
       } else {
-        setBossOpacity(useWindowStore.getState().opacity)
+        flushBossOpacityPersist(useWindowStore.getState().opacity)
+        resetDesktopOverlayOpacitySync()
         await DisableStealthMode()
         setStealthMode(false)
         setOpacity(1)
@@ -704,20 +814,26 @@ const handleToggleCamouflage = () => {
     }
   }
 
-  const handleOpacityChange = async (value: number) => {
+  const handleOpacityChange = async (
+    value: number,
+    options?: { desktopOverlayAlreadyApplied?: boolean }
+  ) => {
+    const nextOpacity = clampStealthOpacity(value)
+
     try {
-      setOpacity(value)
-      setBossOpacity(value)
+      setOpacity(nextOpacity)
+      scheduleBossOpacityPersist(nextOpacity)
+      bossMode.bumpPanelTimer()
 
       if (useDesktopOverlay && isStealthMode) {
-        await UpdateDesktopReaderOverlayOpacity(value)
-        await syncDesktopOverlayControls(value)
-        bossMode.bumpPanelTimer()
+        if (!options?.desktopOverlayAlreadyApplied) {
+          scheduleDesktopOverlayOpacitySync(nextOpacity)
+        }
         return
       }
 
-      await SetOpacity(value)
-      bossMode.bumpPanelTimer()
+      resetDesktopOverlayOpacitySync()
+      await SetOpacity(nextOpacity)
     } catch (error) {
       console.error('设置透明度失败:', error)
     }
@@ -726,10 +842,12 @@ const handleToggleCamouflage = () => {
   const handleReturnHome = async () => {
     if (isStealthMode) {
       try {
-        setBossOpacity(useWindowStore.getState().opacity)
+        flushBossOpacityPersist(useWindowStore.getState().opacity)
         if (useDesktopOverlay) {
+          resetDesktopOverlayOpacitySync()
           await HideDesktopReaderOverlay()
         } else {
+          resetDesktopOverlayOpacitySync()
           await DisableStealthMode()
         }
         setStealthMode(false)
@@ -769,6 +887,8 @@ useEffect(() => {
 useEffect(
   () => () => {
     clearCamouflageTimers()
+    clearBossOpacityPersistTimer()
+    resetDesktopOverlayOpacitySync()
     if (camouflageDragCleanupRef.current) {
       camouflageDragCleanupRef.current()
     }
@@ -869,6 +989,8 @@ useEffect(
         return
       }
 
+      flushBossOpacityPersist(windowState.opacity)
+      resetDesktopOverlayOpacitySync()
       windowState.setStealthMode(false)
       windowState.setOpacity(1)
 
@@ -939,7 +1061,8 @@ useEffect(
           return
         }
 
-        setBossOpacity(useWindowStore.getState().opacity)
+        flushBossOpacityPersist(useWindowStore.getState().opacity)
+        resetDesktopOverlayOpacitySync()
         await HideDesktopReaderOverlay()
         setStealthMode(false)
         setOpacity(1)
@@ -999,11 +1122,14 @@ useEffect(
             } else if (action.type === 'chapter' && typeof action.chapterIndex === 'number') {
               await handleChapterChange(action.chapterIndex)
             } else if (action.type === 'opacity' && typeof action.value === 'number') {
-              await handleOpacityChange(action.value)
+              await handleOpacityChange(action.value, {
+                desktopOverlayAlreadyApplied: true,
+              })
             } else if (action.type === 'camouflage') {
               setBossCamouflageEnabled(Boolean(action.value))
             } else if (action.type === 'close') {
-              setBossOpacity(useWindowStore.getState().opacity)
+              flushBossOpacityPersist(useWindowStore.getState().opacity)
+              resetDesktopOverlayOpacitySync()
               await HideDesktopReaderOverlay()
               setStealthMode(false)
               setOpacity(1)
@@ -1045,9 +1171,9 @@ useEffect(
     })
     const offOpacity = EventsOn('window:opacity', (nextOpacity: number) => {
       const normalizedOpacity = clampStealthOpacity(Number(nextOpacity))
-      setOpacity(Number(nextOpacity))
+      setOpacity(normalizedOpacity)
       if (useWindowStore.getState().isStealthMode && Number(nextOpacity) < 1) {
-        setBossOpacity(normalizedOpacity)
+        scheduleBossOpacityPersist(normalizedOpacity)
       }
     })
 
@@ -1298,7 +1424,7 @@ return (
                   handleOpacityChange(transparencySliderValueToOpacity(Number(event.target.value)))
                 }
                 className={styles.opacitySlider}
-                title="文字透明度"
+                title="内容透明度"
               />
             )}
           </div>
@@ -1458,14 +1584,14 @@ return (
 
             <div className={styles.bossPanelSection}>
               <span className={styles.bossPanelLabel}>
-                文字透明度 {opacityToTransparencySliderValue(bossOpacity).toFixed(2)}
+                内容透明度 {opacityToTransparencySliderValue(activeStealthOpacity).toFixed(2)}
               </span>
               <input
                 type="range"
                 min="0.02"
                 max="1"
                 step="0.02"
-                value={opacityToTransparencySliderValue(bossOpacity)}
+                value={opacityToTransparencySliderValue(activeStealthOpacity)}
                 onChange={(event) =>
                   handleOpacityChange(transparencySliderValueToOpacity(Number(event.target.value)))
                 }

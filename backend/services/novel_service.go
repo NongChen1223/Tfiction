@@ -82,7 +82,7 @@ func (s *NovelService) OpenNovel(filePath string) (*models.Novel, error) {
 
 	// 检查文件是否存在
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		return nil, fmt.Errorf("文件不存在: %s", filePath)
+		return nil, fmt.Errorf("文件不存在，可能是你移动了原文件或修改了目录名称，请重新导入该书籍: %s", filePath)
 	}
 
 	// 检查是否已在缓存中

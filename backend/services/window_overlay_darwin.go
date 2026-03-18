@@ -57,6 +57,7 @@ static int tfictionOverlayCurrentBlue = 34;
 static NSInteger tfictionOverlayCurrentChapterIndex = 0;
 static double tfictionOverlayCurrentProgress = 0.0;
 static NSRect tfictionOverlayExpandedFrame = {{0, 0}, {0, 0}};
+static CGFloat tfictionOverlayLastAttachmentResizeWidth = 0.0;
 static const CGFloat TFictionOverlayDefaultWidth = 620.0;
 static const CGFloat TFictionOverlayDefaultHeight = 280.0;
 static const CGFloat TFictionOverlayMinWidth = 600.0;
@@ -111,6 +112,7 @@ static NSColor *TFictionOverlayColor(int red, int green, int blue, double alpha)
 static NSColor *TFictionOverlayCurrentThemeColor(void);
 static NSColor *TFictionOverlayMixColor(NSColor *baseColor, NSColor *targetColor, CGFloat ratio);
 static CGFloat TFictionOverlayColorLuminance(NSColor *color);
+static void TFictionApplyDesktopReaderOverlayOpacity(double opacity);
 static void TFictionUpdateDesktopReaderOverlayOpacity(double opacity);
 static void TFictionDismissOverlayChapterPanel(void);
 static BOOL TFictionOverlayPointInView(NSPoint point, NSView *view);
@@ -120,6 +122,7 @@ static NSMutableAttributedString *TFictionCreateOverlayAttributedString(NSString
 static NSFont *TFictionOverlayTextFont(NSFont *existingFont, CGFloat pointSize);
 static void TFictionApplyOverlayTextAttributes(NSMutableAttributedString *attributedText, int fontSize, double lineHeight, double opacity, int red, int green, int blue);
 static void TFictionResizeOverlayTextAttachments(NSTextStorage *textStorage, CGFloat availableWidth);
+static void TFictionApplyOverlayContentAlpha(double opacity);
 
 static double TFictionClampOverlayOpacity(double opacity) {
 	return MAX(0.02, MIN(opacity, 1.0));
@@ -461,12 +464,13 @@ static double TFictionOverlayOpacityFromSliderValue(double sliderValue) {
 	nextFrame = TFictionClampDesktopReaderOverlayFrame(nextFrame, self.window.screen ?: tfictionMainAppWindow.screen);
 
 	[self.window setFrame:nextFrame display:YES animate:NO];
-	[self.window.contentView setNeedsDisplay:YES];
 }
 
 - (void)mouseUp:(NSEvent *)event {
 	[super mouseUp:event];
 	tfictionOverlayIsResizing = NO;
+	tfictionOverlayLastAttachmentResizeWidth = 0.0;
+	TFictionLayoutDesktopReaderOverlayViews();
 	tfictionOverlaySuppressCamouflageCollapseUntilReenter =
 		!TFictionOverlayWindowContainsCurrentMouseLocation(self.window);
 	TFictionUpdateOverlayHoverStateForCurrentMouseLocation(self.window);
@@ -528,7 +532,7 @@ static double TFictionOverlayOpacityFromSliderValue(double sliderValue) {
 
 - (void)handleOpacityChanged:(NSSlider *)sender {
 	tfictionOverlayCurrentOpacity = TFictionOverlayOpacityFromSliderValue(sender.doubleValue);
-	TFictionRefreshOverlayControls();
+	TFictionApplyDesktopReaderOverlayOpacity(tfictionOverlayCurrentOpacity);
 	TFictionEnqueueOverlayAction(@"opacity", -1, tfictionOverlayCurrentOpacity, YES);
 }
 
@@ -1394,7 +1398,7 @@ static void TFictionApplyOverlayTextAttributes(NSMutableAttributedString *attrib
 	NSAttributedString *fontSnapshot = [attributedText copy];
 	[attributedText beginEditing];
 	[attributedText addAttribute:NSForegroundColorAttributeName
-	                       value:TFictionOverlayColor(red, green, blue, opacity)
+	                       value:TFictionOverlayColor(red, green, blue, 1.0)
 	                       range:fullRange];
 	[attributedText addAttribute:NSParagraphStyleAttributeName value:paragraphStyle range:fullRange];
 	[attributedText addAttribute:NSShadowAttributeName value:shadow range:fullRange];
@@ -1407,6 +1411,31 @@ static void TFictionApplyOverlayTextAttributes(NSMutableAttributedString *attrib
 		[attributedText addAttribute:NSFontAttributeName value:nextFont range:range];
 	}];
 	[attributedText endEditing];
+}
+
+static NSImage *TFictionResolveOverlayAttachmentImage(NSTextAttachment *attachment) {
+	if (attachment == nil) {
+		return nil;
+	}
+
+	NSImage *image = attachment.image;
+	if (image == nil && attachment.contents != nil) {
+		image = [[NSImage alloc] initWithData:attachment.contents];
+	}
+
+	if (image == nil && attachment.fileWrapper.regularFileContents != nil) {
+		image = [[NSImage alloc] initWithData:attachment.fileWrapper.regularFileContents];
+	}
+
+	if (image == nil) {
+		image = attachment.image;
+	}
+
+	if (image != nil) {
+		attachment.image = image;
+	}
+
+	return image;
 }
 
 static void TFictionResizeOverlayTextAttachments(NSTextStorage *textStorage, CGFloat availableWidth) {
@@ -1425,26 +1454,38 @@ static void TFictionResizeOverlayTextAttachments(NSTextStorage *textStorage, CGF
 		}
 
 		NSTextAttachment *attachment = (NSTextAttachment *)value;
-		NSImage *image = attachment.image;
-		if (image == nil && attachment.contents != nil) {
-			image = [[NSImage alloc] initWithData:attachment.contents];
-			if (image != nil) {
-				attachment.image = image;
-			}
-		}
-
+		NSImage *image = TFictionResolveOverlayAttachmentImage(attachment);
 		if (image == nil || image.size.width <= 0 || image.size.height <= 0) {
 			return;
 		}
 
 		CGFloat scale = MIN(1.0, maxWidth / image.size.width);
+		CGFloat targetWidth = floor(image.size.width * scale);
+		CGFloat targetHeight = floor(image.size.height * scale);
+		if (fabs(attachment.bounds.size.width - targetWidth) < 0.5 &&
+		    fabs(attachment.bounds.size.height - targetHeight) < 0.5) {
+			return;
+		}
+
 		attachment.bounds = CGRectMake(
 			0,
 			0,
-			floor(image.size.width * scale),
-			floor(image.size.height * scale)
+			targetWidth,
+			targetHeight
 		);
 	}];
+}
+
+static void TFictionApplyOverlayContentAlpha(double opacity) {
+	double clampedOpacity = TFictionClampOverlayOpacity(opacity);
+	if (tfictionOverlayScrollView != nil) {
+		[tfictionOverlayScrollView setAlphaValue:clampedOpacity];
+	}
+
+	TFictionOverlayTextView *textView = (TFictionOverlayTextView *)[tfictionOverlayScrollView documentView];
+	if (textView != nil) {
+		[textView setAlphaValue:1.0];
+	}
 }
 
 static void TFictionSetOverlayChromeVisible(BOOL visible) {
@@ -1697,10 +1738,13 @@ static void TFictionLayoutDesktopReaderOverlayViews(void) {
 	if (textView != nil) {
 		[textView setFrame:NSMakeRect(0, 0, scrollFrame.size.width, scrollFrame.size.height)];
 		[textView.textContainer setContainerSize:NSMakeSize(scrollFrame.size.width, CGFLOAT_MAX)];
-		TFictionResizeOverlayTextAttachments(
-			textView.textStorage,
-			MAX(120.0, scrollFrame.size.width - (textView.textContainerInset.width * 2.0) - 8.0)
-		);
+		CGFloat attachmentWidth = MAX(120.0, scrollFrame.size.width - (textView.textContainerInset.width * 2.0) - 8.0);
+		CGFloat resizeThreshold = tfictionOverlayIsResizing ? 18.0 : 1.0;
+		if (tfictionOverlayLastAttachmentResizeWidth <= 0.0 ||
+		    fabs(tfictionOverlayLastAttachmentResizeWidth - attachmentWidth) >= resizeThreshold) {
+			TFictionResizeOverlayTextAttachments(textView.textStorage, attachmentWidth);
+			tfictionOverlayLastAttachmentResizeWidth = attachmentWidth;
+		}
 	}
 
 	if (tfictionOverlayChapterPanelView != nil && tfictionOverlayChapterListScrollView != nil && tfictionOverlayChapterListContentView != nil) {
@@ -1995,25 +2039,12 @@ static void TFictionApplyDesktopReaderOverlayOpacity(double opacity) {
 	tfictionOverlayCurrentOpacity = MAX(0.02, MIN(opacity, 1.0));
 
 	TFictionOverlayTextView *textView = (TFictionOverlayTextView *)[tfictionOverlayScrollView documentView];
-	if (textView == nil || [textView textStorage] == nil) {
+	if (textView == nil) {
 		TFictionRefreshOverlayControls();
 		return;
 	}
 
-	NSTextStorage *textStorage = [textView textStorage];
-	NSRange fullRange = NSMakeRange(0, textStorage.length);
-	if (fullRange.length > 0) {
-		[textStorage beginEditing];
-		[textStorage addAttribute:NSForegroundColorAttributeName
-		                    value:TFictionOverlayColor(
-		                    	tfictionOverlayCurrentRed,
-		                    	tfictionOverlayCurrentGreen,
-		                    	tfictionOverlayCurrentBlue,
-		                    	tfictionOverlayCurrentOpacity
-		                    )
-		                    range:fullRange];
-		[textStorage endEditing];
-	}
+	TFictionApplyOverlayContentAlpha(tfictionOverlayCurrentOpacity);
 
 	TFictionRefreshOverlayControls();
 }
@@ -2046,10 +2077,11 @@ static void TFictionApplyDesktopReaderOverlayContent(const char *text, int fontS
 	}
 	TFictionApplyOverlayTextAttributes(attributedText, fontSize, lineHeight, opacity, red, green, blue);
 	[[textView textStorage] setAttributedString:attributedText];
-	TFictionResizeOverlayTextAttachments(
-		[textView textStorage],
-		MAX(120.0, NSWidth(tfictionOverlayScrollView.contentView.bounds) - (textView.textContainerInset.width * 2.0) - 8.0)
-	);
+	CGFloat attachmentWidth = MAX(120.0, NSWidth(tfictionOverlayScrollView.contentView.bounds) - (textView.textContainerInset.width * 2.0) - 8.0);
+	tfictionOverlayLastAttachmentResizeWidth = 0.0;
+	TFictionResizeOverlayTextAttachments([textView textStorage], attachmentWidth);
+	tfictionOverlayLastAttachmentResizeWidth = attachmentWidth;
+	TFictionApplyOverlayContentAlpha(opacity);
 	if (shouldPreserveScroll && tfictionOverlayScrollView != nil) {
 		[tfictionOverlayScrollView.contentView scrollToPoint:preservedScrollOrigin];
 		[tfictionOverlayScrollView reflectScrolledClipView:tfictionOverlayScrollView.contentView];

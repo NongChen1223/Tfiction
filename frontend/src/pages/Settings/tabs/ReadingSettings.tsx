@@ -111,7 +111,7 @@ export default function ReadingSettings() {
 
         <div className={styles.settingItem}>
           <Slider
-            label={`文字透明度：${opacityToTransparencySliderValue(bossOpacity).toFixed(2)}`}
+            label={`内容透明度：${opacityToTransparencySliderValue(bossOpacity).toFixed(2)}`}
             min={0.02}
             max={1}
             step={0.02}
