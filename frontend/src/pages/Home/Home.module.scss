@@ -51,6 +51,12 @@
   max-width: 500px; /* 限制最大宽度，留出更多拖动空间 */
 }
 
+.searchInputCompact {
+  flex: 1 1 280px;
+  min-width: 220px;
+  max-width: 320px;
+}
+
 .searchInputFrame {
   background: rgb(var(--neo-panel-soft));
   border: var(--neo-border-width-sm) solid rgb(var(--neo-ink));
@@ -69,6 +75,30 @@
   align-items: center;
   gap: var(--spacing-md);
   flex-shrink: 0;
+}
+
+.selectionToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+  gap: var(--spacing-xs);
+  flex-shrink: 0;
+}
+
+.selectionSummary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2rem;
+  padding: 0 var(--spacing-sm);
+  background: rgb(var(--neo-panel-soft));
+  border: var(--neo-border-width-sm) solid rgb(var(--neo-ink));
+  border-radius: var(--neo-radius-md);
+  box-shadow: 3px 3px 0 rgb(var(--neo-shadow));
+  color: rgb(var(--neo-ink));
+  font-size: 0.8125rem;
+  font-weight: 800;
+  white-space: nowrap;
 }
 
 /* === View Mode Toggle === */
@@ -267,6 +297,12 @@
  * 场景：小屏笔记本或窗口缩小状态，侧边栏也会收缩为图标
  */
 @media (max-width: 1200px) {
+  .searchInputCompact {
+    flex-basis: 240px;
+    min-width: 180px;
+    max-width: 260px;
+  }
+
   .booksList.grid {
     grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
     gap: var(--spacing-md);  /* 间距从 24px 减小到 16px */
@@ -281,6 +317,16 @@
 @media (max-width: 1024px) {
   .header {
     padding: var(--spacing-lg) var(--spacing-xl);  /* 从 32px 减小到 24px */
+  }
+
+  .searchInputCompact {
+    min-width: 160px;
+    max-width: 220px;
+  }
+
+  .selectionSummary {
+    padding: 0 0.625rem;
+    font-size: 0.75rem;
   }
 
   .booksList.grid {

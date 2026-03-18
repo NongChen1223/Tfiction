@@ -12,6 +12,54 @@
   transform: translate(-2px, -2px);
 }
 
+.card.selectionMode:hover {
+  transform: none;
+}
+
+.selectionMode .coverWrapper {
+  transition:
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+.selectionMode:hover .coverWrapper {
+  border-color: rgba(var(--color-primary), 0.55);
+}
+
+.selected .coverWrapper {
+  border-color: rgb(var(--color-primary));
+  box-shadow:
+    var(--neo-shadow-offset-md) var(--neo-shadow-offset-md) 0 rgb(var(--neo-shadow)),
+    0 0 0 3px rgba(var(--color-primary), 0.18);
+}
+
+.selectionMarker {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 54px;
+  padding: 0.3rem 0.65rem;
+  background: rgba(10, 12, 18, 0.72);
+  border: var(--neo-border-width-sm) solid rgba(255, 255, 255, 0.48);
+  border-radius: 999px;
+  color: rgb(var(--cover-title-color));
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  z-index: 4;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.selectionMarkerActive {
+  background: rgb(var(--color-primary));
+  border-color: rgb(var(--neo-ink));
+  color: rgb(var(--neo-ink));
+}
+
 /* === Cover Wrapper === */
 
 .coverWrapper {
@@ -259,6 +307,18 @@
   background: rgb(var(--neo-panel-soft));
   transform: translate(2px, 2px);
   box-shadow: 4px 4px 0 rgb(var(--neo-shadow));
+}
+
+.card.list.selectionMode:hover {
+  background: rgb(var(--neo-panel));
+  transform: none;
+  box-shadow: var(--neo-shadow-offset-md) var(--neo-shadow-offset-md) 0
+    rgb(var(--neo-shadow));
+}
+
+.card.list.selected {
+  background: rgba(var(--color-primary), 0.08);
+  border-color: rgb(var(--color-primary));
 }
 
 .card.list .coverWrapper {

@@ -5,6 +5,7 @@ import {
   Grid,
   List,
   Plus,
+  Check,
   ArrowUpDown,
   Clock,
   Maximize2,
@@ -14,6 +15,9 @@ import {
   FolderInput,
   FilePlus,
   ChevronLeft,
+  Square,
+  Trash2,
+  X,
 } from 'lucide-react'
 import { Popover, message } from 'antd'
 import type { Book, SortMode, ViewMode } from '@/types'
@@ -112,6 +116,25 @@ function getDeleteDetail(book: Book) {
   return book.isDirectory ? book.title : getBookDisplayNameWithExtension(book)
 }
 
+function getBatchDeleteTitle(count: number) {
+  return `确定删除已选中的 ${count} 个条目吗？`
+}
+
+function getBatchDeleteDescription() {
+  return '会从书架移除所选条目，并清理关联阅读进度。原始文件不会被删除。'
+}
+
+function getBatchDeleteDetail(books: Book[]) {
+  if (books.length === 0) {
+    return ''
+  }
+
+  const preview = books.slice(0, 3).map((book) => getDeleteDetail(book))
+  return books.length <= 3
+    ? preview.join('、')
+    : `${preview.join('、')} 等 ${books.length} 个条目`
+}
+
 function getRenameDescription(book: Book) {
   if (book.isDirectory) {
     return '只会修改书架里的目录名称，不会改动你本地的原始文件夹或文件。'
@@ -179,6 +202,9 @@ export default function Home() {
   const [selectFilesModalOpen, setSelectFilesModalOpen] = useState(false)
   const [targetDirectory, setTargetDirectory] = useState<Book | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Book | null>(null)
+  const [multiSelectMode, setMultiSelectMode] = useState(false)
+  const [selectedBookIds, setSelectedBookIds] = useState<string[]>([])
+  const [batchDeleteTargets, setBatchDeleteTargets] = useState<Book[]>([])
   const [renameTarget, setRenameTarget] = useState<Book | null>(null)
   const { setCurrentNovel, addNovel } = useNovelStore()
   const {
@@ -245,6 +271,24 @@ export default function Home() {
     }
   })
 
+  const selectedBookIdSet = new Set(selectedBookIds)
+  const selectedVisibleBooks = sortedBooks.filter((book) => selectedBookIdSet.has(book.id))
+  const hasSelectedBooks = selectedVisibleBooks.length > 0
+  const allVisibleSelected =
+    sortedBooks.length > 0 && selectedVisibleBooks.length === sortedBooks.length
+
+  useEffect(() => {
+    if (!multiSelectMode) {
+      return
+    }
+
+    const visibleIds = new Set(sortedBooks.map((book) => book.id))
+    setSelectedBookIds((prev) => {
+      const next = prev.filter((id) => visibleIds.has(id))
+      return next.length === prev.length ? prev : next
+    })
+  }, [multiSelectMode, sortedBooks])
+
   const availableSingleFiles = books.filter((book) => !book.isDirectory)
 
   const sortOptions = [
@@ -281,6 +325,25 @@ export default function Home() {
     const nextSearchParams = new URLSearchParams(searchParams)
     nextSearchParams.delete('directory')
     setSearchParams(nextSearchParams)
+  }
+
+  const closeDeleteModal = () => {
+    setDeleteTarget(null)
+    setBatchDeleteTargets([])
+  }
+
+  const exitMultiSelectMode = () => {
+    setMultiSelectMode(false)
+    setSelectedBookIds([])
+    setBatchDeleteTargets([])
+  }
+
+  const enterMultiSelectMode = () => {
+    setRenameTarget(null)
+    closeDeleteModal()
+    setSortPopoverOpen(false)
+    setMultiSelectMode(true)
+    setSelectedBookIds([])
   }
 
   const loadNovelForShelf = async (filePath = '', options?: { sourceDirectoryId?: string }) => {
@@ -513,31 +576,79 @@ export default function Home() {
 
   const handleDeleteBook = (book: Book) => {
     setRenameTarget(null)
-    setDeleteTarget({ ...book })
+    setBatchDeleteTargets([])
+    setDeleteTarget({
+      ...book,
+      files: book.files?.map((file) => ({ ...file })),
+    })
+  }
+
+  const handleToggleBookSelection = (book: Book) => {
+    setSelectedBookIds((prev) =>
+      prev.includes(book.id) ? prev.filter((id) => id !== book.id) : [...prev, book.id]
+    )
+  }
+
+  const handleToggleSelectAllVisible = () => {
+    if (sortedBooks.length === 0) {
+      return
+    }
+
+    setSelectedBookIds(allVisibleSelected ? [] : sortedBooks.map((book) => book.id))
+  }
+
+  const handleRequestBatchDelete = () => {
+    if (!hasSelectedBooks) {
+      return
+    }
+
+    setRenameTarget(null)
+    setDeleteTarget(null)
+    setBatchDeleteTargets(
+      selectedVisibleBooks.map((book) => ({
+        ...book,
+        files: book.files?.map((file) => ({ ...file })),
+      }))
+    )
+  }
+
+  const deleteBookRecord = async (targetBook: Book) => {
+    const progressFilePaths = targetBook.isDirectory
+      ? (targetBook.files || [])
+          .map((file) => file.filePath)
+          .filter((filePath): filePath is string => Boolean(filePath))
+      : targetBook.filePath
+        ? [targetBook.filePath]
+        : []
+    const uniqueProgressFilePaths = [...new Set(progressFilePaths)]
+
+    await Promise.allSettled(uniqueProgressFilePaths.map((filePath) => DeleteProgress(filePath)))
+
+    if (targetBook.parentDirectoryId) {
+      removeFileFromDirectory(targetBook.parentDirectoryId, targetBook.id)
+    } else {
+      removeBook(targetBook.id)
+    }
   }
 
   const handleConfirmDelete = async () => {
-    if (!deleteTarget) {
+    const targets = deleteTarget ? [deleteTarget] : batchDeleteTargets
+    if (targets.length === 0) {
       return
     }
 
     try {
-      const targetBook = deleteTarget
-      const progressFilePaths = targetBook.isDirectory
-        ? (targetBook.files || []).map((file) => file.filePath).filter(Boolean)
-        : [targetBook.filePath].filter(Boolean)
-
-      await Promise.allSettled(
-        progressFilePaths.map((filePath) => DeleteProgress(filePath as string))
-      )
-
-      if (targetBook.parentDirectoryId) {
-        removeFileFromDirectory(targetBook.parentDirectoryId, targetBook.id)
-      } else {
-        removeBook(targetBook.id)
+      for (const targetBook of targets) {
+        await deleteBookRecord(targetBook)
       }
 
-      messageApi.success(getDeleteSuccessMessage(targetBook))
+      if (deleteTarget) {
+        messageApi.success(getDeleteSuccessMessage(deleteTarget))
+      } else {
+        const deletedIds = new Set(targets.map((book) => book.id))
+        setSelectedBookIds((prev) => prev.filter((id) => !deletedIds.has(id)))
+        messageApi.success(`已删除 ${targets.length} 个条目`)
+      }
     } catch (error) {
       console.error('删除书籍失败:', error)
       messageApi.error(getErrorMessage(error, '删除失败，请稍后重试'))
@@ -567,12 +678,11 @@ export default function Home() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onClear={() => setSearchQuery('')}
-            className={styles.searchInput}
+            className={`${styles.searchInput} ${multiSelectMode ? styles.searchInputCompact : ''}`}
             wrapperClassName={styles.searchInputFrame}
           />
 
           <div className={styles.toolbar}>
-
             <div className={styles.viewModeToggle}>
               <button
                 className={`${styles.viewButton} ${viewMode === 'grid' ? styles.active : ''}`}
@@ -608,9 +718,53 @@ export default function Home() {
               </button>
             </Popover>
 
-            <Button icon={<Plus size={20} />} onClick={handleImport}>
-              {currentDirectory ? '添加到目录' : '导入文件'}
-            </Button>
+            {multiSelectMode ? (
+              <div className={styles.selectionToolbar}>
+                <span className={styles.selectionSummary}>
+                  已选 {selectedVisibleBooks.length} / {sortedBooks.length}
+                </span>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  icon={allVisibleSelected ? <Square size={18} /> : <Check size={18} />}
+                  onClick={handleToggleSelectAllVisible}
+                  disabled={sortedBooks.length === 0}
+                >
+                  {allVisibleSelected ? '取消全选' : '全选当前'}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  icon={<X size={18} />}
+                  onClick={exitMultiSelectMode}
+                >
+                  取消多选
+                </Button>
+                <Button
+                  size="sm"
+                  variant="danger"
+                  icon={<Trash2 size={18} />}
+                  onClick={handleRequestBatchDelete}
+                  disabled={!hasSelectedBooks}
+                >
+                  删除已选 ({selectedVisibleBooks.length})
+                </Button>
+              </div>
+            ) : (
+              <>
+                <Button icon={<Plus size={20} />} onClick={handleImport}>
+                  {currentDirectory ? '添加到目录' : '导入文件'}
+                </Button>
+                <Button
+                  variant="secondary"
+                  icon={<Trash2 size={18} />}
+                  onClick={enterMultiSelectMode}
+                  disabled={sortedBooks.length === 0}
+                >
+                  多选删除
+                </Button>
+              </>
+            )}
           </div>
         </header>
         {currentDirectory && (
@@ -639,6 +793,9 @@ export default function Home() {
                   onDelete={handleDeleteBook}
                   onQuickRead={handleQuickRead}
                   onImportToDirectory={handleImportToDirectory}
+                  selectionMode={multiSelectMode}
+                  selected={selectedBookIdSet.has(book.id)}
+                  onToggleSelect={handleToggleBookSelection}
                 />
               ))}
             </div>
@@ -657,14 +814,22 @@ export default function Home() {
         onClose={() => setImportModalOpen(false)}
       />
       <ConfirmModal
-        open={deleteTarget !== null}
-        title={deleteTarget ? getDeleteConfirmMessage(deleteTarget) : ''}
-        detail={deleteTarget ? getDeleteDetail(deleteTarget) : ''}
-        description={deleteTarget ? getDeleteDescription(deleteTarget) : ''}
-        confirmText="确认删除"
+        open={deleteTarget !== null || batchDeleteTargets.length > 0}
+        title={
+          deleteTarget
+            ? getDeleteConfirmMessage(deleteTarget)
+            : getBatchDeleteTitle(batchDeleteTargets.length)
+        }
+        detail={
+          deleteTarget ? getDeleteDetail(deleteTarget) : getBatchDeleteDetail(batchDeleteTargets)
+        }
+        description={
+          deleteTarget ? getDeleteDescription(deleteTarget) : getBatchDeleteDescription()
+        }
+        confirmText={deleteTarget ? '确认删除' : `删除已选 (${batchDeleteTargets.length})`}
         cancelText="先不删"
         tone="danger"
-        onClose={() => setDeleteTarget(null)}
+        onClose={closeDeleteModal}
         onConfirm={handleConfirmDelete}
       />
       <RenameModal

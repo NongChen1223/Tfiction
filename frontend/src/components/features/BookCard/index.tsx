@@ -7,12 +7,15 @@ import styles from './BookCard.module.scss'
 export interface BookCardProps {
   book: Book
   viewMode?: ViewMode
+  selectionMode?: boolean
+  selected?: boolean
   onOpen?: (book: Book) => void
   onOpenInBossMode?: (book: Book) => void
   onEdit?: (book: Book) => void
   onDelete?: (book: Book) => void
   onQuickRead?: (book: Book) => void
   onImportToDirectory?: (book: Book) => void
+  onToggleSelect?: (book: Book) => void
 }
 
 /**
@@ -23,17 +26,33 @@ export interface BookCardProps {
 export default function BookCard({
   book,
   viewMode = 'grid',
+  selectionMode = false,
+  selected = false,
   onOpen,
   onOpenInBossMode,
   onEdit,
   onDelete,
   onQuickRead,
   onImportToDirectory,
+  onToggleSelect,
 }: BookCardProps) {
-  const handlePrimaryOpen = () => onOpen?.(book)
+  const handlePrimaryOpen = () => {
+    if (selectionMode) {
+      onToggleSelect?.(book)
+      return
+    }
+
+    onOpen?.(book)
+  }
   const handlePrimaryOpenClick = (event: MouseEvent) => {
     event.preventDefault()
     event.stopPropagation()
+
+    if (selectionMode) {
+      onToggleSelect?.(book)
+      return
+    }
+
     onOpen?.(book)
   }
   const handleBossMode = (event: MouseEvent) => {
@@ -77,7 +96,14 @@ export default function BookCard({
       : 0
   const progressValue = clampProgress(book.isDirectory ? directoryProgress : book.progress || 0)
   const progressLabel = formatProgress(progressValue)
-  const cardClasses = [styles.card, styles[viewMode]].filter(Boolean).join(' ')
+  const cardClasses = [
+    styles.card,
+    styles[viewMode],
+    selectionMode && styles.selectionMode,
+    selected && styles.selected,
+  ]
+    .filter(Boolean)
+    .join(' ')
 
   if (viewMode === 'list') {
     return (
@@ -89,6 +115,14 @@ export default function BookCard({
             ) : (
               <div className={styles.coverPlaceholder}>
                 {book.isDirectory ? <FolderOpen size={48} /> : <BookOpen size={48} />}
+              </div>
+            )}
+
+            {selectionMode && (
+              <div
+                className={`${styles.selectionMarker} ${selected ? styles.selectionMarkerActive : ''}`}
+              >
+                {selected ? '已选' : '选择'}
               </div>
             )}
           </div>
@@ -124,78 +158,80 @@ export default function BookCard({
                 最后阅读: {new Date(book.lastReadTime).toLocaleDateString()}
               </p>
             )}
-            <div className={styles.actions}>
-              {book.isDirectory ? (
-                <>
-                  <button
-                    type="button"
-                    className={styles.iconButton}
-                    onClick={handlePrimaryOpenClick}
-                    aria-label="进入目录"
-                    title="进入目录"
-                  >
-                    <FolderOpen size={16} />
-                  </button>
-                  <button
-                    type="button"
-                    className={styles.iconButton}
-                    onClick={handleQuickRead}
-                    aria-label="立即阅读"
-                    title="立即阅读"
-                  >
-                    <Eye size={16} />
-                  </button>
-                  <button
-                    type="button"
-                    className={styles.iconButton}
-                    onClick={handleImportToDirectory}
-                    aria-label="导入文件"
-                    title="导入文件"
-                  >
-                    <Plus size={16} />
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    className={styles.iconButton}
-                    onClick={handlePrimaryOpenClick}
-                    aria-label="阅读"
-                    title="阅读"
-                  >
-                    <Eye size={16} />
-                  </button>
-                  <button
-                    type="button"
-                    className={styles.iconButton}
-                    onClick={handleBossMode}
-                    aria-label="老板模式阅读"
-                    title="老板模式阅读"
-                  >
-                    <EyeOff size={16} />
-                  </button>
-                </>
-              )}
-              <button
-                type="button"
-                className={styles.iconButton}
-                onClick={handleEdit}
-                aria-label="编辑"
-                title="编辑"
-              >
-                <Edit2 size={16} />
-              </button>
-              <button
-                type="button"
-                className={styles.iconButton}
-                onClick={handleDelete}
-                aria-label="删除"
-                title="删除"
-              >
-                <Trash2 size={16} />
-              </button>
-            </div>
+            {!selectionMode && (
+              <div className={styles.actions}>
+                {book.isDirectory ? (
+                  <>
+                    <button
+                      type="button"
+                      className={styles.iconButton}
+                      onClick={handlePrimaryOpenClick}
+                      aria-label="进入目录"
+                      title="进入目录"
+                    >
+                      <FolderOpen size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.iconButton}
+                      onClick={handleQuickRead}
+                      aria-label="立即阅读"
+                      title="立即阅读"
+                    >
+                      <Eye size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.iconButton}
+                      onClick={handleImportToDirectory}
+                      aria-label="导入文件"
+                      title="导入文件"
+                    >
+                      <Plus size={16} />
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      className={styles.iconButton}
+                      onClick={handlePrimaryOpenClick}
+                      aria-label="阅读"
+                      title="阅读"
+                    >
+                      <Eye size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.iconButton}
+                      onClick={handleBossMode}
+                      aria-label="老板模式阅读"
+                      title="老板模式阅读"
+                    >
+                      <EyeOff size={16} />
+                    </button>
+                  </>
+                )}
+                <button
+                  type="button"
+                  className={styles.iconButton}
+                  onClick={handleEdit}
+                  aria-label="编辑"
+                  title="编辑"
+                >
+                  <Edit2 size={16} />
+                </button>
+                <button
+                  type="button"
+                  className={styles.iconButton}
+                  onClick={handleDelete}
+                  aria-label="删除"
+                  title="删除"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -214,7 +250,7 @@ export default function BookCard({
             </div>
           )}
 
-          {!book.isDirectory && book.progress !== undefined && (
+          {!selectionMode && !book.isDirectory && book.progress !== undefined && (
             <div className={styles.progressCircle}>
               <svg className={styles.progressSvg} viewBox="0 0 36 36">
                 <circle className={styles.progressBg} cx="18" cy="18" r="16" />
@@ -236,40 +272,50 @@ export default function BookCard({
             </Badge>
           </div>
 
+          {selectionMode && (
+            <div
+              className={`${styles.selectionMarker} ${selected ? styles.selectionMarkerActive : ''}`}
+            >
+              {selected ? '已选' : '选择'}
+            </div>
+          )}
+
           <div className={styles.titleOverlay}>
             <h3 className={styles.title}>{book.title}</h3>
             <p className={styles.author}>作者: {book.author}</p>
           </div>
 
-          <div className={styles.hoverActions}>
-            {book.isDirectory ? (
-              <>
-                <button type="button" className={styles.actionButton} onClick={handlePrimaryOpenClick}>
-                  <FolderOpen size={20} />
-                  <span>进入目录</span>
-                </button>
-                <button type="button" className={styles.actionButton} onClick={handleQuickRead}>
-                  <Eye size={20} />
-                  <span>立即阅读</span>
-                </button>
-                <button type="button" className={styles.actionButton} onClick={handleImportToDirectory}>
-                  <Plus size={20} />
-                  <span>导入文件</span>
-                </button>
-              </>
-            ) : (
-              <>
-                <button type="button" className={styles.actionButton} onClick={handlePrimaryOpenClick}>
-                  <Eye size={20} />
-                  <span>立刻阅读</span>
-                </button>
-                <button type="button" className={styles.actionButton} onClick={handleBossMode}>
-                  <EyeOff size={20} />
-                  <span>老板模式</span>
-                </button>
-              </>
-            )}
-          </div>
+          {!selectionMode && (
+            <div className={styles.hoverActions}>
+              {book.isDirectory ? (
+                <>
+                  <button type="button" className={styles.actionButton} onClick={handlePrimaryOpenClick}>
+                    <FolderOpen size={20} />
+                    <span>进入目录</span>
+                  </button>
+                  <button type="button" className={styles.actionButton} onClick={handleQuickRead}>
+                    <Eye size={20} />
+                    <span>立即阅读</span>
+                  </button>
+                  <button type="button" className={styles.actionButton} onClick={handleImportToDirectory}>
+                    <Plus size={20} />
+                    <span>导入文件</span>
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button type="button" className={styles.actionButton} onClick={handlePrimaryOpenClick}>
+                    <Eye size={20} />
+                    <span>立刻阅读</span>
+                  </button>
+                  <button type="button" className={styles.actionButton} onClick={handleBossMode}>
+                    <EyeOff size={20} />
+                    <span>老板模式</span>
+                  </button>
+                </>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -279,26 +325,28 @@ export default function BookCard({
             最后阅读: {new Date(book.lastReadTime).toLocaleDateString()}
           </p>
         )}
-        <div className={styles.actions}>
-          <button
-            type="button"
-            className={styles.iconButton}
-            onClick={handleEdit}
-            aria-label="编辑"
-            title="编辑"
-          >
-            <Edit2 size={16} />
-          </button>
-          <button
-            type="button"
-            className={styles.iconButton}
-            onClick={handleDelete}
-            aria-label="删除"
-            title="删除"
-          >
-            <Trash2 size={16} />
-          </button>
-        </div>
+        {!selectionMode && (
+          <div className={styles.actions}>
+            <button
+              type="button"
+              className={styles.iconButton}
+              onClick={handleEdit}
+              aria-label="编辑"
+              title="编辑"
+            >
+              <Edit2 size={16} />
+            </button>
+            <button
+              type="button"
+              className={styles.iconButton}
+              onClick={handleDelete}
+              aria-label="删除"
+              title="删除"
+            >
+              <Trash2 size={16} />
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )
