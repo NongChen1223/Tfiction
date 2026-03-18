@@ -58,6 +58,8 @@ static NSInteger tfictionOverlayCurrentChapterIndex = 0;
 static double tfictionOverlayCurrentProgress = 0.0;
 static NSRect tfictionOverlayExpandedFrame = {{0, 0}, {0, 0}};
 static CGFloat tfictionOverlayLastAttachmentResizeWidth = 0.0;
+static CFTimeInterval tfictionOverlayLastOpacityActionTimestamp = 0.0;
+static double tfictionOverlayLastOpacityActionValue = -1.0;
 static const CGFloat TFictionOverlayDefaultWidth = 620.0;
 static const CGFloat TFictionOverlayDefaultHeight = 280.0;
 static const CGFloat TFictionOverlayMinWidth = 600.0;
@@ -533,7 +535,17 @@ static double TFictionOverlayOpacityFromSliderValue(double sliderValue) {
 - (void)handleOpacityChanged:(NSSlider *)sender {
 	tfictionOverlayCurrentOpacity = TFictionOverlayOpacityFromSliderValue(sender.doubleValue);
 	TFictionApplyDesktopReaderOverlayOpacity(tfictionOverlayCurrentOpacity);
-	TFictionEnqueueOverlayAction(@"opacity", -1, tfictionOverlayCurrentOpacity, YES);
+
+	CFTimeInterval now = CFAbsoluteTimeGetCurrent();
+	BOOL shouldEnqueueAction =
+		tfictionOverlayLastOpacityActionTimestamp <= 0.0 ||
+		fabs(tfictionOverlayLastOpacityActionValue - tfictionOverlayCurrentOpacity) >= 0.012 ||
+		(now - tfictionOverlayLastOpacityActionTimestamp) >= (1.0 / 30.0);
+	if (shouldEnqueueAction) {
+		tfictionOverlayLastOpacityActionTimestamp = now;
+		tfictionOverlayLastOpacityActionValue = tfictionOverlayCurrentOpacity;
+		TFictionEnqueueOverlayAction(@"opacity", -1, tfictionOverlayCurrentOpacity, YES);
+	}
 }
 
 - (void)handleSelectChapter:(NSButton *)sender {
@@ -1479,11 +1491,18 @@ static void TFictionResizeOverlayTextAttachments(NSTextStorage *textStorage, CGF
 static void TFictionApplyOverlayContentAlpha(double opacity) {
 	double clampedOpacity = TFictionClampOverlayOpacity(opacity);
 	if (tfictionOverlayScrollView != nil) {
-		[tfictionOverlayScrollView setAlphaValue:clampedOpacity];
+		if (tfictionOverlayScrollView.layer != nil) {
+			tfictionOverlayScrollView.layer.opacity = (float)clampedOpacity;
+		} else {
+			[tfictionOverlayScrollView setAlphaValue:clampedOpacity];
+		}
 	}
 
 	TFictionOverlayTextView *textView = (TFictionOverlayTextView *)[tfictionOverlayScrollView documentView];
 	if (textView != nil) {
+		if (textView.layer != nil) {
+			textView.layer.opacity = 1.0f;
+		}
 		[textView setAlphaValue:1.0];
 	}
 }
@@ -1876,6 +1895,7 @@ static void TFictionEnsureDesktopReaderOverlayWindow(void) {
 	tfictionOverlayOpacitySlider = [[NSSlider alloc] initWithFrame:NSZeroRect];
 	[tfictionOverlayOpacitySlider setMinValue:0.02];
 	[tfictionOverlayOpacitySlider setMaxValue:1.0];
+	[tfictionOverlayOpacitySlider setContinuous:YES];
 	[tfictionOverlayOpacitySlider setTarget:tfictionOverlayControlTarget];
 	[tfictionOverlayOpacitySlider setAction:@selector(handleOpacityChanged:)];
 
@@ -1917,6 +1937,7 @@ static void TFictionEnsureDesktopReaderOverlayWindow(void) {
 	[tfictionOverlayScrollView setHasVerticalScroller:NO];
 	[tfictionOverlayScrollView setHasHorizontalScroller:NO];
 	[tfictionOverlayScrollView setScrollerStyle:NSScrollerStyleOverlay];
+	[tfictionOverlayScrollView setWantsLayer:YES];
 
 	TFictionOverlayTextView *textView = [[TFictionOverlayTextView alloc] initWithFrame:NSZeroRect];
 	[textView setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
@@ -1928,6 +1949,7 @@ static void TFictionEnsureDesktopReaderOverlayWindow(void) {
 	[textView setHorizontallyResizable:NO];
 	[textView setVerticallyResizable:YES];
 	[textView setTextContainerInset:NSMakeSize(22, 18)];
+	[textView setWantsLayer:YES];
 	[textView.textContainer setWidthTracksTextView:YES];
 	[textView.textContainer setContainerSize:NSMakeSize(frame.size.width, CGFLOAT_MAX)];
 
@@ -2040,13 +2062,17 @@ static void TFictionApplyDesktopReaderOverlayOpacity(double opacity) {
 
 	TFictionOverlayTextView *textView = (TFictionOverlayTextView *)[tfictionOverlayScrollView documentView];
 	if (textView == nil) {
-		TFictionRefreshOverlayControls();
 		return;
 	}
 
-	TFictionApplyOverlayContentAlpha(tfictionOverlayCurrentOpacity);
+	if (tfictionOverlayOpacitySlider != nil) {
+		double sliderValue = TFictionOverlayOpacitySliderValue(tfictionOverlayCurrentOpacity);
+		if (fabs(tfictionOverlayOpacitySlider.doubleValue - sliderValue) >= 0.001) {
+			[tfictionOverlayOpacitySlider setDoubleValue:sliderValue];
+		}
+	}
 
-	TFictionRefreshOverlayControls();
+	TFictionApplyOverlayContentAlpha(tfictionOverlayCurrentOpacity);
 }
 
 static void TFictionApplyDesktopReaderOverlayContent(const char *text, int fontSize, double lineHeight, double opacity, int red, int green, int blue) {
@@ -2096,6 +2122,8 @@ static void TFictionShowDesktopReaderOverlayWindow(const char *text, int fontSiz
 	dispatch_async(dispatch_get_main_queue(), ^{
 		tfictionMainAppWindow = TFictionResolveMainAppWindow();
 		[tfictionOverlayActionQueue removeAllObjects];
+		tfictionOverlayLastOpacityActionTimestamp = 0.0;
+		tfictionOverlayLastOpacityActionValue = -1.0;
 		tfictionOverlayIsResizing = NO;
 		tfictionOverlaySuppressCamouflageCollapseUntilReenter = NO;
 		TFictionSetOverlayChapterPanelVisible(NO);
@@ -2158,6 +2186,8 @@ static void TFictionUpdateDesktopReaderOverlayOpacity(double opacity) {
 static void TFictionHideDesktopReaderOverlayWindow(void) {
 	dispatch_async(dispatch_get_main_queue(), ^{
 		tfictionOverlayIsResizing = NO;
+		tfictionOverlayLastOpacityActionTimestamp = 0.0;
+		tfictionOverlayLastOpacityActionValue = -1.0;
 		tfictionOverlaySuppressCamouflageCollapseUntilReenter = NO;
 		if (tfictionOverlayCamouflageCollapsed && tfictionOverlayWindow != nil) {
 			NSRect expandedFrame = TFictionOverlayExpandedFrameForRestore();
