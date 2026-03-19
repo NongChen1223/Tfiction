@@ -66,6 +66,8 @@ static double moyureaderOverlayLastOpacityActionValue = -1.0;
 static CFTimeInterval moyureaderOverlayLastPositionActionTimestamp = 0.0;
 static NSInteger moyureaderOverlayLastPositionActionChapterIndex = -1;
 static double moyureaderOverlayLastPositionActionProgress = -1.0;
+static NSString *const MoyuReaderOverlayFrameWidthDefaultsKey = @"moyureader.overlay.frame.width";
+static NSString *const MoyuReaderOverlayFrameHeightDefaultsKey = @"moyureader.overlay.frame.height";
 static const CGFloat MoyuReaderOverlayDefaultWidth = 620.0;
 static const CGFloat MoyuReaderOverlayDefaultHeight = 280.0;
 static const CGFloat MoyuReaderOverlayMinWidth = 600.0;
@@ -145,6 +147,8 @@ static NSDictionary *MoyuReaderResolveOverlayReadingLocation(void);
 static BOOL MoyuReaderScrollOverlayToReadingLocation(NSInteger chapterIndex, double progress);
 static BOOL MoyuReaderRefreshOverlayCurrentChapterFromVisibleLocation(void);
 static void MoyuReaderNotifyOverlayReadingLocationIfNeeded(void);
+static NSSize MoyuReaderOverlayPersistedSize(void);
+static void MoyuReaderPersistOverlayExpandedFrameSize(NSRect frame);
 
 static double MoyuReaderClampOverlayOpacity(double opacity) {
 	return MAX(0.02, MIN(opacity, 1.0));
@@ -498,12 +502,14 @@ static void MoyuReaderOverlayDebugLog(NSString *format, ...) {
 	nextFrame.origin.y = NSMaxY(self.initialWindowFrame) - nextFrame.size.height;
 	nextFrame = MoyuReaderClampDesktopReaderOverlayFrame(nextFrame, self.window.screen ?: moyureaderMainAppWindow.screen);
 
-	[self.window setFrame:nextFrame display:YES animate:NO];
+	[self.window setFrame:nextFrame display:NO animate:NO];
 }
 
 - (void)mouseUp:(NSEvent *)event {
 	[super mouseUp:event];
 	moyureaderOverlayIsResizing = NO;
+	moyureaderOverlayExpandedFrame = self.window.frame;
+	MoyuReaderPersistOverlayExpandedFrameSize(moyureaderOverlayExpandedFrame);
 	moyureaderOverlayLastAttachmentResizeWidth = 0.0;
 	MoyuReaderLayoutDesktopReaderOverlayViews();
 	moyureaderOverlaySuppressCamouflageCollapseUntilReenter =
@@ -1008,6 +1014,28 @@ static NSRect MoyuReaderOverlayExpandedFrameForRestore(void) {
 	return MoyuReaderClampDesktopReaderOverlayFrame(baseFrame, moyureaderOverlayWindow.screen ?: moyureaderMainAppWindow.screen);
 }
 
+static NSSize MoyuReaderOverlayPersistedSize(void) {
+	NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+	double width = [defaults doubleForKey:MoyuReaderOverlayFrameWidthDefaultsKey];
+	double height = [defaults doubleForKey:MoyuReaderOverlayFrameHeightDefaultsKey];
+
+	if (width < MoyuReaderOverlayMinWidth || height < MoyuReaderOverlayMinHeight) {
+		return NSMakeSize(MoyuReaderOverlayDefaultWidth, MoyuReaderOverlayDefaultHeight);
+	}
+
+	return NSMakeSize(width, height);
+}
+
+static void MoyuReaderPersistOverlayExpandedFrameSize(NSRect frame) {
+	if (frame.size.width < MoyuReaderOverlayMinWidth || frame.size.height < MoyuReaderOverlayMinHeight) {
+		return;
+	}
+
+	NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+	[defaults setDouble:frame.size.width forKey:MoyuReaderOverlayFrameWidthDefaultsKey];
+	[defaults setDouble:frame.size.height forKey:MoyuReaderOverlayFrameHeightDefaultsKey];
+}
+
 static void MoyuReaderSetOverlayCamouflageCollapsed(BOOL collapsed, BOOL animated) {
 	if (moyureaderOverlayWindow == nil || !moyureaderOverlayVisible) {
 		moyureaderOverlayCamouflageCollapsed = NO;
@@ -1345,7 +1373,7 @@ static NSRect MoyuReaderPreferredDesktopReaderOverlayFrame(void) {
 		);
 	}
 
-	NSSize overlaySize = NSMakeSize(MoyuReaderOverlayDefaultWidth, MoyuReaderOverlayDefaultHeight);
+	NSSize overlaySize = MoyuReaderOverlayPersistedSize();
 	NSRect frame = NSMakeRect(0, 0, overlaySize.width, overlaySize.height);
 	NSScreen *preferredScreen = nil;
 
@@ -2239,6 +2267,14 @@ static void MoyuReaderLayoutDesktopReaderOverlayViews(void) {
 		MoyuReaderOverlayFooterHeight +
 		24.0);
 	[moyureaderOverlayScrollView setFrame:scrollFrame];
+
+	if (moyureaderOverlayIsResizing) {
+		if (moyureaderOverlayChapterPanelView != nil) {
+			[moyureaderOverlayChapterPanelView setHidden:YES];
+		}
+		[moyureaderOverlayRootView setNeedsDisplay:YES];
+		return;
+	}
 
 	MoyuReaderOverlayTextView *textView = (MoyuReaderOverlayTextView *)[moyureaderOverlayScrollView documentView];
 	if (textView != nil) {

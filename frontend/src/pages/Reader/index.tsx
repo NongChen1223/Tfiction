@@ -132,6 +132,11 @@ interface PendingChapterScroll {
   behavior: ScrollBehavior
 }
 
+interface ReadingLocation {
+  chapterIndex: number
+  chapterScrollProgress: number
+}
+
 function deriveChapterProgressFromOverall(novel: Novel, chapterIndex: number) {
   const chapter = novel.chapters[chapterIndex]
   if (!chapter || novel.content.length === 0) {
@@ -718,7 +723,52 @@ const camouflageWidgetClassName = `${styles.camouflageWidget} ${
     }
   }
 
-  const resolveReaderReadingLocation = () => {
+  const applyReadingProgressState = (
+    chapterIndex: number,
+    chapterScrollProgress: number,
+    options?: { updateTimestamp?: boolean }
+  ) => {
+    const novel = currentNovelRef.current
+    if (!novel) {
+      return null
+    }
+
+    const nextProgress = calculateProgressFromPosition(
+      novel,
+      chapterIndex,
+      chapterScrollProgress
+    )
+    const nextLastReadTime = options?.updateTimestamp ? Date.now() : novel.lastReadTime
+
+    currentNovelRef.current = {
+      ...novel,
+      currentChapter: chapterIndex,
+      readProgress: nextProgress,
+      lastReadTime: nextLastReadTime,
+    }
+    patchCurrentNovel((activeNovel) =>
+      activeNovel.filePath !== novel.filePath
+        ? activeNovel
+        : {
+            ...activeNovel,
+            currentChapter: chapterIndex,
+            readProgress: nextProgress,
+            lastReadTime: nextLastReadTime,
+          }
+    )
+
+    if (options?.updateTimestamp) {
+      updateReadProgress(novel.filePath, nextProgress)
+      updateProgressByFilePath(novel.filePath, {
+        progress: nextProgress,
+        lastReadTime: nextLastReadTime,
+      })
+    }
+
+    return nextProgress
+  }
+
+  const resolveReaderReadingLocation = (): ReadingLocation | null => {
     const readingLocation = resolveCurrentReadingLocation()
     if (readingLocation) {
       return readingLocation
@@ -857,30 +907,13 @@ const camouflageWidgetClassName = `${styles.camouflageWidget} ${
     }
     const novel = currentNovelRef.current
     if (novel) {
-      const nextProgress = calculateProgressFromPosition(
-        novel,
-        chapterIndex,
-        chapterScrollProgress
-      )
+      const nextProgress = calculateProgressFromPosition(novel, chapterIndex, chapterScrollProgress)
       const currentProgress = Number(novel.readProgress || 0)
       const shouldSyncReaderState =
         chapterIndex !== novel.currentChapter || Math.abs(currentProgress - nextProgress) >= 0.2
 
       if (shouldSyncReaderState) {
-        currentNovelRef.current = {
-          ...novel,
-          currentChapter: chapterIndex,
-          readProgress: nextProgress,
-        }
-        patchCurrentNovel((activeNovel) =>
-          activeNovel.filePath !== novel.filePath
-            ? activeNovel
-            : {
-                ...activeNovel,
-                currentChapter: chapterIndex,
-                readProgress: nextProgress,
-              }
-        )
+        applyReadingProgressState(chapterIndex, chapterScrollProgress)
       }
     }
     void ensureUpcomingChapters(chapterIndex)
@@ -925,7 +958,6 @@ const camouflageWidgetClassName = `${styles.camouflageWidget} ${
     }
 
     const progress = calculateProgressFromPosition(novel, chapterIndex, chapterScrollProgress)
-    const now = Date.now()
 
     try {
       await saveReadingProgress(novel.filePath, chapterIndex, 0, progress)
@@ -933,24 +965,7 @@ const camouflageWidgetClassName = `${styles.camouflageWidget} ${
       console.error('保存阅读进度失败:', error)
     }
 
-    currentNovelRef.current = {
-      ...novel,
-      currentChapter: chapterIndex,
-      readProgress: progress,
-      lastReadTime: now,
-    }
-    patchCurrentNovel((activeNovel) =>
-      activeNovel.filePath !== novel.filePath
-        ? activeNovel
-        : {
-            ...activeNovel,
-            currentChapter: chapterIndex,
-            readProgress: progress,
-            lastReadTime: now,
-          }
-    )
-    updateReadProgress(novel.filePath, progress)
-    updateProgressByFilePath(novel.filePath, { progress, lastReadTime: now })
+    applyReadingProgressState(chapterIndex, chapterScrollProgress, { updateTimestamp: true })
   }
 
   // 执行章节切换或搜索跳转，并尽量保留章节内对应的滚动百分比。
@@ -1248,9 +1263,10 @@ const handleToggleCamouflage = () => {
           overlayReadingLocationRef.current = null
 
           if (currentReadingLocation) {
-            await persistReadingProgress(
+            applyReadingProgressState(
               currentReadingLocation.chapterIndex,
-              currentReadingLocation.chapterScrollProgress
+              currentReadingLocation.chapterScrollProgress,
+              { updateTimestamp: true }
             )
           }
 
