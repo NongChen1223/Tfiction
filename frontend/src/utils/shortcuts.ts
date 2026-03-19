@@ -46,6 +46,15 @@ export const SHORTCUT_META: Record<
 }
 
 const MODIFIER_ORDER = ['Ctrl', 'Shift', 'Alt', 'Meta'] as const
+const DOUBLE_SHORTCUT_PREFIX = 'Double:'
+const DOUBLE_SHORTCUT_LABEL = '双击 '
+const DOUBLE_SHORTCUT_INTERVAL_MS = 360
+const shortcutTriggerHistory = new Map<string, number>()
+
+type ParsedShortcutBinding = {
+  mode: 'single' | 'double'
+  shortcut: string
+}
 
 export function normalizeShortcut(input: string) {
   const parts = input
@@ -57,6 +66,17 @@ export function normalizeShortcut(input: string) {
   const nonModifiers = parts.filter((part) => !MODIFIER_ORDER.includes(part as never))
   const unique = Array.from(new Set([...modifiers, ...nonModifiers]))
   return unique.join('+')
+}
+
+export function normalizeShortcutBinding(input: string) {
+  const parsed = parseShortcutBinding(input)
+  if (!parsed.shortcut) {
+    return ''
+  }
+
+  return parsed.mode === 'double'
+    ? `${DOUBLE_SHORTCUT_PREFIX}${parsed.shortcut}`
+    : parsed.shortcut
 }
 
 export function eventToShortcut(event: KeyboardEvent | React.KeyboardEvent<HTMLElement>) {
@@ -78,12 +98,33 @@ export function matchesShortcut(
   event: KeyboardEvent | React.KeyboardEvent<HTMLElement>,
   shortcut: string
 ) {
-  const normalizedShortcut = normalizeShortcut(shortcut)
-  if (!normalizedShortcut) {
+  const parsed = parseShortcutBinding(shortcut)
+  if (!parsed.shortcut) {
     return false
   }
 
-  return eventToShortcut(event) === normalizedShortcut
+  if ('repeat' in event && event.repeat) {
+    return false
+  }
+
+  if (eventToShortcut(event) !== parsed.shortcut) {
+    return false
+  }
+
+  if (parsed.mode === 'single') {
+    return true
+  }
+
+  const now = Number(event.timeStamp || Date.now())
+  const lastTriggeredAt = shortcutTriggerHistory.get(parsed.shortcut) || 0
+  shortcutTriggerHistory.set(parsed.shortcut, now)
+
+  if (now - lastTriggeredAt <= DOUBLE_SHORTCUT_INTERVAL_MS) {
+    shortcutTriggerHistory.delete(parsed.shortcut)
+    return true
+  }
+
+  return false
 }
 
 export function getDuplicateShortcutAction(
@@ -91,9 +132,11 @@ export function getDuplicateShortcutAction(
   targetAction: ShortcutAction,
   candidate: string
 ) {
-  const normalizedCandidate = normalizeShortcut(candidate)
+  const candidateConflictKey = getShortcutConflictKey(candidate)
   return (Object.keys(shortcuts) as ShortcutAction[]).find(
-    (action) => action !== targetAction && normalizeShortcut(shortcuts[action]) === normalizedCandidate
+    (action) =>
+      action !== targetAction &&
+      getShortcutConflictKey(shortcuts[action]) === candidateConflictKey
   )
 }
 
@@ -105,11 +148,12 @@ export function isShortcutRecorderEvent(
 }
 
 export function hasNonModifierKey(shortcut: string) {
-  if (!shortcut) {
+  const parsed = parseShortcutBinding(shortcut)
+  if (!parsed.shortcut) {
     return false
   }
 
-  const parts = normalizeShortcut(shortcut)
+  const parts = parsed.shortcut
     .split('+')
     .filter(Boolean)
 
@@ -122,6 +166,52 @@ export function normalizeKeyName(key: string) {
 
 export function buildShortcutFromKeys(keys: Iterable<string>) {
   return normalizeShortcut(Array.from(keys).join('+'))
+}
+
+export function buildDoubleShortcutBinding(shortcut: string) {
+  const normalizedShortcut = normalizeShortcut(shortcut)
+  return normalizedShortcut ? `${DOUBLE_SHORTCUT_PREFIX}${normalizedShortcut}` : ''
+}
+
+export function formatShortcutLabel(shortcut: string) {
+  const parsed = parseShortcutBinding(shortcut)
+  if (!parsed.shortcut) {
+    return ''
+  }
+
+  return parsed.mode === 'double'
+    ? `${parsed.shortcut} + ${parsed.shortcut}`
+    : parsed.shortcut
+}
+
+function getShortcutConflictKey(shortcut: string) {
+  return parseShortcutBinding(shortcut).shortcut
+}
+
+function parseShortcutBinding(input: string): ParsedShortcutBinding {
+  const trimmedInput = input.trim()
+  if (!trimmedInput) {
+    return { mode: 'single', shortcut: '' }
+  }
+
+  if (trimmedInput.startsWith(DOUBLE_SHORTCUT_PREFIX)) {
+    return {
+      mode: 'double',
+      shortcut: normalizeShortcut(trimmedInput.slice(DOUBLE_SHORTCUT_PREFIX.length)),
+    }
+  }
+
+  if (trimmedInput.startsWith(DOUBLE_SHORTCUT_LABEL)) {
+    return {
+      mode: 'double',
+      shortcut: normalizeShortcut(trimmedInput.slice(DOUBLE_SHORTCUT_LABEL.length)),
+    }
+  }
+
+  return {
+    mode: 'single',
+    shortcut: normalizeShortcut(trimmedInput),
+  }
 }
 
 function normalizeKeyToken(token: string) {

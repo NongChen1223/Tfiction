@@ -5,7 +5,9 @@ import { useClickOutside } from '@/hooks/useClickOutside'
 import {
   DEFAULT_SHORTCUTS,
   SHORTCUT_META,
+  buildDoubleShortcutBinding,
   buildShortcutFromKeys,
+  formatShortcutLabel,
   getDuplicateShortcutAction,
   hasNonModifierKey,
   normalizeKeyName,
@@ -23,6 +25,10 @@ export default function KeyboardSettings() {
   const buttonRefs = useRef<Partial<Record<ShortcutAction, HTMLButtonElement | null>>>({})
   const activeButtonRef = useRef<HTMLButtonElement>(null)
   const pressedKeysRef = useRef<Set<string>>(new Set())
+  const pendingShortcutRef = useRef<{
+    shortcut: string
+    timerId: number
+  } | null>(null)
 
   useEffect(() => {
     activeButtonRef.current = recordingAction
@@ -35,6 +41,10 @@ export default function KeyboardSettings() {
     setRecordingShortcut('')
     setErrorMessage('')
     pressedKeysRef.current.clear()
+    if (pendingShortcutRef.current) {
+      window.clearTimeout(pendingShortcutRef.current.timerId)
+      pendingShortcutRef.current = null
+    }
   })
 
   useEffect(() => {
@@ -42,16 +52,51 @@ export default function KeyboardSettings() {
       return
     }
 
+    const clearPendingShortcut = () => {
+      if (!pendingShortcutRef.current) {
+        return
+      }
+
+      window.clearTimeout(pendingShortcutRef.current.timerId)
+      pendingShortcutRef.current = null
+    }
+
     const clearRecordingState = () => {
+      clearPendingShortcut()
       setRecordingAction(null)
       setRecordingShortcut('')
       setErrorMessage('')
       pressedKeysRef.current.clear()
     }
 
+    const saveShortcut = (candidateShortcut: string) => {
+      const duplicateAction = getDuplicateShortcutAction(
+        keyboardShortcuts,
+        recordingAction,
+        candidateShortcut
+      )
+
+      if (duplicateAction) {
+        setErrorMessage(
+          `快捷键 ${formatShortcutLabel(candidateShortcut)} 已被「${SHORTCUT_META[duplicateAction].action}」占用`
+        )
+        setRecordingShortcut('')
+        pressedKeysRef.current.clear()
+        return false
+      }
+
+      setKeyboardShortcut(recordingAction, candidateShortcut)
+      clearRecordingState()
+      return true
+    }
+
     const handleWindowKeyDown = (event: KeyboardEvent) => {
       event.preventDefault()
       event.stopPropagation()
+
+      if (event.repeat) {
+        return
+      }
 
       const normalizedKey = normalizeKeyName(event.key)
 
@@ -69,23 +114,36 @@ export default function KeyboardSettings() {
       event.preventDefault()
       event.stopPropagation()
 
+      if (event.repeat) {
+        return
+      }
+
       const normalizedKey = normalizeKeyName(event.key)
       const currentShortcut = buildShortcutFromKeys(pressedKeysRef.current)
 
       if (hasNonModifierKey(currentShortcut) && !['Ctrl', 'Shift', 'Alt', 'Meta'].includes(normalizedKey)) {
-        const duplicateAction = getDuplicateShortcutAction(
-          keyboardShortcuts,
-          recordingAction,
-          currentShortcut
-        )
-
-        if (duplicateAction) {
-          setErrorMessage(
-            `快捷键 ${currentShortcut} 已被「${SHORTCUT_META[duplicateAction].action}」占用`
-          )
+        const pendingShortcut = pendingShortcutRef.current?.shortcut
+        if (pendingShortcut && pendingShortcut === currentShortcut) {
+          if (saveShortcut(buildDoubleShortcutBinding(currentShortcut))) {
+            return
+          }
+          clearPendingShortcut()
         } else {
-          setKeyboardShortcut(recordingAction, currentShortcut)
-          clearRecordingState()
+          clearPendingShortcut()
+          pendingShortcutRef.current = {
+            shortcut: currentShortcut,
+            timerId: window.setTimeout(() => {
+              if (!pendingShortcutRef.current || pendingShortcutRef.current.shortcut !== currentShortcut) {
+                return
+              }
+
+              pendingShortcutRef.current = null
+              void saveShortcut(currentShortcut)
+            }, 360),
+          }
+          pressedKeysRef.current.clear()
+          setErrorMessage('')
+          setRecordingShortcut(`${formatShortcutLabel(currentShortcut)}（再次按下可录制双击）`)
           return
         }
       }
@@ -98,6 +156,7 @@ export default function KeyboardSettings() {
     window.addEventListener('keyup', handleWindowKeyUp, true)
 
     return () => {
+      clearPendingShortcut()
       window.removeEventListener('keydown', handleWindowKeyDown, true)
       window.removeEventListener('keyup', handleWindowKeyUp, true)
     }
@@ -152,6 +211,10 @@ export default function KeyboardSettings() {
                   }`}
                   onClick={() => {
                     if (recordingAction === shortcut.actionId) {
+                      if (pendingShortcutRef.current) {
+                        window.clearTimeout(pendingShortcutRef.current.timerId)
+                        pendingShortcutRef.current = null
+                      }
                       setRecordingAction(null)
                       setRecordingShortcut('')
                       setErrorMessage('')
@@ -163,12 +226,16 @@ export default function KeyboardSettings() {
                     setRecordingShortcut('')
                     setErrorMessage('')
                     pressedKeysRef.current.clear()
+                    if (pendingShortcutRef.current) {
+                      window.clearTimeout(pendingShortcutRef.current.timerId)
+                      pendingShortcutRef.current = null
+                    }
                     buttonRefs.current[shortcut.actionId]?.focus()
                   }}
                 >
                   {recordingAction === shortcut.actionId
                     ? recordingShortcut || '按下新组合键'
-                    : shortcut.key}
+                    : formatShortcutLabel(shortcut.key)}
                 </button>
               </div>
             ))}
@@ -180,6 +247,9 @@ export default function KeyboardSettings() {
         <div className={styles.infoBox}>
           <p className={styles.infoText}>
             点击右侧按键开始录制。按 `Delete` 或 `Backspace` 可恢复该项默认值。
+          </p>
+          <p className={styles.infoText}>
+            连续按两次同一组按键，会保存为“双击快捷键”。
           </p>
           <p className={styles.infoText}>
             页面级快捷键已经接入阅读器，包括 BOSS 模式切换、快速隐藏、搜索、翻章和返回书架。
