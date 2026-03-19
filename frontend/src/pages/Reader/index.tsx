@@ -783,6 +783,34 @@ const camouflageWidgetClassName = `${styles.camouflageWidget} ${
       chapterScrollProgress: clampUnitInterval(chapterScrollProgress),
       behavior: 'auto',
     }
+    const novel = currentNovelRef.current
+    if (novel) {
+      const nextProgress = calculateProgressFromPosition(
+        novel,
+        chapterIndex,
+        chapterScrollProgress
+      )
+      const currentProgress = Number(novel.readProgress || 0)
+      const shouldSyncReaderState =
+        chapterIndex !== novel.currentChapter || Math.abs(currentProgress - nextProgress) >= 0.2
+
+      if (shouldSyncReaderState) {
+        currentNovelRef.current = {
+          ...novel,
+          currentChapter: chapterIndex,
+          readProgress: nextProgress,
+        }
+        patchCurrentNovel((activeNovel) =>
+          activeNovel.filePath !== novel.filePath
+            ? activeNovel
+            : {
+                ...activeNovel,
+                currentChapter: chapterIndex,
+                readProgress: nextProgress,
+              }
+        )
+      }
+    }
     void ensureUpcomingChapters(chapterIndex)
   }
 
@@ -915,6 +943,10 @@ const camouflageWidgetClassName = `${styles.camouflageWidget} ${
 
       void ensureUpcomingChapters(nextChapterIndex)
       await persistReadingProgress(nextChapterIndex, nextScrollProgress)
+
+      if (useDesktopOverlay && useWindowStore.getState().isStealthMode) {
+        await syncDesktopOverlayControls()
+      }
     } catch (error) {
       pendingChapterScrollRef.current = null
       console.error('跳转阅读位置失败:', error)
@@ -1072,7 +1104,7 @@ const handleToggleCamouflage = () => {
   }
 
   const handleChapterChange = async (chapterIndex: number) => {
-    if (!currentNovel) {
+    if (!currentNovelRef.current) {
       return
     }
 
@@ -1080,23 +1112,25 @@ const handleToggleCamouflage = () => {
   }
 
   const handlePrevChapter = () => {
-    if (!currentNovel || currentNovel.currentChapter <= 0) {
+    const novel = currentNovelRef.current
+    if (!novel || novel.currentChapter <= 0) {
       return
     }
 
-    void handleChapterChange(currentNovel.currentChapter - 1)
+    void handleChapterChange(novel.currentChapter - 1)
   }
 
   const handleNextChapter = () => {
-    if (!currentNovel) {
+    const novel = currentNovelRef.current
+    if (!novel) {
       return
     }
 
-    if (currentNovel.currentChapter >= currentNovel.chapters.length - 1) {
+    if (novel.currentChapter >= novel.chapters.length - 1) {
       return
     }
 
-    void handleChapterChange(currentNovel.currentChapter + 1)
+    void handleChapterChange(novel.currentChapter + 1)
   }
 
   const handleSearch = async () => {
@@ -1509,9 +1543,7 @@ useEffect(
 
     void syncDesktopOverlayControls()
   }, [
-    currentNovel?.currentChapter,
     currentNovel?.filePath,
-    currentNovel?.readProgress,
     bossCamouflageEnabled,
     overlayChapterTitlesSignature,
     useDesktopOverlay,

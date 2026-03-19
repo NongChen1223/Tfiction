@@ -140,6 +140,7 @@ static void MoyuReaderApplyOverlayTextAttributes(NSMutableAttributedString *attr
 static void MoyuReaderResizeOverlayTextAttachments(NSTextStorage *textStorage, CGFloat availableWidth);
 static void MoyuReaderApplyOverlayContentAlpha(double opacity);
 static NSDictionary *MoyuReaderResolveOverlayReadingLocation(void);
+static BOOL MoyuReaderRefreshOverlayCurrentChapterFromVisibleLocation(void);
 static void MoyuReaderNotifyOverlayReadingLocationIfNeeded(void);
 
 static double MoyuReaderClampOverlayOpacity(double opacity) {
@@ -1228,6 +1229,10 @@ static void MoyuReaderScrollCurrentChapterButtonIntoView(void) {
 static void MoyuReaderSetOverlayChapterPanelVisible(BOOL visible) {
 	moyureaderOverlayChapterPanelVisible = visible;
 
+	if (visible) {
+		MoyuReaderRefreshOverlayCurrentChapterFromVisibleLocation();
+	}
+
 	if (moyureaderOverlayChapterPanelView != nil) {
 		[moyureaderOverlayRootView addSubview:moyureaderOverlayChapterPanelView positioned:NSWindowAbove relativeTo:moyureaderOverlayScrollView];
 		[moyureaderOverlayChapterPanelView setHidden:!(visible && moyureaderOverlayChromeVisible)];
@@ -1237,6 +1242,10 @@ static void MoyuReaderSetOverlayChapterPanelVisible(BOOL visible) {
 	MoyuReaderLayoutDesktopReaderOverlayViews();
 	if (visible) {
 		dispatch_async(dispatch_get_main_queue(), ^{
+			if (MoyuReaderRefreshOverlayCurrentChapterFromVisibleLocation()) {
+				MoyuReaderRefreshOverlayControls();
+				MoyuReaderApplyOverlayChapterButtonStyles();
+			}
 			MoyuReaderScrollCurrentChapterButtonIntoView();
 		});
 	}
@@ -1839,6 +1848,23 @@ static NSDictionary *MoyuReaderResolveOverlayReadingLocation(void) {
 	};
 }
 
+static BOOL MoyuReaderRefreshOverlayCurrentChapterFromVisibleLocation(void) {
+	NSDictionary *readingLocation = MoyuReaderResolveOverlayReadingLocation();
+	if (readingLocation == nil) {
+		return NO;
+	}
+
+	NSInteger chapterIndex = [readingLocation[@"chapterIndex"] integerValue];
+	double chapterProgress = [readingLocation[@"progress"] doubleValue];
+	moyureaderOverlayCurrentChapterIndex = chapterIndex;
+	MoyuReaderOverlayDebugLog(
+		@"refresh current chapter for directory chapter=%ld progress=%.3f",
+		(long)chapterIndex,
+		chapterProgress
+	);
+	return YES;
+}
+
 static void MoyuReaderNotifyOverlayReadingLocationIfNeeded(void) {
 	if (!moyureaderOverlayVisible) {
 		return;
@@ -2045,6 +2071,17 @@ static void MoyuReaderLayoutDesktopReaderOverlayViews(void) {
 		return;
 	}
 
+	NSClipView *contentView = moyureaderOverlayScrollView.contentView;
+	NSPoint preservedScrollOrigin = NSZeroPoint;
+	BOOL shouldPreserveScroll =
+		moyureaderOverlayVisible &&
+		contentView != nil &&
+		[moyureaderOverlayScrollView documentView] != nil &&
+		!moyureaderOverlayCamouflageCollapsed;
+	if (shouldPreserveScroll) {
+		preservedScrollOrigin = contentView.bounds.origin;
+	}
+
 	NSRect bounds = moyureaderOverlayRootView.bounds;
 	if (moyureaderOverlayCamouflageCollapsed) {
 		[moyureaderOverlayHeaderView setHidden:YES];
@@ -2146,6 +2183,23 @@ static void MoyuReaderLayoutDesktopReaderOverlayViews(void) {
 			moyureaderOverlayLastAttachmentResizeWidth = attachmentWidth;
 			MoyuReaderResizeOverlayTextViewToFitContent(textView, scrollFrame.size);
 		}
+	}
+
+	if (shouldPreserveScroll && contentView != nil && textView != nil) {
+		CGFloat maxOffsetY = MAX(0.0, NSHeight(textView.frame) - NSHeight(contentView.bounds));
+		NSPoint clampedScrollOrigin = NSMakePoint(
+			0.0,
+			MIN(MAX(preservedScrollOrigin.y, 0.0), maxOffsetY)
+		);
+		[contentView scrollToPoint:clampedScrollOrigin];
+		[moyureaderOverlayScrollView reflectScrolledClipView:contentView];
+		MoyuReaderOverlayDebugLog(
+			@"layout preserve scroll from=%.1f to=%.1f viewportH=%.1f contentH=%.1f",
+			preservedScrollOrigin.y,
+			clampedScrollOrigin.y,
+			NSHeight(contentView.bounds),
+			NSHeight(textView.frame)
+		);
 	}
 
 	if (moyureaderOverlayChapterPanelView != nil && moyureaderOverlayChapterListScrollView != nil && moyureaderOverlayChapterListContentView != nil) {
