@@ -137,6 +137,12 @@ interface ReadingLocation {
   chapterScrollProgress: number
 }
 
+interface ReaderRouteState {
+  filePath?: string
+  activateBossMode?: boolean
+  returnDirectoryId?: string
+}
+
 function deriveChapterProgressFromOverall(novel: Novel, chapterIndex: number) {
   const chapter = novel.chapters[chapterIndex]
   if (!chapter || novel.content.length === 0) {
@@ -338,9 +344,8 @@ export default function Reader() {
   const overlayChapterTitlesSignature = currentNovel
     ? currentNovel.chapters.map((chapter) => chapter.title).join('\u0000')
     : ''
-  const routeState = (location.state as
-    | { activateBossMode?: boolean; returnDirectoryId?: string }
-    | null)
+  const routeState = (location.state as ReaderRouteState | null) ?? null
+  const pendingRouteFilePath = routeState?.filePath?.trim() || ''
   const activeStealthOpacity = clampStealthOpacity(
     isStealthMode ? opacity : bossOpacity
   )
@@ -1190,6 +1195,66 @@ const handleToggleCamouflage = () => {
     }
   }
 
+  useEffect(() => {
+    if (!pendingRouteFilePath) {
+      return
+    }
+
+    const nextRouteState: ReaderRouteState = {
+      ...(routeState?.activateBossMode ? { activateBossMode: true } : {}),
+      ...(returnDirectoryId ? { returnDirectoryId } : {}),
+    }
+
+    if (currentNovel?.filePath === pendingRouteFilePath) {
+      navigate(location.pathname, {
+        replace: true,
+        state: Object.keys(nextRouteState).length > 0 ? nextRouteState : null,
+      })
+      return
+    }
+
+    let disposed = false
+
+    const openRouteNovel = async () => {
+      try {
+        const openedNovel = await openNovel(pendingRouteFilePath)
+        if (disposed) {
+          return
+        }
+
+        const normalizedNovel = normalizeNovel(openedNovel)
+        setCurrentNovel(normalizedNovel)
+        addNovel(normalizedNovel)
+        navigate(location.pathname, {
+          replace: true,
+          state: Object.keys(nextRouteState).length > 0 ? nextRouteState : null,
+        })
+      } catch (error) {
+        if (disposed) {
+          return
+        }
+
+        console.error('打开阅读内容失败:', error)
+        navigate('/home', { replace: true })
+      }
+    }
+
+    void openRouteNovel()
+
+    return () => {
+      disposed = true
+    }
+  }, [
+    addNovel,
+    currentNovel?.filePath,
+    location.pathname,
+    navigate,
+    pendingRouteFilePath,
+    returnDirectoryId,
+    routeState?.activateBossMode,
+    setCurrentNovel,
+  ])
+
   const handleChapterChange = async (chapterIndex: number) => {
     if (!currentNovelRef.current) {
       return
@@ -1879,6 +1944,14 @@ useEffect(
       }
     }
   }, [currentNovel?.filePath, loadedChapters.length])
+
+  if (!currentNovel && pendingRouteFilePath) {
+    return (
+      <div className={styles.empty}>
+        <p>正在打开阅读内容...</p>
+      </div>
+    )
+  }
 
   if (!currentNovel) {
     return (

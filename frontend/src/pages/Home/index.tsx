@@ -31,7 +31,6 @@ import ImportModal, { type ModalOption } from '@/components/features/ImportModal
 import SelectFilesModal from '@/components/features/SelectFilesModal'
 import { openNovel } from '@/services/novelBridge'
 import { DeleteProgress } from '@/wailsjs/go/services/ProgressService'
-import { useNovelStore } from '@/stores/novelStore'
 import { useLibraryStore } from '@/stores/libraryStore'
 import { formatBookCategory, mapNovelToBook, normalizeNovel } from '@/utils/novel'
 import styles from './Home.module.scss'
@@ -182,6 +181,34 @@ function mapDirectoryFileToBook(
   }
 }
 
+interface ReaderNavigationTarget {
+  filePath: string
+  sourceDirectoryId?: string
+}
+
+function resolveBookReadTarget(book: Book): ReaderNavigationTarget | null {
+  if (book.isDirectory) {
+    const targetFile = resolveDirectoryReadTarget(book)
+    if (!targetFile?.filePath) {
+      return null
+    }
+
+    return {
+      filePath: targetFile.filePath,
+      sourceDirectoryId: book.id,
+    }
+  }
+
+  if (!book.filePath) {
+    return null
+  }
+
+  return {
+    filePath: book.filePath,
+    sourceDirectoryId: book.parentDirectoryId,
+  }
+}
+
 /**
  * Home 页面 - 书架/图书馆视图
  */
@@ -206,7 +233,6 @@ export default function Home() {
   const [selectedBookIds, setSelectedBookIds] = useState<string[]>([])
   const [batchDeleteTargets, setBatchDeleteTargets] = useState<Book[]>([])
   const [renameTarget, setRenameTarget] = useState<Book | null>(null)
-  const { setCurrentNovel, addNovel } = useNovelStore()
   const {
     books,
     upsertBook,
@@ -365,24 +391,19 @@ export default function Home() {
     return { normalizedNovel, shelfBook }
   }
 
-  const openNovelAndEnterReader = async (
-    filePath = '',
+  const navigateToReader = (
+    filePath: string,
     options?: { activateBossMode?: boolean; sourceDirectoryId?: string }
   ) => {
-    const { normalizedNovel, shelfBook } = await loadNovelForShelf(filePath, options)
     const readerState = {
+      filePath,
       ...(options?.activateBossMode ? { activateBossMode: true } : {}),
       ...(options?.sourceDirectoryId ? { returnDirectoryId: options.sourceDirectoryId } : {}),
     }
 
-    setCurrentNovel(normalizedNovel)
-    addNovel(normalizedNovel)
-    upsertBook(shelfBook)
     navigate('/reader', {
-      state: Object.keys(readerState).length > 0 ? readerState : null,
+      state: readerState,
     })
-
-    return shelfBook
   }
 
   const openImportModalForDirectory = (book: Book) => {
@@ -465,14 +486,14 @@ export default function Home() {
   }
 
   const handleQuickRead = async (book: Book) => {
-    const targetFile = resolveDirectoryReadTarget(book)
-    if (!targetFile?.filePath) {
+    const target = resolveBookReadTarget(book)
+    if (!target?.filePath) {
       messageApi.warning('当前目录还没有可阅读的文件')
       return
     }
 
     try {
-      await openNovelAndEnterReader(targetFile.filePath, { sourceDirectoryId: book.id })
+      navigateToReader(target.filePath, { sourceDirectoryId: target.sourceDirectoryId })
     } catch (error) {
       console.error('打开目录失败:', error)
       messageApi.error(getErrorMessage(error, '打开目录失败'))
@@ -519,13 +540,14 @@ export default function Home() {
       return
     }
 
-    if (!book.filePath) {
+    const target = resolveBookReadTarget(book)
+    if (!target?.filePath) {
       return
     }
 
     try {
-      await openNovelAndEnterReader(book.filePath, {
-        sourceDirectoryId: book.parentDirectoryId,
+      navigateToReader(target.filePath, {
+        sourceDirectoryId: target.sourceDirectoryId,
       })
     } catch (error) {
       console.error('打开书籍失败:', error)
@@ -534,19 +556,17 @@ export default function Home() {
   }
 
   const handleOpenBookInBossMode = async (book: Book) => {
-    const targetFile = book.isDirectory ? resolveDirectoryReadTarget(book)?.filePath : book.filePath
-    const sourceDirectoryId = book.isDirectory ? book.id : book.parentDirectoryId
-    if (!targetFile) {
+    const target = resolveBookReadTarget(book)
+    if (!target?.filePath) {
       messageApi.warning('当前条目还没有可阅读的文件')
       return
     }
 
     try {
-      await openNovelAndEnterReader(targetFile, {
+      navigateToReader(target.filePath, {
         activateBossMode: true,
-        sourceDirectoryId,
+        sourceDirectoryId: target.sourceDirectoryId,
       })
-      messageApi.success('已进入老板模式阅读')
     } catch (error) {
       console.error('老板模式打开失败:', error)
       messageApi.error(getErrorMessage(error, '老板模式打开失败'))
