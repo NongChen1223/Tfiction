@@ -627,11 +627,13 @@ const camouflageWidgetClassName = `${styles.camouflageWidget} ${
     )
 
     try {
-      await Promise.all(
-        Array.from({ length: preloadUntil - highestLoadedChapterIndex }, (_, offset) =>
-          ensureChapterLoaded(novel.filePath, highestLoadedChapterIndex + offset + 1)
-        )
-      )
+      for (
+        let chapterIndex = highestLoadedChapterIndex + 1;
+        chapterIndex <= preloadUntil;
+        chapterIndex += 1
+      ) {
+        await ensureChapterLoaded(novel.filePath, chapterIndex)
+      }
     } catch (error) {
       console.error('预加载后续章节失败:', error)
     }
