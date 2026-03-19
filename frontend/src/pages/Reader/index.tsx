@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import type { CamouflageWidgetPosition, SearchResult } from '@/types'
+import type { CamouflageWidgetPosition, Novel, SearchResult } from '@/types'
 import { useNovelStore } from '@/stores/novelStore'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { getPersistedBossOpacity } from '@/stores/settingsStore'
@@ -109,6 +109,34 @@ function clampUnitInterval(value: number) {
   return Math.max(0, Math.min(1, Number(value || 0)))
 }
 
+const CHAPTER_PREFETCH_BATCH = 2
+const CHAPTER_PREFETCH_TRIGGER_DISTANCE = 1
+const READING_ANCHOR_RATIO = 0.18
+
+interface LoadedChapter {
+  index: number
+  content: string
+}
+
+interface PendingChapterScroll {
+  chapterIndex: number
+  chapterScrollProgress: number
+  behavior: ScrollBehavior
+}
+
+function deriveChapterProgressFromOverall(novel: Novel, chapterIndex: number) {
+  const chapter = novel.chapters[chapterIndex]
+  if (!chapter || novel.content.length === 0) {
+    return 0
+  }
+
+  const absoluteProgress = clampUnitInterval(Number(novel.readProgress || 0) / 100)
+  const absolutePosition = Math.round(absoluteProgress * Math.max(novel.content.length, 1))
+  const chapterLength = Math.max(chapter.endPos - chapter.startPos, 1)
+
+  return clampUnitInterval((absolutePosition - chapter.startPos) / chapterLength)
+}
+
 
 function clampCamouflageRatio(value: number) {
   return Math.max(0, Math.min(1, Number(value || 0)))
@@ -209,8 +237,8 @@ export default function Reader() {
   const [showAppearancePanel, setShowAppearancePanel] = useState(false)
   const [searchKeyword, setSearchKeyword] = useState('')
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
-  const [chapterContent, setChapterContent] = useState('')
-  const [isLoadingChapter, setIsLoadingChapter] = useState(false)
+  const [loadedChapters, setLoadedChapters] = useState<LoadedChapter[]>([])
+  const [loadingChapterIndexes, setLoadingChapterIndexes] = useState<number[]>([])
   const [supportsDesktopOverlay, setSupportsDesktopOverlay] = useState(false)
   const [camouflageStage, setCamouflageStage] = useState<CamouflageStage>('expanded')
   const [camouflageWidgetPosition, setCamouflageWidgetPosition] = useState<CamouflageWidgetPosition>(
@@ -222,7 +250,13 @@ export default function Reader() {
   const saveTimerRef = useRef<number | null>(null)
   const appearancePanelRef = useRef<HTMLDivElement>(null)
   const bossPanelRef = useRef<HTMLDivElement>(null)
-  const pendingScrollProgressRef = useRef<number | null>(null)
+  const chapterLoadRevisionRef = useRef(0)
+  const chapterLoadPromisesRef = useRef<Map<number, Promise<string>>>(new Map())
+  const chapterContentMapRef = useRef<Map<number, string>>(new Map())
+  const loadedChaptersRef = useRef<LoadedChapter[]>([])
+  const currentNovelRef = useRef(currentNovel)
+  const chapterSectionRefs = useRef<Record<number, HTMLElement | null>>({})
+  const pendingChapterScrollRef = useRef<PendingChapterScroll | null>(null)
   const overlayActionPollingRef = useRef(false)
   const camouflageTimerRef = useRef<number | null>(null)
   const camouflageDragCleanupRef = useRef<(() => void) | null>(null)
@@ -246,13 +280,18 @@ export default function Reader() {
       ? currentNovel.chapters[currentNovel.currentChapter]
       : null
 
-  const isRichContent = currentNovel?.format === '.epub' || isRichChapterContent(chapterContent)
-  const chapterHtml = isRichContent
-    ? chapterContent || '<p>暂无内容</p>'
-    : buildHighlightedHtml(chapterContent, searchKeyword)
+  const currentChapterContent =
+    currentNovel
+      ? loadedChapters.find((chapter) => chapter.index === currentNovel.currentChapter)?.content || ''
+      : ''
+  const isRichContent =
+    currentNovel?.format === '.epub' || isRichChapterContent(currentChapterContent)
+  const isLoadingChapter = loadingChapterIndexes.length > 0
+  const isInitialChapterLoading = loadedChapters.length === 0 && isLoadingChapter
+  const isAppendingChapters = loadedChapters.length > 0 && isLoadingChapter
   const overlayChapterMarkup = buildDesktopOverlayMarkup(
     currentChapter?.title,
-    chapterContent,
+    currentChapterContent,
     Boolean(isRichContent)
   )
   const overlayChapterTitlesSignature = currentNovel
@@ -444,72 +483,247 @@ const camouflageWidgetClassName = `${styles.camouflageWidget} ${
     })
   }
 
-  // 从后端读取指定章节正文，并在内容更新后恢复到顶部或既有滚动位置。
-  const loadChapterContent = async (
+  const buildChapterMarkup = (content: string) => {
+    const chapterIsRichContent =
+      currentNovel?.format === '.epub' || isRichChapterContent(content)
+
+    return {
+      isRichContent: chapterIsRichContent,
+      html: chapterIsRichContent
+        ? content || '<p>暂无内容</p>'
+        : buildHighlightedHtml(content, searchKeyword),
+    }
+  }
+
+  const resetLoadedChapterState = () => {
+    chapterLoadRevisionRef.current += 1
+    chapterLoadPromisesRef.current = new Map()
+    chapterContentMapRef.current = new Map()
+    loadedChaptersRef.current = []
+    chapterSectionRefs.current = {}
+    pendingChapterScrollRef.current = null
+    setLoadedChapters([])
+    setLoadingChapterIndexes([])
+    return chapterLoadRevisionRef.current
+  }
+
+  const upsertLoadedChapter = (chapterIndex: number, content: string) => {
+    chapterContentMapRef.current.set(chapterIndex, content)
+
+    const orderedChapters = Array.from(chapterContentMapRef.current.entries())
+      .sort((left, right) => left[0] - right[0])
+      .map(([index, chapterContent]) => ({
+        index,
+        content: chapterContent,
+      }))
+
+    loadedChaptersRef.current = orderedChapters
+    setLoadedChapters(orderedChapters)
+  }
+
+  const ensureChapterLoaded = async (
     novelFilePath: string,
     chapterIndex: number,
-    scrollMode: 'top' | 'keep' = 'top'
+    expectedRevision = chapterLoadRevisionRef.current
   ) => {
-    setIsLoadingChapter(true)
+    const cachedContent = chapterContentMapRef.current.get(chapterIndex)
+    if (cachedContent !== undefined) {
+      return cachedContent
+    }
+
+    const inflightPromise = chapterLoadPromisesRef.current.get(chapterIndex)
+    if (inflightPromise) {
+      return inflightPromise
+    }
+
+    setLoadingChapterIndexes((previous) =>
+      previous.includes(chapterIndex) ? previous : [...previous, chapterIndex]
+    )
+
+    const loadPromise = GetChapterContent(novelFilePath, chapterIndex)
+      .then((content) => {
+        if (
+          expectedRevision !== chapterLoadRevisionRef.current ||
+          currentNovelRef.current?.filePath !== novelFilePath
+        ) {
+          return content
+        }
+
+        upsertLoadedChapter(chapterIndex, content)
+        return content
+      })
+      .catch((error) => {
+        console.error('加载章节内容失败:', error)
+        throw error
+      })
+      .finally(() => {
+        chapterLoadPromisesRef.current.delete(chapterIndex)
+
+        if (expectedRevision !== chapterLoadRevisionRef.current) {
+          return
+        }
+
+        setLoadingChapterIndexes((previous) =>
+          previous.filter((value) => value !== chapterIndex)
+        )
+      })
+
+    chapterLoadPromisesRef.current.set(chapterIndex, loadPromise)
+    return loadPromise
+  }
+
+  const ensureUpcomingChapters = async (focusChapterIndex: number) => {
+    const novel = currentNovelRef.current
+    if (!novel || novel.chapters.length === 0) {
+      return
+    }
+
+    const latestLoadedChapter = loadedChaptersRef.current[loadedChaptersRef.current.length - 1]
+    const highestLoadedChapterIndex = latestLoadedChapter?.index ?? focusChapterIndex
+
+    if (highestLoadedChapterIndex >= novel.chapters.length - 1) {
+      return
+    }
+
+    if (highestLoadedChapterIndex - focusChapterIndex > CHAPTER_PREFETCH_TRIGGER_DISTANCE) {
+      return
+    }
+
+    const preloadUntil = Math.min(
+      novel.chapters.length - 1,
+      highestLoadedChapterIndex + CHAPTER_PREFETCH_BATCH
+    )
 
     try {
-      const content = await GetChapterContent(novelFilePath, chapterIndex)
-      setChapterContent(content)
-
-      requestAnimationFrame(() => {
-        if (!contentRef.current) {
-          return
-        }
-
-        if (pendingScrollProgressRef.current !== null) {
-          const maxScrollTop = Math.max(
-            contentRef.current.scrollHeight - contentRef.current.clientHeight,
-            0
-          )
-          contentRef.current.scrollTop = maxScrollTop * pendingScrollProgressRef.current
-          pendingScrollProgressRef.current = null
-          return
-        }
-
-        if (scrollMode === 'top') {
-          contentRef.current.scrollTop = 0
-        }
-      })
+      await Promise.all(
+        Array.from({ length: preloadUntil - highestLoadedChapterIndex }, (_, offset) =>
+          ensureChapterLoaded(novel.filePath, highestLoadedChapterIndex + offset + 1)
+        )
+      )
     } catch (error) {
-      console.error('加载章节内容失败:', error)
-      setChapterContent('')
-    } finally {
-      setIsLoadingChapter(false)
+      console.error('预加载后续章节失败:', error)
     }
+  }
+
+  const getChapterMetrics = (contentElement: HTMLDivElement, chapterIndex: number) => {
+    const chapterElement = chapterSectionRefs.current[chapterIndex]
+    if (!chapterElement) {
+      return null
+    }
+
+    const containerRect = contentElement.getBoundingClientRect()
+    const chapterRect = chapterElement.getBoundingClientRect()
+    const top = chapterRect.top - containerRect.top + contentElement.scrollTop
+
+    return {
+      top,
+      bottom: top + chapterRect.height,
+      height: Math.max(chapterRect.height, 1),
+    }
+  }
+
+  const resolveCurrentReadingLocation = () => {
+    const contentElement = contentRef.current
+    const visibleChapters = loadedChaptersRef.current
+
+    if (!contentElement || visibleChapters.length === 0) {
+      return null
+    }
+
+    const readingAnchor =
+      contentElement.scrollTop + contentElement.clientHeight * READING_ANCHOR_RATIO
+    let activeChapterIndex = visibleChapters[0].index
+    let activeChapterTop = 0
+    let activeChapterHeight = 1
+
+    for (const chapter of visibleChapters) {
+      const metrics = getChapterMetrics(contentElement, chapter.index)
+      if (!metrics) {
+        continue
+      }
+
+      if (readingAnchor < metrics.top) {
+        break
+      }
+
+      activeChapterIndex = chapter.index
+      activeChapterTop = metrics.top
+      activeChapterHeight = metrics.height
+
+      if (readingAnchor < metrics.bottom) {
+        break
+      }
+    }
+
+    return {
+      chapterIndex: activeChapterIndex,
+      chapterScrollProgress: clampUnitInterval(
+        (readingAnchor - activeChapterTop) / activeChapterHeight
+      ),
+    }
+  }
+
+  const tryApplyPendingChapterScroll = () => {
+    const contentElement = contentRef.current
+    const pendingScroll = pendingChapterScrollRef.current
+
+    if (!contentElement || !pendingScroll) {
+      return false
+    }
+
+    const metrics = getChapterMetrics(contentElement, pendingScroll.chapterIndex)
+    if (!metrics) {
+      return false
+    }
+
+    const anchorOffset = contentElement.clientHeight * READING_ANCHOR_RATIO
+    const targetTop = Math.max(
+      metrics.top + metrics.height * pendingScroll.chapterScrollProgress - anchorOffset,
+      0
+    )
+
+    contentElement.scrollTo({
+      top: targetTop,
+      behavior: pendingScroll.behavior,
+    })
+    pendingChapterScrollRef.current = null
+    return true
   }
 
   // 统一保存阅读进度，同时更新阅读页状态和书架展示所依赖的数据。
   const persistReadingProgress = async (chapterIndex: number, chapterScrollProgress: number) => {
-    if (!currentNovel) {
+    const novel = currentNovelRef.current
+    if (!novel) {
       return
     }
 
-    const progress = calculateProgressFromPosition(
-      currentNovel,
-      chapterIndex,
-      chapterScrollProgress
-    )
+    const progress = calculateProgressFromPosition(novel, chapterIndex, chapterScrollProgress)
     const now = Date.now()
 
     try {
-      await saveReadingProgress(currentNovel.filePath, chapterIndex, 0, progress)
+      await saveReadingProgress(novel.filePath, chapterIndex, 0, progress)
     } catch (error) {
       console.error('保存阅读进度失败:', error)
     }
 
-    patchCurrentNovel((novel) => ({
+    currentNovelRef.current = {
       ...novel,
       currentChapter: chapterIndex,
       readProgress: progress,
       lastReadTime: now,
-    }))
-    updateReadProgress(currentNovel.filePath, progress)
-    updateProgressByFilePath(currentNovel.filePath, { progress, lastReadTime: now })
+    }
+    patchCurrentNovel((activeNovel) =>
+      activeNovel.filePath !== novel.filePath
+        ? activeNovel
+        : {
+            ...activeNovel,
+            currentChapter: chapterIndex,
+            readProgress: progress,
+            lastReadTime: now,
+          }
+    )
+    updateReadProgress(novel.filePath, progress)
+    updateProgressByFilePath(novel.filePath, { progress, lastReadTime: now })
   }
 
   // 执行章节切换或搜索跳转，并尽量保留章节内对应的滚动百分比。
@@ -517,32 +731,63 @@ const camouflageWidgetClassName = `${styles.camouflageWidget} ${
     chapterIndex: number,
     chapterScrollProgress: number
   ) => {
-    if (!currentNovel || currentNovel.chapters.length === 0) {
+    const novel = currentNovelRef.current
+    if (!novel || novel.chapters.length === 0) {
       return
     }
 
-    const nextChapterIndex = Math.max(
-      0,
-      Math.min(chapterIndex, currentNovel.chapters.length - 1)
-    )
+    const nextChapterIndex = Math.max(0, Math.min(chapterIndex, novel.chapters.length - 1))
     const nextScrollProgress = clampUnitInterval(chapterScrollProgress)
 
     try {
-      pendingScrollProgressRef.current = nextScrollProgress
-      await setCurrentChapter(currentNovel.filePath, nextChapterIndex)
-      patchCurrentNovel((novel) => ({
+      await setCurrentChapter(novel.filePath, nextChapterIndex)
+      currentNovelRef.current = {
         ...novel,
         currentChapter: nextChapterIndex,
-      }))
-      setShowSidebar(false)
-      await loadChapterContent(
-        currentNovel.filePath,
-        nextChapterIndex,
-        nextScrollProgress > 0 ? 'keep' : 'top'
+      }
+      patchCurrentNovel((activeNovel) =>
+        activeNovel.filePath !== novel.filePath
+          ? activeNovel
+          : {
+              ...activeNovel,
+              currentChapter: nextChapterIndex,
+            }
       )
+      setShowSidebar(false)
+
+      const alreadyLoaded = chapterContentMapRef.current.has(nextChapterIndex)
+      pendingChapterScrollRef.current = {
+        chapterIndex: nextChapterIndex,
+        chapterScrollProgress: nextScrollProgress,
+        behavior: alreadyLoaded ? 'smooth' : 'auto',
+      }
+
+      if (alreadyLoaded) {
+        requestAnimationFrame(() => {
+          tryApplyPendingChapterScroll()
+        })
+      } else {
+        const nextRevision = resetLoadedChapterState()
+        pendingChapterScrollRef.current = {
+          chapterIndex: nextChapterIndex,
+          chapterScrollProgress: nextScrollProgress,
+          behavior: 'auto',
+        }
+
+        if (contentRef.current) {
+          contentRef.current.scrollTop = 0
+        }
+
+        await ensureChapterLoaded(novel.filePath, nextChapterIndex, nextRevision)
+        if (nextRevision !== chapterLoadRevisionRef.current) {
+          return
+        }
+      }
+
+      void ensureUpcomingChapters(nextChapterIndex)
       await persistReadingProgress(nextChapterIndex, nextScrollProgress)
     } catch (error) {
-      pendingScrollProgressRef.current = null
+      pendingChapterScrollRef.current = null
       console.error('跳转阅读位置失败:', error)
     }
   }
@@ -897,37 +1142,65 @@ useEffect(
 )
 
   useEffect(() => {
+    currentNovelRef.current = currentNovel
+  }, [currentNovel])
+
+  useEffect(() => {
+    loadedChaptersRef.current = loadedChapters
+  }, [loadedChapters])
+
+  useEffect(() => {
     if (!currentNovel) {
-      setChapterContent('')
+      resetLoadedChapterState()
       setSearchResults([])
       return
     }
 
-    void loadChapterContent(
-      currentNovel.filePath,
-      currentNovel.currentChapter || 0,
-      'keep'
+    const initialChapterIndex = currentNovel.currentChapter || 0
+    const initialChapterProgress = deriveChapterProgressFromOverall(
+      currentNovel,
+      initialChapterIndex
     )
-  }, [currentNovel?.filePath, currentNovel?.currentChapter])
+    const nextRevision = resetLoadedChapterState()
+
+    pendingChapterScrollRef.current = {
+      chapterIndex: initialChapterIndex,
+      chapterScrollProgress: initialChapterProgress,
+      behavior: 'auto',
+    }
+
+    if (contentRef.current) {
+      contentRef.current.scrollTop = 0
+    }
+
+    void ensureChapterLoaded(currentNovel.filePath, initialChapterIndex, nextRevision)
+      .then(() => {
+        if (nextRevision !== chapterLoadRevisionRef.current) {
+          return
+        }
+
+        void ensureUpcomingChapters(initialChapterIndex)
+      })
+      .catch((error) => {
+        if (nextRevision === chapterLoadRevisionRef.current) {
+          console.error('初始化章节内容失败:', error)
+        }
+      })
+  }, [currentNovel?.filePath])
 
   useEffect(() => {
-    if (pendingScrollProgressRef.current === null || !contentRef.current) {
+    if (!pendingChapterScrollRef.current) {
       return
     }
 
-    requestAnimationFrame(() => {
-      if (pendingScrollProgressRef.current === null || !contentRef.current) {
-        return
-      }
-
-      const maxScrollTop = Math.max(
-        contentRef.current.scrollHeight - contentRef.current.clientHeight,
-        0
-      )
-      contentRef.current.scrollTop = maxScrollTop * pendingScrollProgressRef.current
-      pendingScrollProgressRef.current = null
+    const frame = window.requestAnimationFrame(() => {
+      tryApplyPendingChapterScroll()
     })
-  }, [chapterContent, currentNovel?.currentChapter])
+
+    return () => {
+      window.cancelAnimationFrame(frame)
+    }
+  }, [loadedChapters, fontSize, lineHeight, pageWidth])
 
   useEffect(() => {
     let disposed = false
@@ -1232,21 +1505,44 @@ useEffect(
     }
 
     const handleScroll = () => {
+      const readingLocation = resolveCurrentReadingLocation()
+      const activeNovel = currentNovelRef.current
+
+      if (!readingLocation || !activeNovel) {
+        return
+      }
+
+      if (readingLocation.chapterIndex !== activeNovel.currentChapter) {
+        currentNovelRef.current = {
+          ...activeNovel,
+          currentChapter: readingLocation.chapterIndex,
+        }
+        patchCurrentNovel((novel) =>
+          novel.filePath !== activeNovel.filePath
+            ? novel
+            : {
+                ...novel,
+                currentChapter: readingLocation.chapterIndex,
+              }
+        )
+      }
+
+      void ensureUpcomingChapters(readingLocation.chapterIndex)
+
       if (saveTimerRef.current) {
         window.clearTimeout(saveTimerRef.current)
       }
 
       saveTimerRef.current = window.setTimeout(() => {
-        if (!contentElement) {
+        const latestReadingLocation = resolveCurrentReadingLocation()
+        if (!latestReadingLocation) {
           return
         }
 
-        const maxScrollTop = Math.max(
-          contentElement.scrollHeight - contentElement.clientHeight,
-          1
+        void persistReadingProgress(
+          latestReadingLocation.chapterIndex,
+          latestReadingLocation.chapterScrollProgress
         )
-        const chapterScrollProgress = contentElement.scrollTop / maxScrollTop
-        void persistReadingProgress(currentNovel.currentChapter, chapterScrollProgress)
       }, 200)
     }
 
@@ -1257,7 +1553,7 @@ useEffect(
         window.clearTimeout(saveTimerRef.current)
       }
     }
-  }, [currentNovel?.filePath, currentNovel?.currentChapter, chapterContent])
+  }, [currentNovel?.filePath, loadedChapters.length])
 
   if (!currentNovel) {
     return (
@@ -1520,16 +1816,41 @@ return (
           style={contentStyle}
         >
           <div className={styles.contentBody} style={{ opacity: displayOpacity }}>
-            {currentChapter && <h2 className={styles.chapterTitle}>{currentChapter.title}</h2>}
-            {isLoadingChapter ? (
+            {isInitialChapterLoading ? (
               <div className={styles.loading}>章节内容加载中...</div>
             ) : (
-              <div
-                className={`${styles.text} ${isRichContent ? styles.epubText : ''}`}
-                dangerouslySetInnerHTML={{
-                  __html: chapterHtml,
-                }}
-              />
+              <>
+                {loadedChapters.map((chapter) => {
+                  const chapterMeta = currentNovel.chapters[chapter.index]
+                  const chapterMarkup = buildChapterMarkup(chapter.content)
+
+                  return (
+                    <section
+                      key={`${chapterMeta?.title || '正文'}-${chapter.index}`}
+                      ref={(element) => {
+                        chapterSectionRefs.current[chapter.index] = element
+                      }}
+                      className={styles.chapterSection}
+                    >
+                      {chapterMeta && (
+                        <h2 className={styles.chapterTitle}>{chapterMeta.title}</h2>
+                      )}
+                      <div
+                        className={`${styles.text} ${
+                          chapterMarkup.isRichContent ? styles.epubText : ''
+                        }`}
+                        dangerouslySetInnerHTML={{
+                          __html: chapterMarkup.html,
+                        }}
+                      />
+                    </section>
+                  )
+                })}
+
+                {isAppendingChapters && (
+                  <div className={styles.inlineLoading}>下一章已在路上...</div>
+                )}
+              </>
             )}
           </div>
         </div>
