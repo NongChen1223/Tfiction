@@ -211,6 +211,10 @@ function hasWailsRuntimeEvents() {
   return typeof runtime?.EventsOnMultiple === 'function'
 }
 
+function logDesktopOverlayDebug(...args: unknown[]) {
+  console.info('[desktop-overlay]', ...args)
+}
+
 /**
  * Reader 阅读器页面
  * 小说阅读的主界面
@@ -278,6 +282,7 @@ export default function Reader() {
   const chapterSectionRefs = useRef<Record<number, HTMLElement | null>>({})
   const chapterItemRefs = useRef<Record<number, HTMLButtonElement | null>>({})
   const pendingChapterScrollRef = useRef<PendingChapterScroll | null>(null)
+  const overlayReadingLocationRef = useRef<PendingChapterScroll | null>(null)
   const overlayActionPollingRef = useRef(false)
   const camouflageTimerRef = useRef<number | null>(null)
   const camouflageDragCleanupRef = useRef<(() => void) | null>(null)
@@ -383,6 +388,11 @@ const camouflageWidgetClassName = `${styles.camouflageWidget} ${
       return
     }
 
+    logDesktopOverlayDebug('sync content', {
+      loadedChapterIndexes: loadedChaptersRef.current.map((chapter) => chapter.index),
+      opacity: nextOpacity,
+    })
+
     const { red, green, blue } = parseHexColor(textColor)
 
     await UpdateDesktopReaderOverlay(
@@ -406,6 +416,13 @@ const camouflageWidgetClassName = `${styles.camouflageWidget} ${
     if (currentNovel.chapters.length === 0) {
       return
     }
+
+    logDesktopOverlayDebug('sync controls', {
+      currentChapter: currentNovel.currentChapter,
+      readProgress: Number(currentNovel.readProgress || 0),
+      opacity: nextOpacity,
+      camouflageEnabled: bossCamouflageEnabled,
+    })
 
     const chapterTitles = currentNovel.chapters.map((chapter) => chapter.title)
     await UpdateDesktopReaderOverlayControls(
@@ -534,6 +551,7 @@ const camouflageWidgetClassName = `${styles.camouflageWidget} ${
     loadedChaptersRef.current = []
     chapterSectionRefs.current = {}
     pendingChapterScrollRef.current = null
+    overlayReadingLocationRef.current = null
     setLoadedChapters([])
     setLoadingChapterIndexes([])
     return chapterLoadRevisionRef.current
@@ -752,6 +770,53 @@ const camouflageWidgetClassName = `${styles.camouflageWidget} ${
     return true
   }
 
+  const rememberOverlayReadingLocation = (
+    chapterIndex: number,
+    chapterScrollProgress: number
+  ) => {
+    logDesktopOverlayDebug('remember position', {
+      chapterIndex,
+      chapterScrollProgress,
+    })
+    overlayReadingLocationRef.current = {
+      chapterIndex,
+      chapterScrollProgress: clampUnitInterval(chapterScrollProgress),
+      behavior: 'auto',
+    }
+    void ensureUpcomingChapters(chapterIndex)
+  }
+
+  const flushOverlayReadingLocation = async (options?: { syncReaderView?: boolean }) => {
+    const pendingLocation = overlayReadingLocationRef.current
+    if (!pendingLocation) {
+      return
+    }
+
+    overlayReadingLocationRef.current = null
+
+    logDesktopOverlayDebug('flush position', {
+      chapterIndex: pendingLocation.chapterIndex,
+      chapterScrollProgress: pendingLocation.chapterScrollProgress,
+      syncReaderView: Boolean(options?.syncReaderView),
+    })
+
+    if (options?.syncReaderView) {
+      await moveToReadingLocation(
+        pendingLocation.chapterIndex,
+        pendingLocation.chapterScrollProgress,
+        {
+          preferSmooth: false,
+        }
+      )
+      return
+    }
+
+    await persistReadingProgress(
+      pendingLocation.chapterIndex,
+      pendingLocation.chapterScrollProgress
+    )
+  }
+
   // 统一保存阅读进度，同时更新阅读页状态和书架展示所依赖的数据。
   const persistReadingProgress = async (chapterIndex: number, chapterScrollProgress: number) => {
     const novel = currentNovelRef.current
@@ -791,7 +856,8 @@ const camouflageWidgetClassName = `${styles.camouflageWidget} ${
   // 执行章节切换或搜索跳转，并尽量保留章节内对应的滚动百分比。
   const moveToReadingLocation = async (
     chapterIndex: number,
-    chapterScrollProgress: number
+    chapterScrollProgress: number,
+    options?: { preferSmooth?: boolean }
   ) => {
     const novel = currentNovelRef.current
     if (!novel || novel.chapters.length === 0) {
@@ -821,7 +887,8 @@ const camouflageWidgetClassName = `${styles.camouflageWidget} ${
       pendingChapterScrollRef.current = {
         chapterIndex: nextChapterIndex,
         chapterScrollProgress: nextScrollProgress,
-        behavior: alreadyLoaded ? 'smooth' : 'auto',
+        behavior:
+          alreadyLoaded && options?.preferSmooth !== false ? 'smooth' : 'auto',
       }
 
       if (alreadyLoaded) {
@@ -1071,6 +1138,7 @@ const handleToggleCamouflage = () => {
           const { red, green, blue } = parseHexColor(textColor)
           resetDesktopOverlayOpacitySync()
           setBossOpacity(rememberedBossOpacity)
+          overlayReadingLocationRef.current = null
 
           await ShowDesktopReaderOverlay(
             overlayChapterMarkup,
@@ -1095,6 +1163,7 @@ const handleToggleCamouflage = () => {
           setStealthMode(false)
           setOpacity(1)
           bossMode.closePanel()
+          await flushOverlayReadingLocation({ syncReaderView: true })
         }
 
         return
@@ -1153,6 +1222,7 @@ const handleToggleCamouflage = () => {
         if (useDesktopOverlay) {
           resetDesktopOverlayOpacitySync()
           await HideDesktopReaderOverlay()
+          await flushOverlayReadingLocation()
         } else {
           resetDesktopOverlayOpacitySync()
           await DisableStealthMode()
@@ -1466,6 +1536,7 @@ useEffect(
         setStealthMode(false)
         setOpacity(1)
         bossMode.closePanel()
+        await flushOverlayReadingLocation({ syncReaderView: true })
       } catch (error) {
         console.error('同步桌面浮窗状态失败:', error)
       }
@@ -1513,6 +1584,8 @@ useEffect(
             return
           }
 
+          logDesktopOverlayDebug('consume actions', actions)
+
           for (const action of actions) {
             if (action.type === 'prev') {
               handlePrevChapter()
@@ -1525,7 +1598,7 @@ useEffect(
               typeof action.chapterIndex === 'number' &&
               typeof action.value === 'number'
             ) {
-              await persistReadingProgress(
+              rememberOverlayReadingLocation(
                 action.chapterIndex,
                 clampUnitInterval(action.value)
               )
@@ -1542,6 +1615,7 @@ useEffect(
               setStealthMode(false)
               setOpacity(1)
               bossMode.closePanel()
+              await flushOverlayReadingLocation({ syncReaderView: true })
             }
           }
         })
