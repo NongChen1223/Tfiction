@@ -126,6 +126,7 @@ static BOOL MoyuReaderOverlayPointInView(NSPoint point, NSView *view);
 static void MoyuReaderHandleOverlayMouseDownEvent(NSEvent *event);
 static BOOL MoyuReaderOverlayStringLooksLikeHTML(NSString *string);
 static NSArray<NSDictionary *> *MoyuReaderExtractOverlayChapterHTMLFragments(NSString *string);
+static BOOL MoyuReaderOverlayChaptersDidOnlyAppend(NSString *previous, NSString *next);
 static NSString *MoyuReaderWrapOverlayHTMLFragment(NSString *fragment);
 static NSMutableAttributedString *MoyuReaderImportOverlayHTMLAttributedString(NSString *string);
 static NSMutableAttributedString *MoyuReaderCreateOverlayAttributedString(NSString *string, NSArray<NSNumber *> **chapterIndicesOut, NSArray<NSValue *> **chapterRangesOut);
@@ -1405,6 +1406,34 @@ static NSArray<NSDictionary *> *MoyuReaderExtractOverlayChapterHTMLFragments(NSS
 	return [fragments copy];
 }
 
+static BOOL MoyuReaderOverlayChaptersDidOnlyAppend(NSString *previous, NSString *next) {
+	NSArray<NSDictionary *> *previousFragments = MoyuReaderExtractOverlayChapterHTMLFragments(previous);
+	NSArray<NSDictionary *> *nextFragments = MoyuReaderExtractOverlayChapterHTMLFragments(next);
+	if (previousFragments.count == 0 || nextFragments.count < previousFragments.count) {
+		return NO;
+	}
+
+	for (NSInteger index = 0; index < previousFragments.count; index++) {
+		NSDictionary *previousFragment = previousFragments[index];
+		NSDictionary *nextFragment = nextFragments[index];
+		if (![previousFragment[@"index"] isEqual:nextFragment[@"index"]]) {
+			return NO;
+		}
+
+		NSString *previousHTML = [previousFragment[@"html"] isKindOfClass:[NSString class]]
+			? (NSString *)previousFragment[@"html"]
+			: @"";
+		NSString *nextHTML = [nextFragment[@"html"] isKindOfClass:[NSString class]]
+			? (NSString *)nextFragment[@"html"]
+			: @"";
+		if (![previousHTML isEqualToString:nextHTML]) {
+			return NO;
+		}
+	}
+
+	return YES;
+}
+
 static NSString *MoyuReaderWrapOverlayHTMLFragment(NSString *fragment) {
 	NSString *safeFragment = fragment ?: @"";
 	return [NSString stringWithFormat:
@@ -2332,7 +2361,7 @@ static void MoyuReaderApplyDesktopReaderOverlayContent(const char *text, int fon
 		moyureaderOverlayVisible &&
 		moyureaderOverlayCurrentText != nil &&
 		moyureaderOverlayCurrentText.length > 0 &&
-		[string hasPrefix:moyureaderOverlayCurrentText];
+		MoyuReaderOverlayChaptersDidOnlyAppend(moyureaderOverlayCurrentText, string);
 	BOOL shouldPreserveScroll =
 		moyureaderOverlayVisible &&
 		([moyureaderOverlayCurrentText isEqualToString:string] || didAppendOnlyContent);
