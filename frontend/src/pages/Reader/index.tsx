@@ -33,6 +33,7 @@ import { openNovel, saveReadingProgress, setCurrentChapter } from '@/services/no
 import { useBossMode } from '@/hooks/useBossMode'
 import { useClickOutside } from '@/hooks/useClickOutside'
 import {
+  buildDesktopOverlayChaptersMarkup,
   buildDesktopOverlayMarkup,
   buildHighlightedHtml,
   calculateProgressFromPosition,
@@ -111,6 +112,11 @@ function clampUnitInterval(value: number) {
 
 const CHAPTER_PREFETCH_BATCH = 2
 const CHAPTER_PREFETCH_TRIGGER_DISTANCE = 1
+const DESKTOP_OVERLAY_PREFETCH_AHEAD = {
+  text: 12,
+  epub: 6,
+  pdf: 2,
+}
 const READING_ANCHOR_RATIO = 0.18
 
 interface LoadedChapter {
@@ -135,6 +141,18 @@ function deriveChapterProgressFromOverall(novel: Novel, chapterIndex: number) {
   const chapterLength = Math.max(chapter.endPos - chapter.startPos, 1)
 
   return clampUnitInterval((absolutePosition - chapter.startPos) / chapterLength)
+}
+
+function getDesktopOverlayPrefetchAhead(format: string) {
+  if (format === '.pdf') {
+    return DESKTOP_OVERLAY_PREFETCH_AHEAD.pdf
+  }
+
+  if (format === '.epub') {
+    return DESKTOP_OVERLAY_PREFETCH_AHEAD.epub
+  }
+
+  return DESKTOP_OVERLAY_PREFETCH_AHEAD.text
 }
 
 
@@ -289,11 +307,19 @@ export default function Reader() {
   const isLoadingChapter = loadingChapterIndexes.length > 0
   const isInitialChapterLoading = loadedChapters.length === 0 && isLoadingChapter
   const isAppendingChapters = loadedChapters.length > 0 && isLoadingChapter
-  const overlayChapterMarkup = buildDesktopOverlayMarkup(
-    currentChapter?.title,
-    currentChapterContent,
-    Boolean(isRichContent)
-  )
+  const overlayChapterMarkup =
+    currentNovel && loadedChapters.length > 0
+      ? buildDesktopOverlayChaptersMarkup(
+          loadedChapters
+            .filter((chapter) => chapter.index >= currentNovel.currentChapter)
+            .map((chapter) => ({
+            title: currentNovel.chapters[chapter.index]?.title,
+            content: chapter.content,
+            contentIsHtml:
+              currentNovel.format === '.epub' || isRichChapterContent(chapter.content),
+            }))
+        )
+      : buildDesktopOverlayMarkup(currentChapter?.title, currentChapterContent, Boolean(isRichContent))
   const overlayChapterTitlesSignature = currentNovel
     ? currentNovel.chapters.map((chapter) => chapter.title).join('\u0000')
     : ''
@@ -1201,6 +1227,49 @@ useEffect(
       window.cancelAnimationFrame(frame)
     }
   }, [loadedChapters, fontSize, lineHeight, pageWidth])
+
+  useEffect(() => {
+    if (!useDesktopOverlay || !isStealthMode || !currentNovel) {
+      return
+    }
+
+    let cancelled = false
+
+    const preloadDesktopOverlayChapters = async () => {
+      const prefetchAhead = getDesktopOverlayPrefetchAhead(currentNovel.format)
+      const targetChapterIndex = Math.min(
+        currentNovel.chapters.length - 1,
+        currentNovel.currentChapter + prefetchAhead
+      )
+
+      for (let chapterIndex = currentNovel.currentChapter; chapterIndex <= targetChapterIndex; chapterIndex += 1) {
+        if (cancelled) {
+          return
+        }
+
+        try {
+          await ensureChapterLoaded(currentNovel.filePath, chapterIndex)
+        } catch (error) {
+          if (!cancelled) {
+            console.error('预加载摸鱼模式后续章节失败:', error)
+          }
+          return
+        }
+      }
+    }
+
+    void preloadDesktopOverlayChapters()
+
+    return () => {
+      cancelled = true
+    }
+  }, [
+    useDesktopOverlay,
+    isStealthMode,
+    currentNovel?.filePath,
+    currentNovel?.currentChapter,
+    currentNovel?.format,
+  ])
 
   useEffect(() => {
     let disposed = false

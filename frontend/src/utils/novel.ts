@@ -92,18 +92,31 @@ export function isRichChapterContent(content: string) {
   return trimmedContent.includes('data-chapter-rich="true"')
 }
 
+interface DesktopOverlayChapterMarkup {
+  title?: string | null
+  content: string
+  contentIsHtml?: boolean
+}
+
 export function buildDesktopOverlayMarkup(
   title: string | null | undefined,
   content: string,
   contentIsHtml = false
 ) {
-  const safeTitle = title?.trim()
-  const contentMarkup = contentIsHtml
-    ? normalizeDesktopOverlayHtml(content)
-    : buildDesktopOverlayPlainTextMarkup(content)
+  return buildDesktopOverlayChaptersMarkup([
+    {
+      title,
+      content,
+      contentIsHtml,
+    },
+  ])
+}
 
-  const titleMarkup = safeTitle ? `<p><strong>${escapeHtml(safeTitle)}</strong></p>` : ''
-  const articleMarkup = `${titleMarkup}${contentMarkup || '<p>暂无内容</p>'}`
+export function buildDesktopOverlayChaptersMarkup(chapters: DesktopOverlayChapterMarkup[]) {
+  const safeChapters = chapters.length > 0 ? chapters : [{ title: null, content: '', contentIsHtml: false }]
+  const articleMarkup = safeChapters
+    .map((chapter, index) => buildDesktopOverlayChapterMarkup(chapter, index))
+    .join('')
 
   return [
     '<!DOCTYPE html>',
@@ -114,6 +127,8 @@ export function buildDesktopOverlayMarkup(
     'body { margin: 0; padding: 0; }',
     'article { margin: 0; padding: 0; }',
     'p, div, section, blockquote, pre, ul, ol, figure { margin: 0 0 1em; }',
+    '.overlay-chapter + .overlay-chapter { margin-top: 2.8em; padding-top: 2.2em; border-top: 1px solid rgba(255, 255, 255, 0.18); }',
+    '.overlay-chapter-title { margin: 0 0 1.2em; }',
     'img { display: block; max-width: 100%; height: auto; margin: 0 auto; }',
     'figcaption { margin-top: 0.4em; }',
     '</style>',
@@ -166,6 +181,23 @@ export function calculateProgressFromPosition(
 
 function clampProgress(progress: number) {
   return Math.max(0, Math.min(100, Number(progress || 0)))
+}
+
+function buildDesktopOverlayChapterMarkup(
+  chapter: DesktopOverlayChapterMarkup,
+  index: number
+) {
+  const safeTitle = chapter.title?.trim()
+  const contentMarkup = chapter.contentIsHtml
+    ? normalizeDesktopOverlayHtml(chapter.content)
+    : buildDesktopOverlayPlainTextMarkup(chapter.content)
+
+  const titleMarkup = safeTitle
+    ? `<p class="overlay-chapter-title"><strong>${escapeHtml(safeTitle)}</strong></p>`
+    : ''
+  const bodyMarkup = contentMarkup || '<p>暂无内容</p>'
+
+  return `<section class="overlay-chapter" data-overlay-chapter-index="${index}">${titleMarkup}${bodyMarkup}</section>`
 }
 
 function buildDesktopOverlayPlainTextMarkup(content: string) {

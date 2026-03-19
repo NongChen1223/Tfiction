@@ -2082,7 +2082,14 @@ static void MoyuReaderApplyDesktopReaderOverlayContent(const char *text, int fon
 	if (string == nil) {
 		string = @"";
 	}
-	BOOL shouldPreserveScroll = moyureaderOverlayVisible && [moyureaderOverlayCurrentText isEqualToString:string];
+	BOOL didAppendOnlyContent =
+		moyureaderOverlayVisible &&
+		moyureaderOverlayCurrentText != nil &&
+		moyureaderOverlayCurrentText.length > 0 &&
+		[string hasPrefix:moyureaderOverlayCurrentText];
+	BOOL shouldPreserveScroll =
+		moyureaderOverlayVisible &&
+		([moyureaderOverlayCurrentText isEqualToString:string] || didAppendOnlyContent);
 	NSPoint preservedScrollOrigin = NSZeroPoint;
 	if (shouldPreserveScroll && moyureaderOverlayScrollView != nil) {
 		preservedScrollOrigin = moyureaderOverlayScrollView.contentView.bounds.origin;
