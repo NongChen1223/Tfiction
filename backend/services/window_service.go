@@ -201,6 +201,28 @@ func (s *WindowService) ConsumeDesktopReaderOverlayActions() string {
 	return consumeDesktopReaderOverlayActions()
 }
 
+// GetDesktopReaderOverlayReadingLocation 直接读取桌面浮窗当前阅读位置
+func (s *WindowService) GetDesktopReaderOverlayReadingLocation() string {
+	if !desktopReaderOverlaySupported() || !s.isDesktopOverlay {
+		return ""
+	}
+
+	return getDesktopReaderOverlayReadingLocation()
+}
+
+// MoveDesktopReaderOverlayToReadingLocation 让桌面浮窗滚动到指定阅读位置
+func (s *WindowService) MoveDesktopReaderOverlayToReadingLocation(
+	chapterIndex int,
+	progress float64,
+) error {
+	if !desktopReaderOverlaySupported() || !s.isDesktopOverlay {
+		return nil
+	}
+
+	moveDesktopReaderOverlayToReadingLocation(chapterIndex, progress)
+	return nil
+}
+
 // HideDesktopReaderOverlay 隐藏桌面悬浮阅读浮窗
 func (s *WindowService) HideDesktopReaderOverlay() error {
 	if !desktopReaderOverlaySupported() {

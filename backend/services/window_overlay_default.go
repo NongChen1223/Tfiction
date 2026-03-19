@@ -23,3 +23,9 @@ func isDesktopReaderOverlayVisible() bool {
 func consumeDesktopReaderOverlayActions() string {
 	return ""
 }
+
+func getDesktopReaderOverlayReadingLocation() string {
+	return ""
+}
+
+func moveDesktopReaderOverlayToReadingLocation(_ int, _ float64) {}

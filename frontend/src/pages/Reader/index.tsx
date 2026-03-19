@@ -16,9 +16,11 @@ import { SearchInNovel } from '@/wailsjs/go/services/SearchService'
 import {
   ConsumeDesktopReaderOverlayActions,
   DisableStealthMode,
+  GetDesktopReaderOverlayReadingLocation,
   EnableStealthMode,
   HideDesktopReaderOverlay,
   IsDesktopReaderOverlayVisible,
+  MoveDesktopReaderOverlayToReadingLocation,
   OnMouseEnter,
   OnMouseLeave,
   SetOpacity,
@@ -409,26 +411,27 @@ const camouflageWidgetClassName = `${styles.camouflageWidget} ${
 
   // 同步浮窗顶部/底部控制区需要的章节列表、当前章节和透明度状态。
   const syncDesktopOverlayControls = async (nextOpacity = activeStealthOpacity) => {
-    if (!useDesktopOverlay || !currentNovel) {
+    const novel = currentNovelRef.current
+    if (!useDesktopOverlay || !novel) {
       return
     }
 
-    if (currentNovel.chapters.length === 0) {
+    if (novel.chapters.length === 0) {
       return
     }
 
     logDesktopOverlayDebug('sync controls', {
-      currentChapter: currentNovel.currentChapter,
-      readProgress: Number(currentNovel.readProgress || 0),
+      currentChapter: novel.currentChapter,
+      readProgress: Number(novel.readProgress || 0),
       opacity: nextOpacity,
       camouflageEnabled: bossCamouflageEnabled,
     })
 
-    const chapterTitles = currentNovel.chapters.map((chapter) => chapter.title)
+    const chapterTitles = novel.chapters.map((chapter) => chapter.title)
     await UpdateDesktopReaderOverlayControls(
       JSON.stringify(chapterTitles),
-      currentNovel.currentChapter,
-      Number(currentNovel.readProgress || 0),
+      novel.currentChapter,
+      Number(novel.readProgress || 0),
       nextOpacity,
       bossCamouflageEnabled
     )
@@ -712,6 +715,75 @@ const camouflageWidgetClassName = `${styles.camouflageWidget} ${
       chapterScrollProgress: clampUnitInterval(
         (readingAnchor - activeChapterTop) / activeChapterHeight
       ),
+    }
+  }
+
+  const resolveReaderReadingLocation = () => {
+    const readingLocation = resolveCurrentReadingLocation()
+    if (readingLocation) {
+      return readingLocation
+    }
+
+    const novel = currentNovelRef.current
+    if (!novel || novel.chapters.length === 0) {
+      return null
+    }
+
+    const chapterIndex = Math.max(0, Math.min(novel.currentChapter, novel.chapters.length - 1))
+    return {
+      chapterIndex,
+      chapterScrollProgress: deriveChapterProgressFromOverall(novel, chapterIndex),
+    }
+  }
+
+  const syncDesktopOverlayReadingLocation = async (readingLocation = resolveReaderReadingLocation()) => {
+    if (!useDesktopOverlay || !readingLocation) {
+      return
+    }
+
+    logDesktopOverlayDebug('sync overlay position', readingLocation)
+    await MoveDesktopReaderOverlayToReadingLocation(
+      readingLocation.chapterIndex,
+      readingLocation.chapterScrollProgress
+    )
+  }
+
+  const captureDesktopOverlayReadingLocation = async () => {
+    if (!useDesktopOverlay) {
+      return null
+    }
+
+    try {
+      const rawPayload = await GetDesktopReaderOverlayReadingLocation()
+      if (!rawPayload) {
+        return null
+      }
+
+      const payload = JSON.parse(rawPayload) as {
+        chapterIndex?: number
+        progress?: number
+      }
+
+      if (
+        typeof payload.chapterIndex !== 'number' ||
+        typeof payload.progress !== 'number'
+      ) {
+        return null
+      }
+
+      const readingLocation = {
+        chapterIndex: payload.chapterIndex,
+        chapterScrollProgress: clampUnitInterval(payload.progress),
+      }
+      rememberOverlayReadingLocation(
+        readingLocation.chapterIndex,
+        readingLocation.chapterScrollProgress
+      )
+      logDesktopOverlayDebug('capture overlay position', readingLocation)
+      return readingLocation
+    } catch (error) {
+      console.error('读取摸鱼模式阅读位置失败:', error)
+      return null
     }
   }
 
@@ -1170,9 +1242,17 @@ const handleToggleCamouflage = () => {
       if (useDesktopOverlay) {
         if (nextStealthMode) {
           const { red, green, blue } = parseHexColor(textColor)
+          const currentReadingLocation = resolveReaderReadingLocation()
           resetDesktopOverlayOpacitySync()
           setBossOpacity(rememberedBossOpacity)
           overlayReadingLocationRef.current = null
+
+          if (currentReadingLocation) {
+            await persistReadingProgress(
+              currentReadingLocation.chapterIndex,
+              currentReadingLocation.chapterScrollProgress
+            )
+          }
 
           await ShowDesktopReaderOverlay(
             overlayChapterMarkup,
@@ -1184,6 +1264,7 @@ const handleToggleCamouflage = () => {
             blue
           )
           await syncDesktopOverlayControls(rememberedBossOpacity)
+          await syncDesktopOverlayReadingLocation(currentReadingLocation)
           overlayOpacityLastSentRef.current = rememberedBossOpacity
           setStealthMode(true)
           setOpacity(rememberedBossOpacity)
@@ -1193,6 +1274,7 @@ const handleToggleCamouflage = () => {
         } else {
           flushBossOpacityPersist(useWindowStore.getState().opacity)
           resetDesktopOverlayOpacitySync()
+          await captureDesktopOverlayReadingLocation()
           await HideDesktopReaderOverlay()
           setStealthMode(false)
           setOpacity(1)
@@ -1255,6 +1337,7 @@ const handleToggleCamouflage = () => {
         flushBossOpacityPersist(useWindowStore.getState().opacity)
         if (useDesktopOverlay) {
           resetDesktopOverlayOpacitySync()
+          await captureDesktopOverlayReadingLocation()
           await HideDesktopReaderOverlay()
           await flushOverlayReadingLocation()
         } else {
@@ -1564,6 +1647,7 @@ useEffect(
 
         flushBossOpacityPersist(useWindowStore.getState().opacity)
         resetDesktopOverlayOpacitySync()
+        await captureDesktopOverlayReadingLocation()
         await HideDesktopReaderOverlay()
         setStealthMode(false)
         setOpacity(1)
@@ -1643,6 +1727,7 @@ useEffect(
             } else if (action.type === 'close') {
               flushBossOpacityPersist(useWindowStore.getState().opacity)
               resetDesktopOverlayOpacitySync()
+              await captureDesktopOverlayReadingLocation()
               await HideDesktopReaderOverlay()
               setStealthMode(false)
               setOpacity(1)

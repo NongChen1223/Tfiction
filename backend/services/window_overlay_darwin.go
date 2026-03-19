@@ -103,6 +103,8 @@ static void MoyuReaderUpdateOverlayHoverStateForCurrentMouseLocation(NSWindow *w
 static void MoyuReaderPerformOverlayWindowDrag(NSWindow *window, NSEvent *event);
 static void MoyuReaderUpdateDesktopReaderOverlayControls(const char *chaptersJSON, int currentChapter, double progress, double opacity, BOOL camouflageEnabled);
 static char *MoyuReaderConsumeDesktopReaderOverlayActions(void);
+static char *MoyuReaderGetDesktopReaderOverlayReadingLocation(void);
+static void MoyuReaderMoveDesktopReaderOverlayToReadingLocation(int chapterIndex, double progress);
 static void MoyuReaderSetOverlayChapterPanelVisible(BOOL visible);
 static void MoyuReaderRefreshOverlayControls(void);
 static void MoyuReaderRefreshOverlayProgressBar(void);
@@ -140,6 +142,7 @@ static void MoyuReaderApplyOverlayTextAttributes(NSMutableAttributedString *attr
 static void MoyuReaderResizeOverlayTextAttachments(NSTextStorage *textStorage, CGFloat availableWidth);
 static void MoyuReaderApplyOverlayContentAlpha(double opacity);
 static NSDictionary *MoyuReaderResolveOverlayReadingLocation(void);
+static BOOL MoyuReaderScrollOverlayToReadingLocation(NSInteger chapterIndex, double progress);
 static BOOL MoyuReaderRefreshOverlayCurrentChapterFromVisibleLocation(void);
 static void MoyuReaderNotifyOverlayReadingLocationIfNeeded(void);
 
@@ -1848,6 +1851,71 @@ static NSDictionary *MoyuReaderResolveOverlayReadingLocation(void) {
 	};
 }
 
+static BOOL MoyuReaderScrollOverlayToReadingLocation(NSInteger chapterIndex, double progress) {
+	MoyuReaderOverlayTextView *textView = (MoyuReaderOverlayTextView *)[moyureaderOverlayScrollView documentView];
+	NSClipView *contentView = moyureaderOverlayScrollView.contentView;
+	if (textView == nil || contentView == nil || textView.layoutManager == nil || textView.textContainer == nil) {
+		return NO;
+	}
+
+	if (moyureaderOverlayContentChapterIndices.count == 0 || moyureaderOverlayContentChapterRanges.count == 0) {
+		return NO;
+	}
+
+	NSRange targetRange = NSMakeRange(NSNotFound, 0);
+	for (NSInteger index = 0; index < moyureaderOverlayContentChapterIndices.count; index++) {
+		if ([moyureaderOverlayContentChapterIndices[index] integerValue] != chapterIndex) {
+			continue;
+		}
+
+		targetRange = [moyureaderOverlayContentChapterRanges[index] rangeValue];
+		break;
+	}
+
+	if (targetRange.location == NSNotFound || targetRange.length == 0) {
+		return NO;
+	}
+
+	double clampedProgress = MAX(0.0, MIN(progress, 1.0));
+	NSUInteger characterIndex = targetRange.location;
+	if (targetRange.length > 1) {
+		characterIndex += (NSUInteger)llround((double)(targetRange.length - 1) * clampedProgress);
+	}
+	if (characterIndex >= NSMaxRange(targetRange)) {
+		characterIndex = NSMaxRange(targetRange) - 1;
+	}
+
+	NSLayoutManager *layoutManager = textView.layoutManager;
+	[layoutManager ensureLayoutForTextContainer:textView.textContainer];
+	NSUInteger glyphCount = layoutManager.numberOfGlyphs;
+	if (glyphCount == 0) {
+		return NO;
+	}
+
+	NSUInteger glyphIndex = [layoutManager glyphIndexForCharacterAtIndex:characterIndex];
+	if (glyphIndex >= glyphCount) {
+		glyphIndex = glyphCount - 1;
+	}
+
+	NSRect glyphRect = [layoutManager boundingRectForGlyphRange:NSMakeRange(glyphIndex, 1)
+	                                           inTextContainer:textView.textContainer];
+	CGFloat anchorOffset = NSHeight(contentView.bounds) * 0.18;
+	CGFloat targetY = glyphRect.origin.y + textView.textContainerInset.height - anchorOffset;
+	CGFloat maxOffsetY = MAX(0.0, NSHeight(textView.frame) - NSHeight(contentView.bounds));
+	targetY = MIN(MAX(targetY, 0.0), maxOffsetY);
+
+	[contentView scrollToPoint:NSMakePoint(0.0, targetY)];
+	[moyureaderOverlayScrollView reflectScrolledClipView:contentView];
+	moyureaderOverlayCurrentChapterIndex = chapterIndex;
+	MoyuReaderOverlayDebugLog(
+		@"scroll overlay to chapter=%ld progress=%.3f targetY=%.1f",
+		(long)chapterIndex,
+		clampedProgress,
+		targetY
+	);
+	return YES;
+}
+
 static BOOL MoyuReaderRefreshOverlayCurrentChapterFromVisibleLocation(void) {
 	NSDictionary *readingLocation = MoyuReaderResolveOverlayReadingLocation();
 	if (readingLocation == nil) {
@@ -2501,6 +2569,45 @@ static char *MoyuReaderConsumeDesktopReaderOverlayActions(void) {
 	return jsonCString;
 }
 
+static char *MoyuReaderGetDesktopReaderOverlayReadingLocation(void) {
+	__block char *jsonCString = NULL;
+
+	MoyuReaderPerformSyncOnMainQueue(^{
+		if (!moyureaderOverlayVisible) {
+			return;
+		}
+
+		NSDictionary *readingLocation = MoyuReaderResolveOverlayReadingLocation();
+		if (readingLocation == nil) {
+			return;
+		}
+
+		NSData *jsonData = [NSJSONSerialization dataWithJSONObject:readingLocation options:0 error:nil];
+		if (jsonData == nil || jsonData.length == 0) {
+			return;
+		}
+
+		NSString *jsonString = [[NSString alloc] initWithData:jsonData encoding:NSUTF8StringEncoding];
+		if (jsonString == nil || jsonString.length == 0) {
+			return;
+		}
+
+		jsonCString = strdup(jsonString.UTF8String);
+	});
+
+	return jsonCString;
+}
+
+static void MoyuReaderMoveDesktopReaderOverlayToReadingLocation(int chapterIndex, double progress) {
+	dispatch_async(dispatch_get_main_queue(), ^{
+		if (!moyureaderOverlayVisible) {
+			return;
+		}
+
+		MoyuReaderScrollOverlayToReadingLocation((NSInteger)chapterIndex, progress);
+	});
+}
+
 static void MoyuReaderApplyDesktopReaderOverlayOpacity(double opacity) {
 	MoyuReaderEnsureDesktopReaderOverlayWindow();
 	moyureaderOverlayCurrentOpacity = MAX(0.02, MIN(opacity, 1.0));
@@ -2839,4 +2946,21 @@ func consumeDesktopReaderOverlayActions() string {
 	defer C.free(unsafe.Pointer(cActions))
 
 	return C.GoString(cActions)
+}
+
+func getDesktopReaderOverlayReadingLocation() string {
+	cLocation := C.MoyuReaderGetDesktopReaderOverlayReadingLocation()
+	if cLocation == nil {
+		return ""
+	}
+	defer C.free(unsafe.Pointer(cLocation))
+
+	return C.GoString(cLocation)
+}
+
+func moveDesktopReaderOverlayToReadingLocation(chapterIndex int, progress float64) {
+	C.MoyuReaderMoveDesktopReaderOverlayToReadingLocation(
+		C.int(chapterIndex),
+		C.double(progress),
+	)
 }
