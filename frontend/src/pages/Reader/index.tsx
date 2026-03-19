@@ -269,6 +269,7 @@ export default function Reader() {
   const saveTimerRef = useRef<number | null>(null)
   const appearancePanelRef = useRef<HTMLDivElement>(null)
   const bossPanelRef = useRef<HTMLDivElement>(null)
+  const sidebarRef = useRef<HTMLDivElement>(null)
   const chapterLoadRevisionRef = useRef(0)
   const chapterLoadPromisesRef = useRef<Map<number, Promise<string>>>(new Map())
   const chapterContentMapRef = useRef<Map<number, string>>(new Map())
@@ -371,6 +372,9 @@ const camouflageWidgetClassName = `${styles.camouflageWidget} ${
   })
   useClickOutside(appearancePanelRef, showAppearancePanel, () => {
     setShowAppearancePanel(false)
+  })
+  useClickOutside(sidebarRef, showSidebar, () => {
+    setShowSidebar(false)
   })
 
   // 把当前章节正文、字体和文字颜色同步到原生桌面浮窗，用于摸鱼模式渲染正文。
@@ -1838,7 +1842,7 @@ return (
           </div>
         </div>
         {showSidebar && bossMode.isChromeVisible && (
-          <aside className={styles.sidebar}>
+          <aside ref={sidebarRef} className={styles.sidebar}>
             <div className={styles.sidebarHeader}>
               <h3>目录</h3>
               <button
