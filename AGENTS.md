@@ -2,8 +2,8 @@
 
 ## Local Skill
 
-- `tfiction-doc-sync`
-  Path: `.codex/skills/tfiction-doc-sync/SKILL.md`
+- `moyureader-doc-sync`
+  Path: `.codex/skills/moyureader-doc-sync/SKILL.md`
   Use when a task changes user-facing functionality, supported formats, page flow, reading behavior, boss mode, settings, storage path, shortcuts, startup/build commands, platform differences, or visual design.
 
 ## Required Documentation Sync

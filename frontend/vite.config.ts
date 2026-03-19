@@ -22,9 +22,9 @@ export default defineConfig(({ mode }) => {
 
     // 开发服务器配置
     server: {
-      port: 5173,
-      strictPort: true,
-      host: '0.0.0.0',
+      port: Number(process.env.VITE_PORT || 5173),
+      strictPort: false,
+      host: '127.0.0.1',
     },
 
     // 构建配置

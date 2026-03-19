@@ -18,7 +18,7 @@ import (
 	"unicode"
 
 	pdf "github.com/ledongthuc/pdf"
-	"github.com/nongchen1223/tfiction/backend/models"
+	"github.com/nongchen1223/moyureader/backend/models"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	xhtml "golang.org/x/net/html"
 )

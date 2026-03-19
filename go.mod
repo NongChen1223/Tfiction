@@ -1,4 +1,4 @@
-module github.com/nongchen1223/tfiction
+module github.com/nongchen1223/moyureader
 
 go 1.24.1
 

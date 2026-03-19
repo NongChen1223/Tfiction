@@ -1,6 +1,6 @@
 {
   "environment": "local",
-  "app_name": "Tfiction",
+  "app_name": "MoyuReader",
   "version": "1.0.0",
   "data_dir": "",
   "log_level": "debug",

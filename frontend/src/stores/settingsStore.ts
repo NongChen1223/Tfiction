@@ -12,7 +12,7 @@ const MIN_PAGE_WIDTH_PERCENT = 55
 const MAX_PAGE_WIDTH_PERCENT = 100
 const LEGACY_MIN_PAGE_WIDTH_PX = 400
 const LEGACY_MAX_PAGE_WIDTH_PX = 1200
-const SETTINGS_STORAGE_NAME = 'tfiction-settings'
+const SETTINGS_STORAGE_NAME = 'moyureader-settings'
 const DEFAULT_CAMOUFLAGE_WIDGET_POSITION: CamouflageWidgetPosition = {
   x: 0.84,
   y: 0.16,

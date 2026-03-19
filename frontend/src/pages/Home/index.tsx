@@ -402,7 +402,9 @@ export default function Home() {
           icon: <FilePlus size={48} />,
           title: '导入新文件',
           description: '从本地直接导入到目录',
-          onClick: handleImportNewFiles,
+          onClick: () => {
+            void handleImportNewFiles(book)
+          },
         },
       ],
     })
@@ -481,18 +483,18 @@ export default function Home() {
     openImportModalForDirectory(book)
   }
 
-  const handleImportNewFiles = async () => {
-    if (!targetDirectory) {
+  const handleImportNewFiles = async (directory = targetDirectory) => {
+    if (!directory) {
       return
     }
 
     try {
       const { shelfBook } = await loadNovelForShelf('', {
-        sourceDirectoryId: targetDirectory.id,
+        sourceDirectoryId: directory.id,
       })
-      addImportedFileToDirectory(targetDirectory.id, shelfBook)
+      addImportedFileToDirectory(directory.id, shelfBook)
       messageApi.success(
-        `已导入「${getBookDisplayNameWithExtension(shelfBook)}」到「${targetDirectory.title}」`
+        `已导入「${getBookDisplayNameWithExtension(shelfBook)}」到「${directory.title}」`
       )
     } catch (error) {
       if (!isPickerCancelled(error)) {
@@ -844,7 +846,10 @@ export default function Home() {
 
       <SelectFilesModal
         open={selectFilesModalOpen}
-        onClose={() => setSelectFilesModalOpen(false)}
+        onClose={() => {
+          setSelectFilesModalOpen(false)
+          setTargetDirectory(null)
+        }}
         onConfirm={handleSelectFiles}
         availableFiles={availableSingleFiles}
         targetDirectoryName={targetDirectory?.title || ''}

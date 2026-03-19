@@ -42,7 +42,7 @@ func LoadConfig() (*Config, error) {
 	// 默认配置
 	cfg := &Config{
 		Environment:      EnvLocal,
-		AppName:          "Tfiction",
+		AppName:          "MoyuReader",
 		Version:          "1.0.0",
 		DataDir:          getDefaultDataDir(),
 		LogLevel:         "info",
@@ -51,7 +51,7 @@ func LoadConfig() (*Config, error) {
 	}
 
 	// 从环境变量读取环境配置
-	if env := os.Getenv("TFICTION_ENV"); env != "" {
+	if env := os.Getenv("MOYUREADER_ENV"); env != "" {
 		cfg.Environment = Environment(env)
 	}
 
@@ -82,7 +82,7 @@ func getDefaultDataDir() string {
 	if err != nil {
 		return "./data"
 	}
-	return filepath.Join(homeDir, ".tfiction")
+	return filepath.Join(homeDir, ".moyureader")
 }
 
 // getConfigPath 获取配置文件路径

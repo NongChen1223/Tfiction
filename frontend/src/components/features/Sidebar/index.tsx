@@ -36,7 +36,7 @@ export default function Sidebar({
         <div className={styles.logo}>
           <BookOpen size={28} />
         </div>
-        <h1 className={styles.title}>Tfiction</h1>
+        <h1 className={styles.title}>墨鱼阅读器</h1>
       </div>
 
       <nav className={styles.nav}>

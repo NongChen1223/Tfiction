@@ -303,7 +303,7 @@ export const useLibraryStore = create<LibraryState>()(
         })),
     }),
     {
-      name: 'tfiction-library',
+      name: 'moyureader-library',
       merge: (persistedState, currentState) => {
         const typedState = persistedState as Partial<LibraryState> | undefined
 

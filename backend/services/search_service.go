@@ -5,7 +5,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/nongchen1223/tfiction/backend/models"
+	"github.com/nongchen1223/moyureader/backend/models"
 )
 
 // SearchService 搜索服务

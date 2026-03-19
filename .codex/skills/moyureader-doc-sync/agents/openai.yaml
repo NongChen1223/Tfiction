@@ -1,0 +1,3 @@
+display_name: MoyuReader Doc Sync
+short_description: Sync README and the detailed requirement doc when MoyuReader behavior, setup, or design changes.
+default_prompt: Update README.md and docs/功能需求说明.md to match the current moyureader functionality, setup commands, platform differences, and visual design whenever code changes warrant documentation updates.

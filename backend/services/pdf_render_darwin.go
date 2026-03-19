@@ -11,7 +11,7 @@ package services
 #include <math.h>
 #import <Cocoa/Cocoa.h>
 
-static long TFictionPDFPageCount(const char *path) {
+static long MoyuReaderPDFPageCount(const char *path) {
 	@autoreleasepool {
 		if (path == NULL) {
 			return 0;
@@ -32,7 +32,7 @@ static long TFictionPDFPageCount(const char *path) {
 	}
 }
 
-static char *TFictionRenderPDFPageDataURL(const char *path, long pageIndex, double targetMaxWidth) {
+static char *MoyuReaderRenderPDFPageDataURL(const char *path, long pageIndex, double targetMaxWidth) {
 	@autoreleasepool {
 		if (path == NULL || pageIndex < 0) {
 			return NULL;
@@ -136,7 +136,7 @@ func getPDFPageCount(filePath string) (int, error) {
 	cPath := C.CString(filePath)
 	defer C.free(unsafe.Pointer(cPath))
 
-	pageCount := int(C.TFictionPDFPageCount(cPath))
+	pageCount := int(C.MoyuReaderPDFPageCount(cPath))
 	if pageCount <= 0 {
 		return 0, fmt.Errorf("无法读取 PDF 页数")
 	}
@@ -155,7 +155,7 @@ func renderPDFPageDataURL(filePath string, pageIndex int) (string, error) {
 	cPath := C.CString(filePath)
 	defer C.free(unsafe.Pointer(cPath))
 
-	result := C.TFictionRenderPDFPageDataURL(cPath, C.long(pageIndex), C.double(pdfRenderTargetMaxWidth))
+	result := C.MoyuReaderRenderPDFPageDataURL(cPath, C.long(pageIndex), C.double(pdfRenderTargetMaxWidth))
 	if result == nil {
 		return "", fmt.Errorf("macOS PDF 渲染失败")
 	}

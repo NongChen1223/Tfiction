@@ -7,19 +7,19 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/nongchen1223/tfiction/backend/config"
-	"github.com/nongchen1223/tfiction/backend/services"
+	"github.com/nongchen1223/moyureader/backend/config"
+	"github.com/nongchen1223/moyureader/backend/services"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // App 应用主结构
 type App struct {
-	ctx              context.Context
-	config           *config.Config
-	novelService     *services.NovelService
-	windowService    *services.WindowService
-	searchService    *services.SearchService
-	progressService  *services.ProgressService
+	ctx             context.Context
+	config          *config.Config
+	novelService    *services.NovelService
+	windowService   *services.WindowService
+	searchService   *services.SearchService
+	progressService *services.ProgressService
 }
 
 // NewApp 创建应用实例

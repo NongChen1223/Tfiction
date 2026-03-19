@@ -16,10 +16,10 @@ a4cf11e feat: 完善阅读器组件，添加章节导航、搜索功能、摸鱼
 如果你已经配置了 SSH 密钥：
 
 ```bash
-cd ~/Desktop/PersonDevelop/GO_Tfiction
+cd ~/Desktop/PersonDevelop/go_read/moyureader
 
 # 设置远程 URL 为 SSH
-git remote set-url origin git@github.com:NongChen1223/Tfiction.git
+git remote set-url origin git@github.com:NongChen1223/moyureader.git
 
 # 推送
 git push origin main
@@ -28,10 +28,10 @@ git push origin main
 ### 方法 2：使用 HTTPS（需要 GitHub 账号）
 
 ```bash
-cd ~/Desktop/PersonDevelop/GO_Tfiction
+cd ~/Desktop/PersonDevelop/go_read/moyureader
 
 # 设置远程 URL 为 HTTPS
-git remote set-url origin https://github.com/NongChen1223/Tfiction.git
+git remote set-url origin https://github.com/NongChen1223/moyureader.git
 
 # 推送（会提示输入用户名和密码）
 git push origin main
@@ -42,7 +42,7 @@ git push origin main
 ### 方法 3：使用 GitHub CLI（如果已安装）
 
 ```bash
-cd ~/Desktop/PersonDevelop/GO_Tfiction
+cd ~/Desktop/PersonDevelop/go_read/moyureader
 
 # 登录
 gh auth login
@@ -87,7 +87,7 @@ GIT_CURL_VERBOSE=1 git push origin main
 
 推送成功后，你应该能在 GitHub 上看到这两个提交：
 
-https://github.com/NongChen1223/Tfiction/commits/main
+https://github.com/NongChen1223/moyureader/commits/main
 
 ## 需要帮助？
 

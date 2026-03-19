@@ -45,7 +45,7 @@ func resolveProgressDataDir(dataDir string) string {
 		return "./data"
 	}
 
-	return filepath.Join(homeDir, ".tfiction")
+	return filepath.Join(homeDir, ".moyureader")
 }
 
 // NewProgressService 创建进度服务实例

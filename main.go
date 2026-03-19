@@ -4,9 +4,9 @@ import (
 	"embed"
 	"log"
 
-	"github.com/nongchen1223/tfiction/backend/app"
-	"github.com/nongchen1223/tfiction/backend/config"
-	"github.com/nongchen1223/tfiction/backend/services"
+	"github.com/nongchen1223/moyureader/backend/app"
+	"github.com/nongchen1223/moyureader/backend/config"
+	"github.com/nongchen1223/moyureader/backend/services"
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
@@ -35,7 +35,7 @@ func main() {
 
 	// 创建 Wails 应用配置
 	err = wails.Run(&options.App{
-		Title:     "Tfiction - 阅读器",
+		Title:     "墨鱼阅读器",
 		Width:     1000,
 		Height:    700,
 		MinWidth:  600,
@@ -44,8 +44,8 @@ func main() {
 			Assets: assets,
 		},
 		BackgroundColour: &options.RGBA{R: 255, G: 255, B: 255, A: 0},
-		OnStartup:  appInstance.Startup,
-		OnShutdown: appInstance.Shutdown,
+		OnStartup:        appInstance.Startup,
+		OnShutdown:       appInstance.Shutdown,
 		Bind: []interface{}{
 			appInstance,
 			novelService,
@@ -71,8 +71,8 @@ func main() {
 			WebviewIsTransparent: true,
 			WindowIsTranslucent:  true,
 			About: &mac.AboutInfo{
-				Title:   "Tfiction",
-				Message: "一款支持多格式、跨平台的阅读器",
+				Title:   "墨鱼阅读器",
+				Message: "墨鱼阅读器（MoyuReader），一款支持多格式、跨平台的阅读器",
 			},
 		},
 	})

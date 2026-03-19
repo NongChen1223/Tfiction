@@ -34,7 +34,7 @@ export const useThemeStore = create<ThemeState>()(
       },
     }),
     {
-      name: 'tfiction-theme',
+      name: 'moyureader-theme',
       onRehydrateStorage: () => (state) => {
         // 恢复主题时，同步更新 HTML 属性
         if (state) {

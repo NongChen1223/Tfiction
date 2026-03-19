@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nongchen1223/tfiction/backend/models"
+	"github.com/nongchen1223/moyureader/backend/models"
 )
 
 func TestParseEpubNovelExtractsDirectCoverImage(t *testing.T) {

@@ -1,9 +1,9 @@
 ---
-name: tfiction-doc-sync
-description: Sync README.md and docs/功能需求说明.md for GO_Tfiction whenever tasks change user-facing behavior, supported formats, boss mode, bookshelf/reader/settings flows, setup commands, storage paths, platform differences, or visual design.
+name: moyureader-doc-sync
+description: Sync README.md and docs/功能需求说明.md for moyureader whenever tasks change user-facing behavior, supported formats, boss mode, bookshelf/reader/settings flows, setup commands, storage paths, platform differences, or visual design.
 ---
 
-# Tfiction Doc Sync
+# MoyuReader Doc Sync
 
 Use this skill when:
 
@@ -41,7 +41,7 @@ Check code first, not memory:
 4. Update `docs/功能需求说明.md` if behavior, interaction, settings, design language, or constraints changed.
 5. Be explicit about placeholders and unsupported features. Do not advertise them as complete.
 
-## Tfiction-specific checks
+## MoyuReader-specific checks
 
 - TXT / EPUB support is real; PDF / MOBI / AZW3 are not fully implemented.
 - Reading statistics is currently a placeholder UI unless real data plumbing has been added.

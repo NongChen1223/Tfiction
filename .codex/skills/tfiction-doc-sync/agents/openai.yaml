@@ -1,3 +1,0 @@
-display_name: Tfiction Doc Sync
-short_description: Sync README and the detailed requirement doc when Tfiction behavior, setup, or design changes.
-default_prompt: Update README.md and docs/功能需求说明.md to match the current GO_Tfiction functionality, setup commands, platform differences, and visual design whenever code changes warrant documentation updates.

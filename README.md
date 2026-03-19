@@ -1,6 +1,6 @@
-# Tfiction
+# 墨鱼阅读器 MoyuReader
 
-Tfiction 是一个基于 Wails 的桌面小说阅读器项目，前端使用 React + TypeScript，后端使用 Go。
+墨鱼阅读器（MoyuReader）是一个基于 Wails 的桌面小说阅读器项目，前端使用 React + TypeScript，后端使用 Go。
 当前主线能力是本地小说书架、TXT / EPUB / PDF 阅读、阅读外观设置、全文搜索、阅读进度持久化，以及阅读页摸鱼模式。
 
 详细功能和设计说明见 [docs/功能需求说明.md](docs/功能需求说明.md)。
@@ -107,7 +107,7 @@ wails build
 ## 项目结构
 
 ```text
-GO_Tfiction/
+moyureader/
 ├── backend/
 │   ├── app/
 │   │   └── app.go                      # 应用生命周期、配置接口、Wails 绑定入口
@@ -155,7 +155,7 @@ GO_Tfiction/
 
 ### 环境配置
 
-- 环境变量：`TFICTION_ENV`
+- 环境变量：`MOYUREADER_ENV`
 - 默认配置文件：
 - `config/config.local.json`
 - `config/config.test.json`
