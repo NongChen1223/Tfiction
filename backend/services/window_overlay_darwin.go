@@ -130,6 +130,7 @@ static BOOL MoyuReaderOverlayChaptersDidOnlyAppend(NSString *previous, NSString 
 static NSString *MoyuReaderWrapOverlayHTMLFragment(NSString *fragment);
 static NSMutableAttributedString *MoyuReaderImportOverlayHTMLAttributedString(NSString *string);
 static NSMutableAttributedString *MoyuReaderCreateOverlayAttributedString(NSString *string, NSArray<NSNumber *> **chapterIndicesOut, NSArray<NSValue *> **chapterRangesOut);
+static void MoyuReaderResizeOverlayTextViewToFitContent(NSTextView *textView, NSSize viewportSize);
 static NSFont *MoyuReaderOverlayTextFont(NSFont *existingFont, CGFloat pointSize);
 static void MoyuReaderApplyOverlayTextAttributes(NSMutableAttributedString *attributedText, int fontSize, double lineHeight, double opacity, int red, int green, int blue);
 static void MoyuReaderResizeOverlayTextAttachments(NSTextStorage *textStorage, CGFloat availableWidth);
@@ -1525,6 +1526,24 @@ static NSMutableAttributedString *MoyuReaderCreateOverlayAttributedString(NSStri
 	return combined;
 }
 
+static void MoyuReaderResizeOverlayTextViewToFitContent(NSTextView *textView, NSSize viewportSize) {
+	if (textView == nil || textView.layoutManager == nil || textView.textContainer == nil) {
+		return;
+	}
+
+	CGFloat viewportWidth = MAX(viewportSize.width, 120.0);
+	CGFloat viewportHeight = MAX(viewportSize.height, 1.0);
+	[textView.textContainer setContainerSize:NSMakeSize(viewportWidth, CGFLOAT_MAX)];
+	[textView.layoutManager ensureLayoutForTextContainer:textView.textContainer];
+
+	NSRect usedRect = [textView.layoutManager usedRectForTextContainer:textView.textContainer];
+	CGFloat contentHeight = ceil(usedRect.size.height + (textView.textContainerInset.height * 2.0));
+	CGFloat resolvedHeight = MAX(viewportHeight, contentHeight);
+	[textView setMinSize:NSMakeSize(viewportWidth, resolvedHeight)];
+	[textView setMaxSize:NSMakeSize(viewportWidth, CGFLOAT_MAX)];
+	[textView setFrame:NSMakeRect(0.0, 0.0, viewportWidth, resolvedHeight)];
+}
+
 static NSFont *MoyuReaderOverlayTextFont(NSFont *existingFont, CGFloat pointSize) {
 	NSString *fontName = existingFont.fontName.lowercaseString ?: @"";
 	BOOL wantsBold = NO;
@@ -2030,14 +2049,14 @@ static void MoyuReaderLayoutDesktopReaderOverlayViews(void) {
 
 	MoyuReaderOverlayTextView *textView = (MoyuReaderOverlayTextView *)[moyureaderOverlayScrollView documentView];
 	if (textView != nil) {
-		[textView setFrame:NSMakeRect(0, 0, scrollFrame.size.width, scrollFrame.size.height)];
-		[textView.textContainer setContainerSize:NSMakeSize(scrollFrame.size.width, CGFLOAT_MAX)];
+		MoyuReaderResizeOverlayTextViewToFitContent(textView, scrollFrame.size);
 		CGFloat attachmentWidth = MAX(120.0, scrollFrame.size.width - (textView.textContainerInset.width * 2.0) - 8.0);
 		CGFloat resizeThreshold = moyureaderOverlayIsResizing ? 18.0 : 1.0;
 		if (moyureaderOverlayLastAttachmentResizeWidth <= 0.0 ||
 		    fabs(moyureaderOverlayLastAttachmentResizeWidth - attachmentWidth) >= resizeThreshold) {
 			MoyuReaderResizeOverlayTextAttachments(textView.textStorage, attachmentWidth);
 			moyureaderOverlayLastAttachmentResizeWidth = attachmentWidth;
+			MoyuReaderResizeOverlayTextViewToFitContent(textView, scrollFrame.size);
 		}
 	}
 
@@ -2223,6 +2242,8 @@ static void MoyuReaderEnsureDesktopReaderOverlayWindow(void) {
 	[textView setDrawsBackground:NO];
 	[textView setHorizontallyResizable:NO];
 	[textView setVerticallyResizable:YES];
+	[textView setMinSize:NSMakeSize(frame.size.width, frame.size.height)];
+	[textView setMaxSize:NSMakeSize(frame.size.width, CGFLOAT_MAX)];
 	[textView setTextContainerInset:NSMakeSize(22, 18)];
 	[textView setWantsLayer:YES];
 	[textView.textContainer setWidthTracksTextView:YES];
@@ -2400,6 +2421,7 @@ static void MoyuReaderApplyDesktopReaderOverlayContent(const char *text, int fon
 	moyureaderOverlayLastAttachmentResizeWidth = 0.0;
 	MoyuReaderResizeOverlayTextAttachments([textView textStorage], attachmentWidth);
 	moyureaderOverlayLastAttachmentResizeWidth = attachmentWidth;
+	MoyuReaderResizeOverlayTextViewToFitContent(textView, moyureaderOverlayScrollView.contentView.bounds.size);
 	MoyuReaderApplyOverlayContentAlpha(opacity);
 	if (shouldPreserveScroll && moyureaderOverlayScrollView != nil) {
 		[moyureaderOverlayScrollView.contentView scrollToPoint:preservedScrollOrigin];
