@@ -93,6 +93,7 @@ export function isRichChapterContent(content: string) {
 }
 
 interface DesktopOverlayChapterMarkup {
+  chapterIndex?: number
   title?: string | null
   content: string
   contentIsHtml?: boolean
@@ -196,8 +197,17 @@ function buildDesktopOverlayChapterMarkup(
     ? `<p class="overlay-chapter-title"><strong>${escapeHtml(safeTitle)}</strong></p>`
     : ''
   const bodyMarkup = contentMarkup || '<p>暂无内容</p>'
+  const chapterIndexAttr =
+    typeof chapter.chapterIndex === 'number'
+      ? ` data-overlay-chapter-index="${chapter.chapterIndex}"`
+      : ` data-overlay-chapter-index="${index}"`
+  const chapterSection = `<section class="overlay-chapter"${chapterIndexAttr}>${titleMarkup}${bodyMarkup}</section>`
 
-  return `<section class="overlay-chapter" data-overlay-chapter-index="${index}">${titleMarkup}${bodyMarkup}</section>`
+  if (typeof chapter.chapterIndex !== 'number') {
+    return chapterSection
+  }
+
+  return `<!--moyureader-chapter:${chapter.chapterIndex}:start-->${chapterSection}<!--moyureader-chapter:${chapter.chapterIndex}:end-->`
 }
 
 function buildDesktopOverlayPlainTextMarkup(content: string) {

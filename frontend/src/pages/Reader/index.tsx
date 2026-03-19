@@ -101,7 +101,7 @@ function setReaderStealthRoot(enabled: boolean) {
 }
 
 interface DesktopOverlayAction {
-  type: 'prev' | 'next' | 'chapter' | 'opacity' | 'close' | 'camouflage'
+  type: 'prev' | 'next' | 'chapter' | 'opacity' | 'close' | 'camouflage' | 'position'
   chapterIndex?: number
   value?: number
 }
@@ -265,6 +265,7 @@ export default function Reader() {
   const [isDraggingCamouflageWidget, setIsDraggingCamouflageWidget] = useState(false)
 
   const contentRef = useRef<HTMLDivElement>(null)
+  const chapterListRef = useRef<HTMLDivElement>(null)
   const saveTimerRef = useRef<number | null>(null)
   const appearancePanelRef = useRef<HTMLDivElement>(null)
   const bossPanelRef = useRef<HTMLDivElement>(null)
@@ -274,6 +275,7 @@ export default function Reader() {
   const loadedChaptersRef = useRef<LoadedChapter[]>([])
   const currentNovelRef = useRef(currentNovel)
   const chapterSectionRefs = useRef<Record<number, HTMLElement | null>>({})
+  const chapterItemRefs = useRef<Record<number, HTMLButtonElement | null>>({})
   const pendingChapterScrollRef = useRef<PendingChapterScroll | null>(null)
   const overlayActionPollingRef = useRef(false)
   const camouflageTimerRef = useRef<number | null>(null)
@@ -311,12 +313,12 @@ export default function Reader() {
     currentNovel && loadedChapters.length > 0
       ? buildDesktopOverlayChaptersMarkup(
           loadedChapters
-            .filter((chapter) => chapter.index >= currentNovel.currentChapter)
             .map((chapter) => ({
-            title: currentNovel.chapters[chapter.index]?.title,
-            content: chapter.content,
-            contentIsHtml:
-              currentNovel.format === '.epub' || isRichChapterContent(chapter.content),
+              chapterIndex: chapter.index,
+              title: currentNovel.chapters[chapter.index]?.title,
+              content: chapter.content,
+              contentIsHtml:
+                currentNovel.format === '.epub' || isRichChapterContent(chapter.content),
             }))
         )
       : buildDesktopOverlayMarkup(currentChapter?.title, currentChapterContent, Boolean(isRichContent))
@@ -687,6 +689,34 @@ const camouflageWidgetClassName = `${styles.camouflageWidget} ${
         (readingAnchor - activeChapterTop) / activeChapterHeight
       ),
     }
+  }
+
+  const syncActiveChapterFromReadingLocation = (
+    readingLocation = resolveCurrentReadingLocation()
+  ) => {
+    const activeNovel = currentNovelRef.current
+    if (!readingLocation || !activeNovel) {
+      return null
+    }
+
+    if (readingLocation.chapterIndex === activeNovel.currentChapter) {
+      return readingLocation
+    }
+
+    currentNovelRef.current = {
+      ...activeNovel,
+      currentChapter: readingLocation.chapterIndex,
+    }
+    patchCurrentNovel((novel) =>
+      novel.filePath !== activeNovel.filePath
+        ? novel
+        : {
+            ...novel,
+            currentChapter: readingLocation.chapterIndex,
+          }
+    )
+
+    return readingLocation
   }
 
   const tryApplyPendingChapterScroll = () => {
@@ -1229,6 +1259,27 @@ useEffect(
   }, [loadedChapters, fontSize, lineHeight, pageWidth])
 
   useEffect(() => {
+    if (!showSidebar || !currentNovel) {
+      return
+    }
+
+    syncActiveChapterFromReadingLocation()
+
+    const frame = window.requestAnimationFrame(() => {
+      const activeChapterIndex =
+        currentNovelRef.current?.currentChapter ?? currentNovel.currentChapter
+      chapterItemRefs.current[activeChapterIndex]?.scrollIntoView({
+        block: 'center',
+        behavior: 'auto',
+      })
+    })
+
+    return () => {
+      window.cancelAnimationFrame(frame)
+    }
+  }, [showSidebar, currentNovel?.filePath, currentNovel?.currentChapter])
+
+  useEffect(() => {
     if (!useDesktopOverlay || !isStealthMode || !currentNovel) {
       return
     }
@@ -1463,6 +1514,15 @@ useEffect(
               handleNextChapter()
             } else if (action.type === 'chapter' && typeof action.chapterIndex === 'number') {
               await handleChapterChange(action.chapterIndex)
+            } else if (
+              action.type === 'position' &&
+              typeof action.chapterIndex === 'number' &&
+              typeof action.value === 'number'
+            ) {
+              await persistReadingProgress(
+                action.chapterIndex,
+                clampUnitInterval(action.value)
+              )
             } else if (action.type === 'opacity' && typeof action.value === 'number') {
               await handleOpacityChange(action.value, {
                 desktopOverlayAlreadyApplied: true,
@@ -1574,26 +1634,9 @@ useEffect(
     }
 
     const handleScroll = () => {
-      const readingLocation = resolveCurrentReadingLocation()
-      const activeNovel = currentNovelRef.current
-
-      if (!readingLocation || !activeNovel) {
+      const readingLocation = syncActiveChapterFromReadingLocation()
+      if (!readingLocation) {
         return
-      }
-
-      if (readingLocation.chapterIndex !== activeNovel.currentChapter) {
-        currentNovelRef.current = {
-          ...activeNovel,
-          currentChapter: readingLocation.chapterIndex,
-        }
-        patchCurrentNovel((novel) =>
-          novel.filePath !== activeNovel.filePath
-            ? novel
-            : {
-                ...novel,
-                currentChapter: readingLocation.chapterIndex,
-              }
-        )
       }
 
       void ensureUpcomingChapters(readingLocation.chapterIndex)
@@ -1806,10 +1849,13 @@ return (
                 关闭
               </button>
             </div>
-            <div className={styles.chapterList}>
+            <div ref={chapterListRef} className={styles.chapterList}>
               {currentNovel.chapters.map((chapter, index) => (
                 <button
                   key={`${chapter.title}-${chapter.index}`}
+                  ref={(element) => {
+                    chapterItemRefs.current[index] = element
+                  }}
                   className={`${styles.chapterItem} ${
                     index === currentNovel.currentChapter ? styles.active : ''
                   }`}

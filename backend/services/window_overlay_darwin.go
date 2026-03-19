@@ -55,11 +55,16 @@ static int moyureaderOverlayCurrentRed = 34;
 static int moyureaderOverlayCurrentGreen = 34;
 static int moyureaderOverlayCurrentBlue = 34;
 static NSInteger moyureaderOverlayCurrentChapterIndex = 0;
+static NSArray<NSNumber *> *moyureaderOverlayContentChapterIndices = nil;
+static NSArray<NSValue *> *moyureaderOverlayContentChapterRanges = nil;
 static double moyureaderOverlayCurrentProgress = 0.0;
 static NSRect moyureaderOverlayExpandedFrame = {{0, 0}, {0, 0}};
 static CGFloat moyureaderOverlayLastAttachmentResizeWidth = 0.0;
 static CFTimeInterval moyureaderOverlayLastOpacityActionTimestamp = 0.0;
 static double moyureaderOverlayLastOpacityActionValue = -1.0;
+static CFTimeInterval moyureaderOverlayLastPositionActionTimestamp = 0.0;
+static NSInteger moyureaderOverlayLastPositionActionChapterIndex = -1;
+static double moyureaderOverlayLastPositionActionProgress = -1.0;
 static const CGFloat MoyuReaderOverlayDefaultWidth = 620.0;
 static const CGFloat MoyuReaderOverlayDefaultHeight = 280.0;
 static const CGFloat MoyuReaderOverlayMinWidth = 600.0;
@@ -120,11 +125,16 @@ static void MoyuReaderDismissOverlayChapterPanel(void);
 static BOOL MoyuReaderOverlayPointInView(NSPoint point, NSView *view);
 static void MoyuReaderHandleOverlayMouseDownEvent(NSEvent *event);
 static BOOL MoyuReaderOverlayStringLooksLikeHTML(NSString *string);
-static NSMutableAttributedString *MoyuReaderCreateOverlayAttributedString(NSString *string);
+static NSArray<NSDictionary *> *MoyuReaderExtractOverlayChapterHTMLFragments(NSString *string);
+static NSString *MoyuReaderWrapOverlayHTMLFragment(NSString *fragment);
+static NSMutableAttributedString *MoyuReaderImportOverlayHTMLAttributedString(NSString *string);
+static NSMutableAttributedString *MoyuReaderCreateOverlayAttributedString(NSString *string, NSArray<NSNumber *> **chapterIndicesOut, NSArray<NSValue *> **chapterRangesOut);
 static NSFont *MoyuReaderOverlayTextFont(NSFont *existingFont, CGFloat pointSize);
 static void MoyuReaderApplyOverlayTextAttributes(NSMutableAttributedString *attributedText, int fontSize, double lineHeight, double opacity, int red, int green, int blue);
 static void MoyuReaderResizeOverlayTextAttachments(NSTextStorage *textStorage, CGFloat availableWidth);
 static void MoyuReaderApplyOverlayContentAlpha(double opacity);
+static NSDictionary *MoyuReaderResolveOverlayReadingLocation(void);
+static void MoyuReaderNotifyOverlayReadingLocationIfNeeded(void);
 
 static double MoyuReaderClampOverlayOpacity(double opacity) {
 	return MAX(0.02, MIN(opacity, 1.0));
@@ -606,6 +616,11 @@ static double MoyuReaderOverlayOpacityFromSliderValue(double sliderValue) {
 	}
 
 	[super scrollWheel:event];
+}
+
+- (void)reflectScrolledClipView:(NSClipView *)clipView {
+	[super reflectScrolledClipView:clipView];
+	MoyuReaderNotifyOverlayReadingLocationIfNeeded();
 }
 @end
 
@@ -1335,7 +1350,77 @@ static BOOL MoyuReaderOverlayStringLooksLikeHTML(NSString *string) {
 	return leftBracket.location != NSNotFound && rightBracket.location != NSNotFound;
 }
 
-static NSMutableAttributedString *MoyuReaderCreateOverlayAttributedString(NSString *string) {
+static NSArray<NSDictionary *> *MoyuReaderExtractOverlayChapterHTMLFragments(NSString *string) {
+	if (string == nil || string.length == 0) {
+		return @[];
+	}
+
+	NSMutableArray<NSDictionary *> *fragments = [NSMutableArray array];
+	NSString *startPrefix = @"<!--moyureader-chapter:";
+	NSString *startSuffix = @":start-->";
+	NSUInteger searchLocation = 0;
+
+	while (searchLocation < string.length) {
+		NSRange startPrefixRange = [string rangeOfString:startPrefix
+		                                         options:0
+		                                           range:NSMakeRange(searchLocation, string.length - searchLocation)];
+		if (startPrefixRange.location == NSNotFound) {
+			break;
+		}
+
+		NSUInteger indexStart = NSMaxRange(startPrefixRange);
+		NSRange startSuffixRange = [string rangeOfString:startSuffix
+		                                         options:0
+		                                           range:NSMakeRange(indexStart, string.length - indexStart)];
+		if (startSuffixRange.location == NSNotFound) {
+			break;
+		}
+
+		NSString *chapterIndexString = [string substringWithRange:NSMakeRange(
+			indexStart,
+			startSuffixRange.location - indexStart
+		)];
+		NSInteger chapterIndex = [chapterIndexString integerValue];
+		NSString *endMarker = [NSString stringWithFormat:@"<!--moyureader-chapter:%ld:end-->", (long)chapterIndex];
+		NSUInteger fragmentStart = NSMaxRange(startSuffixRange);
+		NSRange endMarkerRange = [string rangeOfString:endMarker
+		                                      options:0
+		                                        range:NSMakeRange(fragmentStart, string.length - fragmentStart)];
+		if (endMarkerRange.location == NSNotFound) {
+			searchLocation = fragmentStart;
+			continue;
+		}
+
+		NSString *fragmentHTML = [string substringWithRange:NSMakeRange(
+			fragmentStart,
+			endMarkerRange.location - fragmentStart
+		)];
+		[fragments addObject:@{
+			@"index": @(chapterIndex),
+			@"html": fragmentHTML ?: @"",
+		}];
+		searchLocation = NSMaxRange(endMarkerRange);
+	}
+
+	return [fragments copy];
+}
+
+static NSString *MoyuReaderWrapOverlayHTMLFragment(NSString *fragment) {
+	NSString *safeFragment = fragment ?: @"";
+	return [NSString stringWithFormat:
+		@"<!DOCTYPE html><html><head><meta charset=\"utf-8\" /><style>"
+		"body { margin: 0; padding: 0; }"
+		"article { margin: 0; padding: 0; }"
+		"p, div, section, blockquote, pre, ul, ol, figure { margin: 0 0 1em; }"
+		".overlay-chapter-title { margin: 0 0 1.2em; }"
+		"img { display: block; max-width: 100%%; height: auto; margin: 0 auto; }"
+		"figcaption { margin-top: 0.4em; }"
+		"</style></head><body><article>%@</article></body></html>",
+		safeFragment
+	];
+}
+
+static NSMutableAttributedString *MoyuReaderImportOverlayHTMLAttributedString(NSString *string) {
 	if (!MoyuReaderOverlayStringLooksLikeHTML(string)) {
 		return nil;
 	}
@@ -1358,6 +1443,57 @@ static NSMutableAttributedString *MoyuReaderCreateOverlayAttributedString(NSStri
 	}
 
 	return [[NSMutableAttributedString alloc] initWithAttributedString:importedText];
+}
+
+static NSMutableAttributedString *MoyuReaderCreateOverlayAttributedString(NSString *string, NSArray<NSNumber *> **chapterIndicesOut, NSArray<NSValue *> **chapterRangesOut) {
+	if (chapterIndicesOut != NULL) {
+		*chapterIndicesOut = nil;
+	}
+	if (chapterRangesOut != NULL) {
+		*chapterRangesOut = nil;
+	}
+
+	NSArray<NSDictionary *> *chapterFragments = MoyuReaderExtractOverlayChapterHTMLFragments(string);
+	if (chapterFragments.count == 0) {
+		return MoyuReaderImportOverlayHTMLAttributedString(string);
+	}
+
+	NSMutableAttributedString *combined = [[NSMutableAttributedString alloc] init];
+	NSMutableArray<NSNumber *> *chapterIndices = [NSMutableArray array];
+	NSMutableArray<NSValue *> *chapterRanges = [NSMutableArray array];
+
+	for (NSInteger index = 0; index < chapterFragments.count; index++) {
+		NSDictionary *fragment = chapterFragments[index];
+		NSInteger chapterIndex = [fragment[@"index"] integerValue];
+		NSString *fragmentHTML = [fragment[@"html"] isKindOfClass:[NSString class]]
+			? (NSString *)fragment[@"html"]
+			: @"";
+		NSMutableAttributedString *chapterText = MoyuReaderImportOverlayHTMLAttributedString(
+			MoyuReaderWrapOverlayHTMLFragment(fragmentHTML)
+		);
+		if (chapterText == nil || chapterText.length == 0) {
+			chapterText = [[NSMutableAttributedString alloc] initWithString:@"暂无内容"];
+		}
+
+		NSUInteger chapterRangeStart = combined.length;
+		[combined appendAttributedString:chapterText];
+		NSUInteger chapterRangeLength = MAX(combined.length - chapterRangeStart, 1);
+		[chapterIndices addObject:@(chapterIndex)];
+		[chapterRanges addObject:[NSValue valueWithRange:NSMakeRange(chapterRangeStart, chapterRangeLength)]];
+
+		if (index < chapterFragments.count - 1) {
+			[combined appendAttributedString:[[NSAttributedString alloc] initWithString:@"\n\n"]];
+		}
+	}
+
+	if (chapterIndicesOut != NULL) {
+		*chapterIndicesOut = [chapterIndices copy];
+	}
+	if (chapterRangesOut != NULL) {
+		*chapterRangesOut = [chapterRanges copy];
+	}
+
+	return combined;
 }
 
 static NSFont *MoyuReaderOverlayTextFont(NSFont *existingFont, CGFloat pointSize) {
@@ -1505,6 +1641,116 @@ static void MoyuReaderApplyOverlayContentAlpha(double opacity) {
 		}
 		[textView setAlphaValue:1.0];
 	}
+}
+
+static NSDictionary *MoyuReaderResolveOverlayReadingLocation(void) {
+	MoyuReaderOverlayTextView *textView = (MoyuReaderOverlayTextView *)[moyureaderOverlayScrollView documentView];
+	if (textView == nil || textView.layoutManager == nil || textView.textContainer == nil) {
+		return nil;
+	}
+
+	if (moyureaderOverlayContentChapterIndices.count == 0 || moyureaderOverlayContentChapterRanges.count == 0) {
+		return nil;
+	}
+
+	NSRect visibleRect = [moyureaderOverlayScrollView documentVisibleRect];
+	if (NSHeight(visibleRect) <= 0.0) {
+		return nil;
+	}
+
+	NSPoint anchorPoint = NSMakePoint(
+		textView.textContainerInset.width + 2.0,
+		NSMinY(visibleRect) + (NSHeight(visibleRect) * 0.18)
+	);
+	NSLayoutManager *layoutManager = textView.layoutManager;
+	NSUInteger glyphCount = layoutManager.numberOfGlyphs;
+	if (glyphCount == 0) {
+		return nil;
+	}
+
+	NSUInteger glyphIndex = [layoutManager glyphIndexForPoint:anchorPoint
+	                                          inTextContainer:textView.textContainer
+	                           fractionOfDistanceThroughGlyph:nil];
+	if (glyphIndex >= glyphCount) {
+		glyphIndex = glyphCount - 1;
+	}
+
+	NSUInteger characterIndex = [layoutManager characterIndexForGlyphAtIndex:glyphIndex];
+	NSInteger resolvedChapterIndex = [[moyureaderOverlayContentChapterIndices firstObject] integerValue];
+	double resolvedChapterProgress = 0.0;
+
+	for (NSInteger index = 0; index < moyureaderOverlayContentChapterRanges.count; index++) {
+		NSRange chapterRange = [moyureaderOverlayContentChapterRanges[index] rangeValue];
+		if (chapterRange.length == 0) {
+			continue;
+		}
+
+		if (characterIndex < chapterRange.location) {
+			break;
+		}
+
+		resolvedChapterIndex = [moyureaderOverlayContentChapterIndices[index] integerValue];
+		NSUInteger clampedCharacterIndex = characterIndex;
+		if (clampedCharacterIndex >= NSMaxRange(chapterRange)) {
+			clampedCharacterIndex = NSMaxRange(chapterRange) - 1;
+		}
+
+		resolvedChapterProgress = chapterRange.length <= 1
+			? 0.0
+			: (double)(clampedCharacterIndex - chapterRange.location) / (double)(chapterRange.length - 1);
+
+		if (characterIndex < NSMaxRange(chapterRange)) {
+			break;
+		}
+	}
+
+	return @{
+		@"chapterIndex": @(resolvedChapterIndex),
+		@"progress": @(MAX(0.0, MIN(resolvedChapterProgress, 1.0))),
+	};
+}
+
+static void MoyuReaderNotifyOverlayReadingLocationIfNeeded(void) {
+	if (!moyureaderOverlayVisible) {
+		return;
+	}
+
+	NSDictionary *readingLocation = MoyuReaderResolveOverlayReadingLocation();
+	if (readingLocation == nil) {
+		return;
+	}
+
+	NSInteger chapterIndex = [readingLocation[@"chapterIndex"] integerValue];
+	double chapterProgress = [readingLocation[@"progress"] doubleValue];
+	CFTimeInterval now = CFAbsoluteTimeGetCurrent();
+	BOOL chapterChanged = chapterIndex != moyureaderOverlayLastPositionActionChapterIndex;
+	BOOL progressChangedEnough =
+		moyureaderOverlayLastPositionActionProgress < 0.0 ||
+		fabs(moyureaderOverlayLastPositionActionProgress - chapterProgress) >= 0.02;
+	BOOL throttledLongEnough =
+		moyureaderOverlayLastPositionActionTimestamp <= 0.0 ||
+		(now - moyureaderOverlayLastPositionActionTimestamp) >= (1.0 / 12.0);
+
+	if (!chapterChanged && !(progressChangedEnough && throttledLongEnough)) {
+		return;
+	}
+
+	moyureaderOverlayLastPositionActionTimestamp = now;
+	moyureaderOverlayLastPositionActionChapterIndex = chapterIndex;
+	moyureaderOverlayLastPositionActionProgress = chapterProgress;
+
+	if (moyureaderOverlayCurrentChapterIndex != chapterIndex) {
+		moyureaderOverlayCurrentChapterIndex = chapterIndex;
+		MoyuReaderRefreshOverlayControls();
+		MoyuReaderApplyOverlayChapterButtonStyles();
+		if (moyureaderOverlayChapterPanelVisible) {
+			dispatch_async(dispatch_get_main_queue(), ^{
+				MoyuReaderScrollCurrentChapterButtonIntoView();
+			});
+		}
+	}
+
+	MoyuReaderEnqueueOverlayAction(@"position", chapterIndex, chapterProgress, YES);
 }
 
 static void MoyuReaderSetOverlayChromeVisible(BOOL visible) {
@@ -2102,9 +2348,20 @@ static void MoyuReaderApplyDesktopReaderOverlayContent(const char *text, int fon
 	moyureaderOverlayCurrentRed = red;
 	moyureaderOverlayCurrentGreen = green;
 	moyureaderOverlayCurrentBlue = blue;
+	moyureaderOverlayLastPositionActionTimestamp = 0.0;
+	moyureaderOverlayLastPositionActionChapterIndex = -1;
+	moyureaderOverlayLastPositionActionProgress = -1.0;
 
 	MoyuReaderOverlayTextView *textView = (MoyuReaderOverlayTextView *)[moyureaderOverlayScrollView documentView];
-	NSMutableAttributedString *attributedText = MoyuReaderCreateOverlayAttributedString(string);
+	NSArray<NSNumber *> *chapterIndices = nil;
+	NSArray<NSValue *> *chapterRanges = nil;
+	NSMutableAttributedString *attributedText = MoyuReaderCreateOverlayAttributedString(
+		string,
+		&chapterIndices,
+		&chapterRanges
+	);
+	moyureaderOverlayContentChapterIndices = chapterIndices ?: @[];
+	moyureaderOverlayContentChapterRanges = chapterRanges ?: @[];
 	if (attributedText == nil) {
 		attributedText = [[NSMutableAttributedString alloc] initWithString:string ?: @""];
 	}
@@ -2122,6 +2379,7 @@ static void MoyuReaderApplyDesktopReaderOverlayContent(const char *text, int fon
 		[textView scrollRangeToVisible:NSMakeRange(0, 0)];
 	}
 	MoyuReaderRefreshOverlayControls();
+	MoyuReaderNotifyOverlayReadingLocationIfNeeded();
 }
 
 static void MoyuReaderShowDesktopReaderOverlayWindow(const char *text, int fontSize, double lineHeight, double opacity, int red, int green, int blue) {
@@ -2131,6 +2389,9 @@ static void MoyuReaderShowDesktopReaderOverlayWindow(const char *text, int fontS
 		[moyureaderOverlayActionQueue removeAllObjects];
 		moyureaderOverlayLastOpacityActionTimestamp = 0.0;
 		moyureaderOverlayLastOpacityActionValue = -1.0;
+		moyureaderOverlayLastPositionActionTimestamp = 0.0;
+		moyureaderOverlayLastPositionActionChapterIndex = -1;
+		moyureaderOverlayLastPositionActionProgress = -1.0;
 		moyureaderOverlayIsResizing = NO;
 		moyureaderOverlaySuppressCamouflageCollapseUntilReenter = NO;
 		MoyuReaderSetOverlayChapterPanelVisible(NO);
@@ -2195,7 +2456,12 @@ static void MoyuReaderHideDesktopReaderOverlayWindow(void) {
 		moyureaderOverlayIsResizing = NO;
 		moyureaderOverlayLastOpacityActionTimestamp = 0.0;
 		moyureaderOverlayLastOpacityActionValue = -1.0;
+		moyureaderOverlayLastPositionActionTimestamp = 0.0;
+		moyureaderOverlayLastPositionActionChapterIndex = -1;
+		moyureaderOverlayLastPositionActionProgress = -1.0;
 		moyureaderOverlaySuppressCamouflageCollapseUntilReenter = NO;
+		moyureaderOverlayContentChapterIndices = @[];
+		moyureaderOverlayContentChapterRanges = @[];
 		if (moyureaderOverlayCamouflageCollapsed && moyureaderOverlayWindow != nil) {
 			NSRect expandedFrame = MoyuReaderOverlayExpandedFrameForRestore();
 			moyureaderOverlayExpandedFrame = expandedFrame;
