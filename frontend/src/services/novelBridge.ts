@@ -3,6 +3,7 @@ import {
   SaveReadingProgress as rawSaveReadingProgress,
   SetCurrentChapter as rawSetCurrentChapter,
 } from '@/wailsjs/go/services/NovelService'
+import type { ChapterContentPayload, SearchResult } from '@/types'
 
 const BRIDGE_RETRY_DELAY_MS = 120
 const BRIDGE_RETRY_MAX_ATTEMPTS = 25
@@ -98,4 +99,47 @@ export function saveReadingProgress(
 // 仅同步后端记录的当前章节，不负责加载正文内容。
 export function setCurrentChapter(filePath: string, chapterIndex: number) {
   return callNovelServiceWithRetry(() => rawSetCurrentChapter(filePath, chapterIndex))
+}
+
+export function searchNovel(filePath: string, keyword: string, caseSensitive = false) {
+  return callNovelServiceWithRetry(
+    () =>
+      (
+        window as Window & {
+          go?: {
+            services?: {
+              NovelService?: {
+                SearchNovel?: (
+                  filePath: string,
+                  keyword: string,
+                  caseSensitive: boolean
+                ) => Promise<SearchResult[]>
+              }
+            }
+          }
+        }
+      ).go?.services?.NovelService?.SearchNovel?.(filePath, keyword, caseSensitive) ??
+      Promise.reject(new Error('SearchNovel 方法不可用'))
+  )
+}
+
+export function getChapterContentPayload(filePath: string, chapterIndex: number) {
+  return callNovelServiceWithRetry(
+    () =>
+      (
+        window as Window & {
+          go?: {
+            services?: {
+              NovelService?: {
+                GetChapterContentPayload?: (
+                  filePath: string,
+                  chapterIndex: number
+                ) => Promise<ChapterContentPayload>
+              }
+            }
+          }
+        }
+      ).go?.services?.NovelService?.GetChapterContentPayload?.(filePath, chapterIndex) ??
+      Promise.reject(new Error('GetChapterContentPayload 方法不可用'))
+  )
 }

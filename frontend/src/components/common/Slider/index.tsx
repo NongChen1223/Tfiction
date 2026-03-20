@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import styles from './Slider.module.scss'
 
 export interface SliderProps {
@@ -7,6 +8,7 @@ export interface SliderProps {
   step?: number
   value?: number
   onChange?: (value: number) => void
+  commitOnRelease?: boolean
   showValue?: boolean
   unit?: string
   disabled?: boolean
@@ -24,16 +26,57 @@ export default function Slider({
   step = 1,
   value = 50,
   onChange,
+  commitOnRelease = false,
   showValue = true,
   unit = '',
   disabled = false,
   className = '',
 }: SliderProps) {
+  const [draftValue, setDraftValue] = useState(value)
+  const [isInteracting, setIsInteracting] = useState(false)
+  const latestValueRef = useRef(value)
+
+  useEffect(() => {
+    latestValueRef.current = value
+
+    if (!commitOnRelease || !isInteracting) {
+      setDraftValue(value)
+    }
+  }, [commitOnRelease, isInteracting, value])
+
+  useEffect(() => {
+    if (!commitOnRelease || !isInteracting) {
+      return
+    }
+
+    const finishInteraction = () => {
+      setIsInteracting(false)
+      onChange?.(latestValueRef.current)
+    }
+
+    window.addEventListener('pointerup', finishInteraction)
+    window.addEventListener('pointercancel', finishInteraction)
+
+    return () => {
+      window.removeEventListener('pointerup', finishInteraction)
+      window.removeEventListener('pointercancel', finishInteraction)
+    }
+  }, [commitOnRelease, isInteracting, onChange])
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    onChange?.(Number(e.target.value))
+    const nextValue = Number(e.target.value)
+    latestValueRef.current = nextValue
+
+    if (commitOnRelease) {
+      setDraftValue(nextValue)
+      return
+    }
+
+    onChange?.(nextValue)
   }
 
-  const percentage = ((value - min) / (max - min)) * 100
+  const displayValue = commitOnRelease ? draftValue : value
+  const percentage = ((displayValue - min) / (max - min)) * 100
 
   return (
     <div className={`${styles.container} ${className}`}>
@@ -42,7 +85,7 @@ export default function Slider({
           <label className={styles.label}>{label}</label>
           {showValue && (
             <span className={styles.value}>
-              {value}
+              {displayValue}
               {unit}
             </span>
           )}
@@ -55,8 +98,31 @@ export default function Slider({
           min={min}
           max={max}
           step={step}
-          value={value}
+          value={displayValue}
           onChange={handleChange}
+          onPointerDown={() => {
+            if (!commitOnRelease) {
+              return
+            }
+
+            setIsInteracting(true)
+          }}
+          onKeyUp={() => {
+            if (!commitOnRelease) {
+              return
+            }
+
+            setIsInteracting(false)
+            onChange?.(latestValueRef.current)
+          }}
+          onBlur={() => {
+            if (!commitOnRelease) {
+              return
+            }
+
+            setIsInteracting(false)
+            onChange?.(latestValueRef.current)
+          }}
           disabled={disabled}
           style={{
             background: `linear-gradient(to right, rgb(var(--color-primary)) 0%, rgb(var(--color-primary)) ${percentage}%, rgb(var(--neo-panel-muted)) ${percentage}%, rgb(var(--neo-panel-muted)) 100%)`,

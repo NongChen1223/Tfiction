@@ -1,7 +1,17 @@
-import { useEffect, useRef, useState } from 'react'
-import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
+import type {
+  CSSProperties,
+  MutableRefObject,
+  PointerEvent as ReactPointerEvent,
+  RefObject,
+} from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import type { CamouflageWidgetPosition, Novel, SearchResult } from '@/types'
+import type {
+  CamouflageWidgetPosition,
+  Novel,
+  ReaderContentBlock,
+  SearchResult,
+} from '@/types'
 import { useNovelStore } from '@/stores/novelStore'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { getPersistedBossOpacity } from '@/stores/settingsStore'
@@ -9,10 +19,6 @@ import { useWindowStore } from '@/stores/windowStore'
 import { useLibraryStore } from '@/stores/libraryStore'
 import ReadingAppearanceControls from '@/components/features/ReadingAppearanceControls'
 import CamouflagePendant from '@/components/features/CamouflagePendant'
-import {
-  GetChapterContent,
-} from '@/wailsjs/go/services/NovelService'
-import { SearchInNovel } from '@/wailsjs/go/services/SearchService'
 import {
   ConsumeDesktopReaderOverlayActions,
   DisableStealthMode,
@@ -31,14 +37,23 @@ import {
   UpdateDesktopReaderOverlayControls,
 } from '@/wailsjs/go/services/WindowService'
 import { EventsOn } from '@/wailsjs/runtime/runtime'
-import { openNovel, saveReadingProgress, setCurrentChapter } from '@/services/novelBridge'
+import {
+  getChapterContentPayload,
+  openNovel,
+  saveReadingProgress,
+  searchNovel,
+  setCurrentChapter,
+} from '@/services/novelBridge'
 import { useBossMode } from '@/hooks/useBossMode'
 import { useClickOutside } from '@/hooks/useClickOutside'
 import {
+  buildHighlightedHtml,
   buildDesktopOverlayChaptersMarkup,
   buildDesktopOverlayMarkup,
-  buildHighlightedHtml,
+  buildDesktopOverlayPreviewMarkup,
+  buildDesktopOverlayPreviewText,
   calculateProgressFromPosition,
+  CONTENT_CHUNK_CLASS_NAME,
   findChapterIndexByPosition,
   isRichChapterContent,
   mapNovelToBook,
@@ -112,8 +127,8 @@ function clampUnitInterval(value: number) {
   return Math.max(0, Math.min(1, Number(value || 0)))
 }
 
-const CHAPTER_PREFETCH_BATCH = 2
-const CHAPTER_PREFETCH_TRIGGER_DISTANCE = 1
+const CHAPTER_WINDOW_BEFORE = 2
+const CHAPTER_WINDOW_AFTER = 3
 const DESKTOP_OVERLAY_PREFETCH_AHEAD = {
   text: 12,
   epub: 6,
@@ -124,6 +139,8 @@ const READING_ANCHOR_RATIO = 0.18
 interface LoadedChapter {
   index: number
   content: string
+  isRichContent: boolean
+  blocks: ReaderContentBlock[]
 }
 
 interface PendingChapterScroll {
@@ -143,14 +160,126 @@ interface ReaderRouteState {
   returnDirectoryId?: string
 }
 
+interface ChapterWindowRange {
+  start: number
+  end: number
+}
+
+interface ReaderChapterListProps {
+  chapters: Novel['chapters']
+  loadedChapters: LoadedChapter[]
+  format?: string
+  searchKeyword: string
+  isAppendingChapters: boolean
+  chapterSectionRefs: MutableRefObject<Record<number, HTMLElement | null>>
+}
+
+interface ReaderContentChunkProps {
+  html: string
+  estimatedHeight: number
+}
+
+const DESKTOP_OVERLAY_MAX_CHAPTERS = {
+  text: 3,
+  epub: 2,
+  pdf: 2,
+}
+const DESKTOP_OVERLAY_MAX_BLOCKS = {
+  text: 48,
+  epub: 18,
+  pdf: 12,
+}
+const DESKTOP_OVERLAY_MAX_CHARS = {
+  text: 18000,
+  epub: 9000,
+  pdf: 7000,
+}
+const DESKTOP_OVERLAY_MAX_IMAGES = {
+  text: 0,
+  epub: 3,
+  pdf: 2,
+}
+
+const ReaderContentChunk = memo(function ReaderContentChunk({
+  html,
+  estimatedHeight,
+}: ReaderContentChunkProps) {
+  return (
+    <div
+      className={CONTENT_CHUNK_CLASS_NAME}
+      style={{
+        containIntrinsicSize: `${Math.max(estimatedHeight, 1)}px auto`,
+      }}
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  )
+})
+
+const ReaderChapterList = memo(function ReaderChapterList({
+  chapters,
+  loadedChapters,
+  format,
+  searchKeyword,
+  isAppendingChapters,
+  chapterSectionRefs,
+}: ReaderChapterListProps) {
+  const chapterRenderItems = useMemo(
+    () =>
+      loadedChapters.map((chapter) => {
+        const chapterMeta = chapters[chapter.index]
+        const chapterIsRichContent = chapter.isRichContent || format === '.epub'
+        const chunks = chapter.blocks.map((block) =>
+          block.type === 'html' ? block.content : buildHighlightedHtml(block.content, searchKeyword)
+        )
+
+        return {
+          index: chapter.index,
+          title: chapterMeta?.title,
+          isRichContent: chapterIsRichContent,
+          chunks,
+          estimatedHeights: chapter.blocks.map((block) => block.estimatedHeight),
+        }
+      }),
+    [chapters, format, loadedChapters, searchKeyword]
+  )
+
+  return (
+    <>
+      {chapterRenderItems.map((chapter) => (
+        <section
+          key={`${chapter.title || '正文'}-${chapter.index}`}
+          ref={(element) => {
+            chapterSectionRefs.current[chapter.index] = element
+          }}
+          className={styles.chapterSection}
+        >
+          {chapter.title && <h2 className={styles.chapterTitle}>{chapter.title}</h2>}
+          <div className={`${styles.text} ${chapter.isRichContent ? styles.epubText : ''}`}>
+            {chapter.chunks.map((chunk, chunkIndex) => (
+              <ReaderContentChunk
+                key={`${chapter.index}-${chunkIndex}`}
+                html={chunk}
+                estimatedHeight={chapter.estimatedHeights[chunkIndex] || 420}
+              />
+            ))}
+          </div>
+        </section>
+      ))}
+
+      {isAppendingChapters && <div className={styles.inlineLoading}>下一章已在路上...</div>}
+    </>
+  )
+})
+
 function deriveChapterProgressFromOverall(novel: Novel, chapterIndex: number) {
   const chapter = novel.chapters[chapterIndex]
-  if (!chapter || novel.content.length === 0) {
+  const totalLength = novel.contentLength || novel.content.length
+  if (!chapter || totalLength <= 0) {
     return 0
   }
 
   const absoluteProgress = clampUnitInterval(Number(novel.readProgress || 0) / 100)
-  const absolutePosition = Math.round(absoluteProgress * Math.max(novel.content.length, 1))
+  const absolutePosition = Math.round(absoluteProgress * Math.max(totalLength, 1))
   const chapterLength = Math.max(chapter.endPos - chapter.startPos, 1)
 
   return clampUnitInterval((absolutePosition - chapter.startPos) / chapterLength)
@@ -168,6 +297,146 @@ function getDesktopOverlayPrefetchAhead(format: string) {
   return DESKTOP_OVERLAY_PREFETCH_AHEAD.text
 }
 
+function getDesktopOverlayRenderLimits(format: string) {
+  if (format === '.pdf') {
+    return {
+      maxChapters: DESKTOP_OVERLAY_MAX_CHAPTERS.pdf,
+      maxBlocks: DESKTOP_OVERLAY_MAX_BLOCKS.pdf,
+      maxChars: DESKTOP_OVERLAY_MAX_CHARS.pdf,
+      maxImages: DESKTOP_OVERLAY_MAX_IMAGES.pdf,
+    }
+  }
+
+  if (format === '.epub') {
+    return {
+      maxChapters: DESKTOP_OVERLAY_MAX_CHAPTERS.epub,
+      maxBlocks: DESKTOP_OVERLAY_MAX_BLOCKS.epub,
+      maxChars: DESKTOP_OVERLAY_MAX_CHARS.epub,
+      maxImages: DESKTOP_OVERLAY_MAX_IMAGES.epub,
+    }
+  }
+
+  return {
+    maxChapters: DESKTOP_OVERLAY_MAX_CHAPTERS.text,
+    maxBlocks: DESKTOP_OVERLAY_MAX_BLOCKS.text,
+    maxChars: DESKTOP_OVERLAY_MAX_CHARS.text,
+    maxImages: DESKTOP_OVERLAY_MAX_IMAGES.text,
+  }
+}
+
+function selectDesktopOverlayChapters(
+  chapters: LoadedChapter[],
+  focusChapterIndex: number,
+  format: string
+) {
+  if (chapters.length === 0) {
+    return []
+  }
+
+  const orderedChapters = [...chapters].sort((left, right) => left.index - right.index)
+  const focusIndex = Math.max(
+    0,
+    orderedChapters.findIndex((chapter) => chapter.index === focusChapterIndex)
+  )
+  const { maxBlocks, maxChapters } = getDesktopOverlayRenderLimits(format)
+  const selectedChapters: LoadedChapter[] = []
+  let totalBlocks = 0
+  let nextCursor = focusIndex
+  let prevCursor = focusIndex - 1
+
+  while (selectedChapters.length < maxChapters) {
+    let pickedChapter: LoadedChapter | null = null
+
+    if (nextCursor < orderedChapters.length) {
+      pickedChapter = orderedChapters[nextCursor]
+      nextCursor += 1
+    } else if (prevCursor >= 0) {
+      pickedChapter = orderedChapters[prevCursor]
+      prevCursor -= 1
+    }
+
+    if (!pickedChapter) {
+      break
+    }
+
+    const blockCount = Math.max(pickedChapter.blocks.length, 1)
+    if (selectedChapters.length > 0 && totalBlocks + blockCount > maxBlocks) {
+      if (prevCursor >= 0 && nextCursor >= orderedChapters.length) {
+        break
+      }
+
+      continue
+    }
+
+    selectedChapters.push(pickedChapter)
+    totalBlocks += blockCount
+
+    if (prevCursor >= 0 && selectedChapters.length < maxChapters && totalBlocks < maxBlocks) {
+      const previousChapter = orderedChapters[prevCursor]
+      const previousBlockCount = Math.max(previousChapter.blocks.length, 1)
+      if (totalBlocks + previousBlockCount <= maxBlocks || selectedChapters.length === 0) {
+        selectedChapters.unshift(previousChapter)
+        totalBlocks += previousBlockCount
+        prevCursor -= 1
+      }
+    }
+  }
+
+  return selectedChapters.sort((left, right) => left.index - right.index)
+}
+
+function buildDesktopOverlayChapterPreview(chapter: LoadedChapter, format: string) {
+  const { maxChars, maxImages } = getDesktopOverlayRenderLimits(format)
+  const previewSegments: string[] = []
+  let remainingChars = maxChars
+  let remainingImages = maxImages
+
+  for (const block of chapter.blocks) {
+    if (remainingChars <= 0 && remainingImages <= 0) {
+      break
+    }
+
+    const nextSegment = buildDesktopOverlayPreviewMarkup(
+      block.content,
+      block.type === 'html',
+      {
+        maxLength: remainingChars,
+        maxImages: remainingImages,
+      }
+    )
+    if (!nextSegment.trim()) {
+      continue
+    }
+
+    previewSegments.push(nextSegment)
+    remainingChars -= Array.from(buildDesktopOverlayPreviewText(nextSegment, true, remainingChars)).length
+    const imageMatches = nextSegment.match(/<img\b/gi)
+    remainingImages -= imageMatches?.length || 0
+  }
+
+  if (previewSegments.length > 0) {
+    return previewSegments.join('')
+  }
+
+  return buildDesktopOverlayPreviewMarkup(chapter.content, chapter.isRichContent, {
+    maxLength: maxChars,
+    maxImages,
+  })
+}
+
+function getChapterWindowRange(
+  focusChapterIndex: number,
+  totalChapters: number
+): ChapterWindowRange {
+  if (totalChapters <= 0) {
+    return { start: 0, end: 0 }
+  }
+
+  return {
+    start: Math.max(0, focusChapterIndex - CHAPTER_WINDOW_BEFORE),
+    end: Math.min(totalChapters - 1, focusChapterIndex + CHAPTER_WINDOW_AFTER),
+  }
+}
 
 function clampCamouflageRatio(value: number) {
   return Math.max(0, Math.min(1, Number(value || 0)))
@@ -284,21 +553,26 @@ export default function Reader() {
   const contentRef = useRef<HTMLDivElement>(null)
   const chapterListRef = useRef<HTMLDivElement>(null)
   const saveTimerRef = useRef<number | null>(null)
+  const scrollTickingRef = useRef(false)
+  const chapterWindowMaintainTimerRef = useRef<number | null>(null)
   const appearancePanelRef = useRef<HTMLDivElement>(null)
   const bossPanelRef = useRef<HTMLDivElement>(null)
   const sidebarRef = useRef<HTMLDivElement>(null)
   const chapterLoadRevisionRef = useRef(0)
-  const chapterLoadPromisesRef = useRef<Map<number, Promise<string>>>(new Map())
-  const chapterContentMapRef = useRef<Map<number, string>>(new Map())
+  const chapterLoadPromisesRef = useRef<Map<number, Promise<LoadedChapter>>>(new Map())
+  const chapterContentMapRef = useRef<Map<number, LoadedChapter>>(new Map())
   const loadedChaptersRef = useRef<LoadedChapter[]>([])
   const currentNovelRef = useRef(currentNovel)
   const chapterSectionRefs = useRef<Record<number, HTMLElement | null>>({})
   const chapterItemRefs = useRef<Record<number, HTMLButtonElement | null>>({})
+  const chapterWindowRangeRef = useRef<ChapterWindowRange | null>(null)
   const pendingChapterScrollRef = useRef<PendingChapterScroll | null>(null)
   const overlayReadingLocationRef = useRef<PendingChapterScroll | null>(null)
   const overlayActionPollingRef = useRef(false)
   const camouflageTimerRef = useRef<number | null>(null)
   const camouflageDragCleanupRef = useRef<(() => void) | null>(null)
+  const camouflageDragFrameRef = useRef<number | null>(null)
+  const camouflageDragLatestPositionRef = useRef<CamouflageWidgetPosition | null>(null)
   const bossOpacityPersistTimerRef = useRef<number | null>(null)
   const overlayOpacityFrameRef = useRef<number | null>(null)
   const overlayOpacityQueuedValueRef = useRef<number | null>(null)
@@ -318,29 +592,62 @@ export default function Reader() {
     currentNovel && currentNovel.chapters.length > 0
       ? currentNovel.chapters[currentNovel.currentChapter]
       : null
-
-  const currentChapterContent =
+  const currentLoadedChapter =
     currentNovel
-      ? loadedChapters.find((chapter) => chapter.index === currentNovel.currentChapter)?.content || ''
-      : ''
-  const isRichContent =
-    currentNovel?.format === '.epub' || isRichChapterContent(currentChapterContent)
+      ? loadedChapters.find((chapter) => chapter.index === currentNovel.currentChapter) || null
+      : null
+
+  const currentChapterContent = currentLoadedChapter?.content || ''
+  const isRichContent = Boolean(
+    currentLoadedChapter?.isRichContent ||
+      currentNovel?.format === '.epub' ||
+      isRichChapterContent(currentChapterContent)
+  )
   const isLoadingChapter = loadingChapterIndexes.length > 0
   const isInitialChapterLoading = loadedChapters.length === 0 && isLoadingChapter
   const isAppendingChapters = loadedChapters.length > 0 && isLoadingChapter
-  const overlayChapterMarkup =
-    currentNovel && loadedChapters.length > 0
-      ? buildDesktopOverlayChaptersMarkup(
-          loadedChapters
-            .map((chapter) => ({
-              chapterIndex: chapter.index,
-              title: currentNovel.chapters[chapter.index]?.title,
-              content: chapter.content,
-              contentIsHtml:
-                currentNovel.format === '.epub' || isRichChapterContent(chapter.content),
-            }))
-        )
-      : buildDesktopOverlayMarkup(currentChapter?.title, currentChapterContent, Boolean(isRichContent))
+  const desktopOverlayChapters = useMemo(() => {
+    if (!currentNovel || loadedChapters.length === 0) {
+      return []
+    }
+
+    return selectDesktopOverlayChapters(
+      loadedChapters,
+      currentNovel.currentChapter,
+      currentNovel.format
+    )
+  }, [currentNovel, loadedChapters])
+  const overlayChapterMarkup = useMemo(() => {
+    if (!currentNovel || desktopOverlayChapters.length === 0) {
+      return buildDesktopOverlayMarkup(
+        currentChapter?.title,
+        buildDesktopOverlayPreviewMarkup(
+          currentChapterContent,
+          Boolean(isRichContent),
+          {
+            maxLength: getDesktopOverlayRenderLimits(currentNovel?.format || '').maxChars,
+            maxImages: getDesktopOverlayRenderLimits(currentNovel?.format || '').maxImages,
+          }
+        ),
+        true
+      )
+    }
+
+    return buildDesktopOverlayChaptersMarkup(
+      desktopOverlayChapters.map((chapter) => ({
+        chapterIndex: chapter.index,
+        title: currentNovel.chapters[chapter.index]?.title,
+        content: buildDesktopOverlayChapterPreview(chapter, currentNovel.format),
+        contentIsHtml: true,
+      }))
+    )
+  }, [
+    currentChapter?.title,
+    currentChapterContent,
+    currentNovel,
+    desktopOverlayChapters,
+    isRichContent,
+  ])
   const overlayChapterTitlesSignature = currentNovel
     ? currentNovel.chapters.map((chapter) => chapter.title).join('\u0000')
     : ''
@@ -384,6 +691,21 @@ const camouflageWidgetClassName = `${styles.camouflageWidget} ${
     : ''
 }`
 
+  const currentChapterOverlayMarkup = currentNovel
+    ? buildDesktopOverlayMarkup(
+        currentChapter?.title,
+        buildDesktopOverlayPreviewMarkup(
+          currentChapterContent,
+          Boolean(isRichContent),
+          {
+            maxLength: getDesktopOverlayRenderLimits(currentNovel.format).maxChars,
+            maxImages: getDesktopOverlayRenderLimits(currentNovel.format).maxImages,
+          }
+        ),
+        true
+      )
+    : buildDesktopOverlayMarkup(null, '', false)
+
   useClickOutside(bossPanelRef, isWebviewStealthMode && bossMode.isPanelOpen, () => {
     bossMode.closePanel()
   })
@@ -417,6 +739,11 @@ const camouflageWidgetClassName = `${styles.camouflageWidget} ${
       blue
     )
     overlayOpacityLastSentRef.current = nextOpacity
+
+    const readingLocation = resolveReaderReadingLocation()
+    if (readingLocation) {
+      await syncDesktopOverlayReadingLocation(readingLocation)
+    }
   }
 
   // 同步浮窗顶部/底部控制区需要的章节列表、当前章节和透明度状态。
@@ -467,6 +794,15 @@ const camouflageWidgetClassName = `${styles.camouflageWidget} ${
       bossOpacityPersistTimerRef.current = null
       setBossOpacity(nextOpacity)
     }, 120)
+  }
+
+  const clearChapterWindowMaintainTimer = () => {
+    if (chapterWindowMaintainTimerRef.current === null) {
+      return
+    }
+
+    window.clearTimeout(chapterWindowMaintainTimerRef.current)
+    chapterWindowMaintainTimerRef.current = null
   }
 
   const resetDesktopOverlayOpacitySync = () => {
@@ -545,24 +881,13 @@ const camouflageWidgetClassName = `${styles.camouflageWidget} ${
     })
   }
 
-  const buildChapterMarkup = (content: string) => {
-    const chapterIsRichContent =
-      currentNovel?.format === '.epub' || isRichChapterContent(content)
-
-    return {
-      isRichContent: chapterIsRichContent,
-      html: chapterIsRichContent
-        ? content || '<p>暂无内容</p>'
-        : buildHighlightedHtml(content, searchKeyword),
-    }
-  }
-
   const resetLoadedChapterState = () => {
     chapterLoadRevisionRef.current += 1
     chapterLoadPromisesRef.current = new Map()
     chapterContentMapRef.current = new Map()
     loadedChaptersRef.current = []
     chapterSectionRefs.current = {}
+    chapterWindowRangeRef.current = null
     pendingChapterScrollRef.current = null
     overlayReadingLocationRef.current = null
     setLoadedChapters([])
@@ -570,18 +895,26 @@ const camouflageWidgetClassName = `${styles.camouflageWidget} ${
     return chapterLoadRevisionRef.current
   }
 
-  const upsertLoadedChapter = (chapterIndex: number, content: string) => {
-    chapterContentMapRef.current.set(chapterIndex, content)
-
+  const syncLoadedChaptersFromMap = () => {
     const orderedChapters = Array.from(chapterContentMapRef.current.entries())
       .sort((left, right) => left[0] - right[0])
-      .map(([index, chapterContent]) => ({
-        index,
-        content: chapterContent,
-      }))
+      .map(([, chapterPayload]) => chapterPayload)
 
     loadedChaptersRef.current = orderedChapters
     setLoadedChapters(orderedChapters)
+  }
+
+  const upsertLoadedChapter = (chapterPayload: LoadedChapter) => {
+    const activeWindowRange = chapterWindowRangeRef.current
+    if (
+      activeWindowRange &&
+      (chapterPayload.index < activeWindowRange.start || chapterPayload.index > activeWindowRange.end)
+    ) {
+      return
+    }
+
+    chapterContentMapRef.current.set(chapterPayload.index, chapterPayload)
+    syncLoadedChaptersFromMap()
   }
 
   const ensureChapterLoaded = async (
@@ -603,17 +936,29 @@ const camouflageWidgetClassName = `${styles.camouflageWidget} ${
       previous.includes(chapterIndex) ? previous : [...previous, chapterIndex]
     )
 
-    const loadPromise = GetChapterContent(novelFilePath, chapterIndex)
-      .then((content) => {
+    const loadPromise = getChapterContentPayload(novelFilePath, chapterIndex)
+      .then((payload) => {
         if (
           expectedRevision !== chapterLoadRevisionRef.current ||
           currentNovelRef.current?.filePath !== novelFilePath
         ) {
-          return content
+          return {
+            index: chapterIndex,
+            content: payload.content,
+            isRichContent: payload.isRichContent,
+            blocks: payload.blocks,
+          }
         }
 
-        upsertLoadedChapter(chapterIndex, content)
-        return content
+        const nextChapter: LoadedChapter = {
+          index: chapterIndex,
+          content: payload.content,
+          isRichContent: payload.isRichContent,
+          blocks: payload.blocks,
+        }
+
+        upsertLoadedChapter(nextChapter)
+        return nextChapter
       })
       .catch((error) => {
         console.error('加载章节内容失败:', error)
@@ -635,39 +980,114 @@ const camouflageWidgetClassName = `${styles.camouflageWidget} ${
     return loadPromise
   }
 
-  const ensureUpcomingChapters = async (focusChapterIndex: number) => {
+  const pruneLoadedChaptersToRange = (
+    range: ChapterWindowRange,
+    options?: { preserveLocation?: boolean }
+  ) => {
+    const currentReadingLocation =
+      options?.preserveLocation !== false ? resolveCurrentReadingLocation() : null
+    const nextEntries = Array.from(chapterContentMapRef.current.entries()).filter(
+      ([chapterIndex]) => chapterIndex >= range.start && chapterIndex <= range.end
+    )
+
+    if (nextEntries.length === chapterContentMapRef.current.size) {
+      return
+    }
+
+    chapterContentMapRef.current = new Map(nextEntries)
+    chapterSectionRefs.current = Object.fromEntries(
+      Object.entries(chapterSectionRefs.current).filter(([chapterIndex]) => {
+        const numericIndex = Number(chapterIndex)
+        return numericIndex >= range.start && numericIndex <= range.end
+      })
+    )
+
+    if (
+      currentReadingLocation &&
+      currentReadingLocation.chapterIndex >= range.start &&
+      currentReadingLocation.chapterIndex <= range.end
+    ) {
+      pendingChapterScrollRef.current = {
+        chapterIndex: currentReadingLocation.chapterIndex,
+        chapterScrollProgress: currentReadingLocation.chapterScrollProgress,
+        behavior: 'auto',
+      }
+    }
+
+    syncLoadedChaptersFromMap()
+  }
+
+  const ensureChapterWindow = async (
+    focusChapterIndex: number,
+    options?: { preserveLocation?: boolean; expectedRevision?: number }
+  ) => {
     const novel = currentNovelRef.current
     if (!novel || novel.chapters.length === 0) {
       return
     }
 
-    const latestLoadedChapter = loadedChaptersRef.current[loadedChaptersRef.current.length - 1]
-    const highestLoadedChapterIndex = latestLoadedChapter?.index ?? focusChapterIndex
-
-    if (highestLoadedChapterIndex >= novel.chapters.length - 1) {
+    const expectedRevision = options?.expectedRevision ?? chapterLoadRevisionRef.current
+    if (expectedRevision !== chapterLoadRevisionRef.current) {
       return
     }
 
-    if (highestLoadedChapterIndex - focusChapterIndex > CHAPTER_PREFETCH_TRIGGER_DISTANCE) {
-      return
-    }
+    const range = getChapterWindowRange(focusChapterIndex, novel.chapters.length)
+    chapterWindowRangeRef.current = range
 
-    const preloadUntil = Math.min(
-      novel.chapters.length - 1,
-      highestLoadedChapterIndex + CHAPTER_PREFETCH_BATCH
-    )
+    const chaptersToLoad: number[] = []
+    for (let chapterIndex = range.start; chapterIndex <= range.end; chapterIndex += 1) {
+      if (!chapterContentMapRef.current.has(chapterIndex)) {
+        chaptersToLoad.push(chapterIndex)
+      }
+    }
 
     try {
-      for (
-        let chapterIndex = highestLoadedChapterIndex + 1;
-        chapterIndex <= preloadUntil;
-        chapterIndex += 1
-      ) {
-        await ensureChapterLoaded(novel.filePath, chapterIndex)
+      await Promise.all(
+        chaptersToLoad.map((chapterIndex) =>
+          ensureChapterLoaded(novel.filePath, chapterIndex, expectedRevision)
+        )
+      )
+
+      if (expectedRevision !== chapterLoadRevisionRef.current) {
+        return
       }
+
+      pruneLoadedChaptersToRange(range, {
+        preserveLocation: options?.preserveLocation,
+      })
     } catch (error) {
-      console.error('预加载后续章节失败:', error)
+      console.error('维护章节渲染窗口失败:', error)
     }
+  }
+
+  const scheduleChapterWindowMaintenance = (
+    focusChapterIndex: number,
+    options?: { preserveLocation?: boolean; delayMs?: number }
+  ) => {
+    const novel = currentNovelRef.current
+    if (!novel || novel.chapters.length === 0) {
+      return
+    }
+
+    const activeRange = chapterWindowRangeRef.current
+    const shouldMaintainImmediately =
+      !activeRange ||
+      focusChapterIndex <= activeRange.start + 1 ||
+      focusChapterIndex >= activeRange.end - 1 ||
+      focusChapterIndex < activeRange.start ||
+      focusChapterIndex > activeRange.end
+
+    if (!shouldMaintainImmediately) {
+      return
+    }
+
+    clearChapterWindowMaintainTimer()
+    chapterWindowMaintainTimerRef.current = window.setTimeout(() => {
+      chapterWindowMaintainTimerRef.current = null
+      void ensureChapterWindow(focusChapterIndex, {
+        preserveLocation: options?.preserveLocation,
+      })
+    }, options?.delayMs ?? 80)
   }
 
   const getChapterMetrics = (contentElement: HTMLDivElement, chapterIndex: number) => {
@@ -675,15 +1095,12 @@ const camouflageWidgetClassName = `${styles.camouflageWidget} ${
     if (!chapterElement) {
       return null
     }
-
-    const containerRect = contentElement.getBoundingClientRect()
-    const chapterRect = chapterElement.getBoundingClientRect()
-    const top = chapterRect.top - containerRect.top + contentElement.scrollTop
+    const top = chapterElement.offsetTop
 
     return {
       top,
-      bottom: top + chapterRect.height,
-      height: Math.max(chapterRect.height, 1),
+      bottom: top + chapterElement.offsetHeight,
+      height: Math.max(chapterElement.offsetHeight, 1),
     }
   }
 
@@ -921,7 +1338,7 @@ const camouflageWidgetClassName = `${styles.camouflageWidget} ${
         applyReadingProgressState(chapterIndex, chapterScrollProgress)
       }
     }
-    void ensureUpcomingChapters(chapterIndex)
+    scheduleChapterWindowMaintenance(chapterIndex, { preserveLocation: true })
   }
 
   const flushOverlayReadingLocation = async (options?: { syncReaderView?: boolean }) => {
@@ -1033,7 +1450,7 @@ const camouflageWidgetClassName = `${styles.camouflageWidget} ${
         }
       }
 
-      void ensureUpcomingChapters(nextChapterIndex)
+      void ensureChapterWindow(nextChapterIndex, { preserveLocation: true })
       await persistReadingProgress(nextChapterIndex, nextScrollProgress)
 
       if (useDesktopOverlay && useWindowStore.getState().isStealthMode) {
@@ -1094,7 +1511,7 @@ const restoreCamouflageReader = () => {
 }
 
 // 挂件支持拖拽，位置会持久化到设置里，方便下次继续使用。
-const handleCamouflageWidgetPointerDown = (
+  const handleCamouflageWidgetPointerDown = (
   event: ReactPointerEvent<HTMLButtonElement>
 ) => {
   if (event.button !== 0) {
@@ -1114,11 +1531,20 @@ const handleCamouflageWidgetPointerDown = (
     window.removeEventListener('pointerup', finishDrag)
     window.removeEventListener('pointercancel', finishDrag)
     camouflageDragCleanupRef.current = null
+    if (camouflageDragFrameRef.current !== null) {
+      window.cancelAnimationFrame(camouflageDragFrameRef.current)
+      camouflageDragFrameRef.current = null
+    }
     setIsDraggingCamouflageWidget(false)
 
     if (moved) {
+      if (camouflageDragLatestPositionRef.current) {
+        setCamouflageWidgetPosition(camouflageDragLatestPositionRef.current)
+      }
       setBossCamouflageWidgetPosition(latestPosition)
     }
+
+    camouflageDragLatestPositionRef.current = null
   }
 
   const handlePointerMove = (moveEvent: PointerEvent) => {
@@ -1134,7 +1560,20 @@ const handleCamouflageWidgetPointerDown = (
       moved ||
       Math.abs(moveEvent.clientX - startX) > 3 ||
       Math.abs(moveEvent.clientY - startY) > 3
-    setCamouflageWidgetPosition(latestPosition)
+    camouflageDragLatestPositionRef.current = latestPosition
+
+    if (camouflageDragFrameRef.current !== null) {
+      return
+    }
+
+    camouflageDragFrameRef.current = window.requestAnimationFrame(() => {
+      camouflageDragFrameRef.current = null
+      if (!camouflageDragLatestPositionRef.current) {
+        return
+      }
+
+      setCamouflageWidgetPosition(camouflageDragLatestPositionRef.current)
+    })
   }
 
   const finishDrag = () => {
@@ -1292,7 +1731,7 @@ const handleToggleCamouflage = () => {
     }
 
     try {
-      const results = await SearchInNovel(currentNovel.content, searchKeyword.trim(), false)
+      const results = await searchNovel(currentNovel.filePath, searchKeyword.trim(), false)
       setSearchResults(results || [])
     } catch (error) {
       console.error('搜索失败:', error)
@@ -1336,7 +1775,7 @@ const handleToggleCamouflage = () => {
           }
 
           await ShowDesktopReaderOverlay(
-            overlayChapterMarkup,
+            currentChapterOverlayMarkup,
             Math.round(fontSize),
             lineHeight,
             rememberedBossOpacity,
@@ -1459,14 +1898,15 @@ useEffect(() => {
   }
 }, [camouflageStage, isCamouflageFeatureActive])
 
-useEffect(
-  () => () => {
-    clearCamouflageTimers()
-    clearBossOpacityPersistTimer()
-    resetDesktopOverlayOpacitySync()
-    if (camouflageDragCleanupRef.current) {
-      camouflageDragCleanupRef.current()
-    }
+  useEffect(
+    () => () => {
+      clearCamouflageTimers()
+      clearBossOpacityPersistTimer()
+      clearChapterWindowMaintainTimer()
+      resetDesktopOverlayOpacitySync()
+      if (camouflageDragCleanupRef.current) {
+        camouflageDragCleanupRef.current()
+      }
   },
   []
 )
@@ -1509,7 +1949,7 @@ useEffect(
           return
         }
 
-        void ensureUpcomingChapters(initialChapterIndex)
+        void ensureChapterWindow(initialChapterIndex, { preserveLocation: true, expectedRevision: nextRevision })
       })
       .catch((error) => {
         if (nextRevision === chapterLoadRevisionRef.current) {
@@ -1559,34 +1999,44 @@ useEffect(
     }
 
     let cancelled = false
+    const timer = window.setTimeout(() => {
+      if (cancelled) {
+        return
+      }
 
-    const preloadDesktopOverlayChapters = async () => {
-      const prefetchAhead = getDesktopOverlayPrefetchAhead(currentNovel.format)
-      const targetChapterIndex = Math.min(
-        currentNovel.chapters.length - 1,
-        currentNovel.currentChapter + prefetchAhead
-      )
+      const preloadDesktopOverlayChapters = async () => {
+        const prefetchAhead = getDesktopOverlayPrefetchAhead(currentNovel.format)
+        const targetChapterIndex = Math.min(
+          currentNovel.chapters.length - 1,
+          currentNovel.currentChapter + prefetchAhead
+        )
 
-      for (let chapterIndex = currentNovel.currentChapter; chapterIndex <= targetChapterIndex; chapterIndex += 1) {
-        if (cancelled) {
-          return
-        }
-
-        try {
-          await ensureChapterLoaded(currentNovel.filePath, chapterIndex)
-        } catch (error) {
-          if (!cancelled) {
-            console.error('预加载摸鱼模式后续章节失败:', error)
+        for (
+          let chapterIndex = currentNovel.currentChapter;
+          chapterIndex <= targetChapterIndex;
+          chapterIndex += 1
+        ) {
+          if (cancelled) {
+            return
           }
-          return
+
+          try {
+            await ensureChapterLoaded(currentNovel.filePath, chapterIndex)
+          } catch (error) {
+            if (!cancelled) {
+              console.error('预加载摸鱼模式后续章节失败:', error)
+            }
+            return
+          }
         }
       }
-    }
 
-    void preloadDesktopOverlayChapters()
+      void preloadDesktopOverlayChapters()
+    }, 180)
 
     return () => {
       cancelled = true
+      window.clearTimeout(timer)
     }
   }, [
     useDesktopOverlay,
@@ -1912,33 +2362,45 @@ useEffect(
     }
 
     const handleScroll = () => {
-      const readingLocation = syncActiveChapterFromReadingLocation()
-      if (!readingLocation) {
+      if (scrollTickingRef.current) {
         return
       }
 
-      void ensureUpcomingChapters(readingLocation.chapterIndex)
+      scrollTickingRef.current = true
+      window.requestAnimationFrame(() => {
+        scrollTickingRef.current = false
 
-      if (saveTimerRef.current) {
-        window.clearTimeout(saveTimerRef.current)
-      }
-
-      saveTimerRef.current = window.setTimeout(() => {
-        const latestReadingLocation = resolveCurrentReadingLocation()
-        if (!latestReadingLocation) {
+        const readingLocation = syncActiveChapterFromReadingLocation()
+        if (!readingLocation) {
           return
         }
 
-        void persistReadingProgress(
-          latestReadingLocation.chapterIndex,
-          latestReadingLocation.chapterScrollProgress
-        )
-      }, 200)
+        scheduleChapterWindowMaintenance(readingLocation.chapterIndex, {
+          preserveLocation: true,
+        })
+
+        if (saveTimerRef.current) {
+          window.clearTimeout(saveTimerRef.current)
+        }
+
+        saveTimerRef.current = window.setTimeout(() => {
+          const latestReadingLocation = resolveCurrentReadingLocation()
+          if (!latestReadingLocation) {
+            return
+          }
+
+          void persistReadingProgress(
+            latestReadingLocation.chapterIndex,
+            latestReadingLocation.chapterScrollProgress
+          )
+        }, 240)
+      })
     }
 
     contentElement.addEventListener('scroll', handleScroll, { passive: true })
     return () => {
       contentElement.removeEventListener('scroll', handleScroll)
+      scrollTickingRef.current = false
       if (saveTimerRef.current) {
         window.clearTimeout(saveTimerRef.current)
       }
@@ -2071,6 +2533,7 @@ return (
                         onFontFamilyChange={setFontFamily}
                         onLineHeightChange={setLineHeight}
                         onPageWidthChange={setPageWidth}
+                        pageWidthCommitOnRelease
                         onBackgroundColorChange={setBackgroundColor}
                         onTextColorChange={setTextColor}
                       />
@@ -2220,38 +2683,14 @@ return (
             {isInitialChapterLoading ? (
               <div className={styles.loading}>章节内容加载中...</div>
             ) : (
-              <>
-                {loadedChapters.map((chapter) => {
-                  const chapterMeta = currentNovel.chapters[chapter.index]
-                  const chapterMarkup = buildChapterMarkup(chapter.content)
-
-                  return (
-                    <section
-                      key={`${chapterMeta?.title || '正文'}-${chapter.index}`}
-                      ref={(element) => {
-                        chapterSectionRefs.current[chapter.index] = element
-                      }}
-                      className={styles.chapterSection}
-                    >
-                      {chapterMeta && (
-                        <h2 className={styles.chapterTitle}>{chapterMeta.title}</h2>
-                      )}
-                      <div
-                        className={`${styles.text} ${
-                          chapterMarkup.isRichContent ? styles.epubText : ''
-                        }`}
-                        dangerouslySetInnerHTML={{
-                          __html: chapterMarkup.html,
-                        }}
-                      />
-                    </section>
-                  )
-                })}
-
-                {isAppendingChapters && (
-                  <div className={styles.inlineLoading}>下一章已在路上...</div>
-                )}
-              </>
+              <ReaderChapterList
+                chapters={currentNovel.chapters}
+                loadedChapters={loadedChapters}
+                format={currentNovel.format}
+                searchKeyword={searchKeyword}
+                isAppendingChapters={isAppendingChapters}
+                chapterSectionRefs={chapterSectionRefs}
+              />
             )}
           </div>
         </div>

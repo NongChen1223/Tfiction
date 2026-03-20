@@ -16,6 +16,7 @@ export interface ReadingAppearanceControlsProps {
   onFontFamilyChange: (value: string) => void
   onLineHeightChange: (value: number) => void
   onPageWidthChange: (value: number) => void
+  pageWidthCommitOnRelease?: boolean
   onBackgroundColorChange: (value: string) => void
   onTextColorChange: (value: string) => void
   variant?: AppearanceVariant
@@ -40,6 +41,7 @@ export default function ReadingAppearanceControls({
   onFontFamilyChange,
   onLineHeightChange,
   onPageWidthChange,
+  pageWidthCommitOnRelease = false,
   onBackgroundColorChange,
   onTextColorChange,
   variant = 'page',
@@ -90,6 +92,7 @@ export default function ReadingAppearanceControls({
           step={1}
           value={pageWidth}
           onChange={onPageWidthChange}
+          commitOnRelease={pageWidthCommitOnRelease}
           showValue={false}
         />
       </section>

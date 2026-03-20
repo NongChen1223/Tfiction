@@ -15,7 +15,9 @@ type Novel struct {
 	// Size 文件大小（字节）
 	Size int64 `json:"size"`
 	// Content 小说内容
-	Content string `json:"content"`
+	Content string `json:"content,omitempty"`
+	// ContentLength 正文总长度（按 rune 计）
+	ContentLength int `json:"content_length"`
 	// Chapters 章节列表
 	Chapters []Chapter `json:"chapters"`
 	// CurrentChapter 当前章节索引
@@ -50,6 +52,26 @@ type SearchResult struct {
 	Context string `json:"context"`
 	// Keyword 关键字
 	Keyword string `json:"keyword"`
+}
+
+// ReaderContentBlock 阅读内容块
+type ReaderContentBlock struct {
+	// Type 块类型：text 或 html
+	Type string `json:"type"`
+	// Content 块内容
+	Content string `json:"content"`
+	// EstimatedHeight 估算高度
+	EstimatedHeight int `json:"estimated_height"`
+}
+
+// ChapterContentPayload 章节内容载荷
+type ChapterContentPayload struct {
+	// Content 完整章节内容
+	Content string `json:"content"`
+	// IsRichContent 是否为富文本内容
+	IsRichContent bool `json:"is_rich_content"`
+	// Blocks 按块切分后的内容
+	Blocks []ReaderContentBlock `json:"blocks"`
 }
 
 // ReadingSettings 阅读设置模型

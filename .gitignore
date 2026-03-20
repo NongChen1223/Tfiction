@@ -46,3 +46,6 @@ Thumbs.db
 # 临时文件
 tmp/
 temp/
+
+# 本地协作记录
+docs/对话记录/

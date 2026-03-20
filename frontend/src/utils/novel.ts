@@ -2,6 +2,9 @@ import type { Book, Chapter, Novel } from '@/types'
 import { models } from '@/wailsjs/go/models'
 
 const DEFAULT_AUTHOR = '未知作者'
+export const CONTENT_CHUNK_CLASS_NAME = 'reader-content-chunk'
+const PLAIN_TEXT_CHUNK_SIZE = 18
+const RICH_TEXT_CHUNK_SIZE = 16
 
 export function normalizeNovel(source: models.Novel | Novel): Novel {
   const sourceChapters = 'chapters' in source ? source.chapters : []
@@ -13,7 +16,9 @@ export function normalizeNovel(source: models.Novel | Novel): Novel {
     cover: source.cover,
     format: source.format,
     size: source.size,
-    content: source.content,
+    content: source.content || '',
+    contentLength:
+      'contentLength' in source ? source.contentLength : source.content_length || 0,
     chapters: sourceChapters.map(normalizeChapter),
     currentChapter:
       'currentChapter' in source ? source.currentChapter : source.current_chapter,
@@ -70,21 +75,24 @@ export function resolveReaderFontFamily(fontFamily: string) {
 }
 
 export function buildHighlightedHtml(content: string, keyword: string) {
+  return buildHighlightedHtmlChunks(content, keyword).join('')
+}
+
+export function buildHighlightedHtmlChunks(content: string, keyword: string) {
   const safeKeyword = keyword.trim()
   const paragraphSource = content.trim() ? content : '暂无内容'
   const paragraphs = paragraphSource.split(/\n{2,}/)
+  const paragraphMarkup = paragraphs.map((paragraph) => {
+    const escapedParagraph = escapeHtml(paragraph).replace(/\n/g, '<br />')
+    if (!safeKeyword) {
+      return `<p>${escapedParagraph}</p>`
+    }
 
-  return paragraphs
-    .map((paragraph) => {
-      const escapedParagraph = escapeHtml(paragraph).replace(/\n/g, '<br />')
-      if (!safeKeyword) {
-        return `<p>${escapedParagraph}</p>`
-      }
+    const regex = new RegExp(`(${escapeRegExp(escapeHtml(safeKeyword))})`, 'gi')
+    return `<p>${escapedParagraph.replace(regex, '<mark>$1</mark>')}</p>`
+  })
 
-      const regex = new RegExp(`(${escapeRegExp(escapeHtml(safeKeyword))})`, 'gi')
-      return `<p>${escapedParagraph.replace(regex, '<mark>$1</mark>')}</p>`
-    })
-    .join('')
+  return wrapMarkupChunks(paragraphMarkup, PLAIN_TEXT_CHUNK_SIZE)
 }
 
 export function isRichChapterContent(content: string) {
@@ -141,6 +149,204 @@ export function buildDesktopOverlayChaptersMarkup(chapters: DesktopOverlayChapte
   ].join('')
 }
 
+export function buildDesktopOverlayPreviewText(
+  content: string,
+  contentIsHtml: boolean,
+  maxLength = 12000
+) {
+  const plainTextSource = contentIsHtml ? stripHtmlToText(content) : content
+  const normalizedText = plainTextSource
+    .replace(/\r\n/g, '\n')
+    .replace(/\u00a0/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+
+  if (!normalizedText) {
+    return '暂无内容'
+  }
+
+  const runes = Array.from(normalizedText)
+  if (runes.length <= maxLength) {
+    return normalizedText
+  }
+
+  return `${runes.slice(0, maxLength).join('').trimEnd()}...`
+}
+
+interface DesktopOverlayPreviewMarkupOptions {
+  maxLength?: number
+  maxImages?: number
+}
+
+export function buildDesktopOverlayPreviewMarkup(
+  content: string,
+  contentIsHtml: boolean,
+  options?: DesktopOverlayPreviewMarkupOptions
+) {
+  const maxLength = options?.maxLength ?? 12000
+  const maxImages = options?.maxImages ?? 2
+
+  if (!contentIsHtml) {
+    const previewText = buildDesktopOverlayPreviewText(content, false, maxLength)
+    return buildDesktopOverlayPlainTextMarkup(previewText)
+  }
+
+  const trimmedContent = content.trim()
+  if (!trimmedContent) {
+    return '<p>暂无内容</p>'
+  }
+
+  if (typeof DOMParser === 'undefined') {
+    const previewText = buildDesktopOverlayPreviewText(content, true, maxLength)
+    return buildDesktopOverlayPlainTextMarkup(previewText)
+  }
+
+  const parsed = new DOMParser().parseFromString(trimmedContent, 'text/html')
+  const fragment = document.createDocumentFragment()
+  let remainingChars = maxLength
+  let remainingImages = maxImages
+
+  const appendPlainTextBlock = (target: HTMLElement, text: string) => {
+    const normalized = buildDesktopOverlayPreviewText(text, false, remainingChars)
+    if (!normalized.trim()) {
+      return
+    }
+
+    const paragraph = document.createElement('p')
+    paragraph.innerHTML = escapeHtml(normalized).replace(/\n/g, '<br />')
+    target.appendChild(paragraph)
+    remainingChars -= Array.from(normalized).length
+  }
+
+  const sanitizeNode = (node: Node): Node | null => {
+    if (remainingChars <= 0 && remainingImages <= 0) {
+      return null
+    }
+
+    if (node.nodeType === Node.TEXT_NODE) {
+      const value = node.textContent?.replace(/\s+/g, ' ') || ''
+      if (!value.trim()) {
+        return null
+      }
+
+      const nextValue = Array.from(value).slice(0, remainingChars).join('')
+      if (!nextValue.trim()) {
+        return null
+      }
+
+      remainingChars -= Array.from(nextValue).length
+      return document.createTextNode(nextValue)
+    }
+
+    if (node.nodeType !== Node.ELEMENT_NODE) {
+      return null
+    }
+
+    const sourceElement = node as HTMLElement
+    const tagName = sourceElement.tagName.toLowerCase()
+
+    if (['script', 'style', 'link', 'meta', 'svg'].includes(tagName)) {
+      return null
+    }
+
+    if (tagName === 'img') {
+      if (remainingImages <= 0) {
+        return null
+      }
+
+      const src = sourceElement.getAttribute('src')?.trim()
+      if (!src) {
+        return null
+      }
+
+      remainingImages -= 1
+      const image = document.createElement('img')
+      image.setAttribute('src', src)
+      image.setAttribute('alt', sourceElement.getAttribute('alt') || '')
+      return image
+    }
+
+    const allowedTagMap: Record<string, string> = {
+      article: 'div',
+      section: 'section',
+      div: 'div',
+      p: 'p',
+      h1: 'p',
+      h2: 'p',
+      h3: 'p',
+      h4: 'p',
+      h5: 'p',
+      h6: 'p',
+      blockquote: 'blockquote',
+      pre: 'pre',
+      ul: 'ul',
+      ol: 'ol',
+      li: 'li',
+      strong: 'strong',
+      b: 'strong',
+      em: 'em',
+      i: 'em',
+      span: 'span',
+      br: 'br',
+      figure: 'figure',
+      figcaption: 'figcaption',
+    }
+
+    const safeTagName = allowedTagMap[tagName]
+    if (!safeTagName) {
+      const fallbackText = sourceElement.textContent || ''
+      if (fallbackText.trim()) {
+        return sanitizeNode(document.createTextNode(fallbackText))
+      }
+      return null
+    }
+
+    if (safeTagName === 'br') {
+      return document.createElement('br')
+    }
+
+    const safeElement = document.createElement(safeTagName)
+    if (safeTagName === 'p' && /^h[1-6]$/.test(tagName)) {
+      safeElement.style.fontWeight = '700'
+    }
+
+    Array.from(sourceElement.childNodes).forEach((childNode) => {
+      const sanitizedChild = sanitizeNode(childNode)
+      if (sanitizedChild) {
+        safeElement.appendChild(sanitizedChild)
+      }
+    })
+
+    if (!safeElement.childNodes.length && !['img', 'br'].includes(safeTagName)) {
+      return null
+    }
+
+    return safeElement
+  }
+
+  Array.from(parsed.body.childNodes).forEach((childNode) => {
+    if (remainingChars <= 0 && remainingImages <= 0) {
+      return
+    }
+
+    const sanitizedChild = sanitizeNode(childNode)
+    if (sanitizedChild) {
+      fragment.appendChild(sanitizedChild)
+    }
+  })
+
+  const container = document.createElement('div')
+  container.appendChild(fragment)
+  const previewHtml = container.innerHTML.trim()
+
+  if (previewHtml) {
+    return previewHtml
+  }
+
+  appendPlainTextBlock(container, content)
+  return container.innerHTML.trim() || '<p>暂无内容</p>'
+}
+
 export function stripHtmlToText(content: string) {
   if (!content.includes('<')) {
     return content
@@ -168,7 +374,8 @@ export function calculateProgressFromPosition(
   chapterScrollProgress: number
 ) {
   const chapter = novel.chapters[chapterIndex]
-  if (!chapter || novel.content.length === 0) {
+  const totalLength = novel.contentLength || novel.content.length
+  if (!chapter || totalLength <= 0) {
     return 0
   }
 
@@ -177,7 +384,7 @@ export function calculateProgressFromPosition(
   const absolutePosition =
     chapter.startPos + Math.round(chapterLength * normalizedChapterProgress)
 
-  return clampProgress((absolutePosition / Math.max(novel.content.length, 1)) * 100)
+  return clampProgress((absolutePosition / Math.max(totalLength, 1)) * 100)
 }
 
 function clampProgress(progress: number) {
@@ -256,6 +463,62 @@ function normalizeDesktopOverlayHtml(content: string) {
   })
 
   return parsed.body.innerHTML.trim()
+}
+
+export function splitReaderContentIntoChunks(
+  content: string,
+  isRichContent: boolean,
+  keyword = ''
+) {
+  if (!content.trim()) {
+    return []
+  }
+
+  return isRichContent ? splitRichContentIntoChunks(content) : buildHighlightedHtmlChunks(content, keyword)
+}
+
+function splitRichContentIntoChunks(content: string) {
+  if (typeof DOMParser === 'undefined') {
+    return [content]
+  }
+
+  const parsed = new DOMParser().parseFromString(content, 'text/html')
+  const body = parsed.body
+  const chunks: string[] = []
+  let buffer: string[] = []
+
+  Array.from(body.childNodes).forEach((node) => {
+    const html =
+      node.nodeType === Node.ELEMENT_NODE
+        ? (node as HTMLElement).outerHTML
+        : escapeHtml(node.textContent || '')
+
+    if (!html.trim()) {
+      return
+    }
+
+    buffer.push(html)
+    if (buffer.length >= RICH_TEXT_CHUNK_SIZE) {
+      chunks.push(buffer.join(''))
+      buffer = []
+    }
+  })
+
+  if (buffer.length > 0) {
+    chunks.push(buffer.join(''))
+  }
+
+  return chunks.length > 0 ? chunks : [content]
+}
+
+function wrapMarkupChunks(items: string[], chunkSize: number) {
+  const chunks: string[] = []
+
+  for (let index = 0; index < items.length; index += chunkSize) {
+    chunks.push(items.slice(index, index + chunkSize).join(''))
+  }
+
+  return chunks
 }
 
 function escapeHtml(content: string) {

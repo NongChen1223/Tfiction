@@ -1,17 +1,42 @@
-# Repository Instructions
+# MoyuReader 协作约定
 
-## Local Skill
+本仓库默认使用中文沟通与中文提交。
 
-- `moyureader-doc-sync`
-  Path: `.codex/skills/moyureader-doc-sync/SKILL.md`
-  Use when a task changes user-facing functionality, supported formats, page flow, reading behavior, boss mode, settings, storage path, shortcuts, startup/build commands, platform differences, or visual design.
+## 提交约定
 
-## Required Documentation Sync
+- Git commit message 一律使用中文。
+- 推荐格式：
+  - `功能：...`
+  - `修复：...`
+  - `优化：...`
+  - `重构：...`
+  - `文档：...`
 
-- If a change affects product behavior or developer-facing setup, update `README.md` and `docs/功能需求说明.md` in the same task.
-- If you intentionally do not update those two files, state why in the final response.
+## 沟通约定
 
-## Scope Note
+- 默认使用中文回复。
+- 不要无故改动用户没有要求的交互、按钮位置、入口位置。
+- 如果需求是在“现有按钮/现有入口”上完善功能，优先复用原有入口，不额外新增按钮。
+- 以后需要在 `docs/对话记录/` 下维护协作记录，按天新建文件，文件名使用日期后缀，例如：`对话记录-2026-03-19.md`。
+- 另外需要长期维护 `docs/对话记录/原话.md`，按时间顺序记录用户发送的原话，标明时间。
+- 协作记录至少包含两部分：
+  - 当天用户发送的需求/反馈摘要
+  - 每次准备推送时，本次需求的精简解决方案、实现思路、修复内容或新增功能摘要
+- `原话.md` 需要尽量保留用户原始表达，不做改写，只做必要的时间标记和分隔。
+- 协作记录内容要精简，重点是帮助后续新对话快速续接上下文，避免重复说明。
+- `docs/对话记录/` 目录默认只用于本地协作记录，不作为必须上传到 GitHub 的内容。
 
-- Do not claim PDF / MOBI / AZW3 / 格式转换 / 阅读统计 are fully implemented unless the code path is actually completed.
-- For macOS native overlay changes, verify that README and the detailed requirement doc still reflect the current behavior and platform limitation.
+## 开发约定
+
+- 推送前默认先执行能直接运行的验证。
+- 前端改动后，优先执行：
+  - `pnpm --dir frontend build`
+- Go 后端改动后，优先执行：
+  - `go test ./...`
+
+## 操作约定
+
+- 未经明确要求，不要擅自改提交历史。
+- 未经明确要求，不要擅自新增显眼入口、快捷操作或首页按钮。
+- 每天开始新一轮协作时，如果 `docs/对话记录/` 下不存在当天文件，需要先创建当天记录文件。
+- 每次用户发送新需求或新反馈后，需要同步追加到 `docs/对话记录/原话.md`。

@@ -134,6 +134,9 @@ static BOOL MoyuReaderOverlayStringLooksLikeHTML(NSString *string);
 static NSArray<NSDictionary *> *MoyuReaderExtractOverlayChapterHTMLFragments(NSString *string);
 static BOOL MoyuReaderOverlayChapterFragmentsSharePrefix(NSArray<NSDictionary *> *previousFragments, NSArray<NSDictionary *> *nextFragments);
 static NSString *MoyuReaderWrapOverlayHTMLFragment(NSString *fragment);
+static NSUInteger MoyuReaderCountOverlayAttachments(NSAttributedString *attributedText);
+static NSImage *MoyuReaderCreateOverlayImageFromDataURL(NSString *dataURL);
+static NSMutableAttributedString *MoyuReaderBuildOverlayAttributedStringFromImageFallbackHTML(NSString *string);
 static NSMutableAttributedString *MoyuReaderImportOverlayHTMLAttributedString(NSString *string);
 static NSMutableAttributedString *MoyuReaderCreateOverlayAttributedString(NSString *string, NSArray<NSNumber *> **chapterIndicesOut, NSArray<NSValue *> **chapterRangesOut);
 static NSMutableAttributedString *MoyuReaderCreateOverlayChapterAttributedString(NSDictionary *fragment);
@@ -481,6 +484,12 @@ static void MoyuReaderOverlayDebugLog(NSString *format, ...) {
 	[super mouseDown:event];
 	MoyuReaderSetOverlayChromeVisible(YES);
 	moyureaderOverlayIsResizing = YES;
+	if (moyureaderOverlayScrollView != nil) {
+		[moyureaderOverlayScrollView setHidden:YES];
+	}
+	if (moyureaderOverlayChapterPanelView != nil) {
+		[moyureaderOverlayChapterPanelView setHidden:YES];
+	}
 	self.initialMouseLocation = [NSEvent mouseLocation];
 	self.initialWindowFrame = self.window.frame;
 }
@@ -508,6 +517,9 @@ static void MoyuReaderOverlayDebugLog(NSString *format, ...) {
 - (void)mouseUp:(NSEvent *)event {
 	[super mouseUp:event];
 	moyureaderOverlayIsResizing = NO;
+	if (moyureaderOverlayScrollView != nil) {
+		[moyureaderOverlayScrollView setHidden:NO];
+	}
 	moyureaderOverlayExpandedFrame = self.window.frame;
 	MoyuReaderPersistOverlayExpandedFrameSize(moyureaderOverlayExpandedFrame);
 	moyureaderOverlayLastAttachmentResizeWidth = 0.0;
@@ -1524,10 +1536,145 @@ static NSMutableAttributedString *MoyuReaderImportOverlayHTMLAttributedString(NS
 	                                                 documentAttributes:nil
 	                                                              error:&error];
 	if (error != nil || importedText == nil) {
+		return MoyuReaderBuildOverlayAttributedStringFromImageFallbackHTML(string);
+	}
+
+	NSMutableAttributedString *result = [[NSMutableAttributedString alloc] initWithAttributedString:importedText];
+	if ([string rangeOfString:@"<img" options:NSCaseInsensitiveSearch].location != NSNotFound &&
+	    MoyuReaderCountOverlayAttachments(result) == 0) {
+		NSMutableAttributedString *fallback = MoyuReaderBuildOverlayAttributedStringFromImageFallbackHTML(string);
+		if (fallback != nil && fallback.length > 0) {
+			return fallback;
+		}
+	}
+
+	return result;
+}
+
+static NSUInteger MoyuReaderCountOverlayAttachments(NSAttributedString *attributedText) {
+	if (attributedText == nil || attributedText.length == 0) {
+		return 0;
+	}
+
+	__block NSUInteger attachmentCount = 0;
+	[attributedText enumerateAttribute:NSAttachmentAttributeName
+	                           inRange:NSMakeRange(0, attributedText.length)
+	                           options:0
+	                        usingBlock:^(id value, NSRange range, BOOL *stop) {
+		if ([value isKindOfClass:[NSTextAttachment class]]) {
+			attachmentCount += 1;
+		}
+	}];
+	return attachmentCount;
+}
+
+static NSImage *MoyuReaderCreateOverlayImageFromDataURL(NSString *dataURL) {
+	if (dataURL == nil || dataURL.length == 0) {
 		return nil;
 	}
 
-	return [[NSMutableAttributedString alloc] initWithAttributedString:importedText];
+	NSRange commaRange = [dataURL rangeOfString:@","];
+	if (commaRange.location == NSNotFound) {
+		return nil;
+	}
+
+	NSString *base64Part = [dataURL substringFromIndex:commaRange.location + 1];
+	NSData *imageData = [[NSData alloc] initWithBase64EncodedString:base64Part options:NSDataBase64DecodingIgnoreUnknownCharacters];
+	if (imageData == nil || imageData.length == 0) {
+		return nil;
+	}
+
+	return [[NSImage alloc] initWithData:imageData];
+}
+
+static NSMutableAttributedString *MoyuReaderBuildOverlayAttributedStringFromImageFallbackHTML(NSString *string) {
+	if (string == nil || string.length == 0) {
+		return nil;
+	}
+
+	NSError *regexError = nil;
+	NSRegularExpression *imgRegex = [NSRegularExpression regularExpressionWithPattern:@"(?is)<img\\b[^>]*?src\\s*=\\s*[\"'](data:image/[^\"']+)[\"'][^>]*?(?:alt\\s*=\\s*[\"']([^\"']*)[\"'])?[^>]*>"
+	                                                                       options:0
+	                                                                         error:&regexError];
+	if (regexError != nil || imgRegex == nil) {
+		return nil;
+	}
+
+	NSArray<NSTextCheckingResult *> *matches = [imgRegex matchesInString:string options:0 range:NSMakeRange(0, string.length)];
+	if (matches.count == 0) {
+		return nil;
+	}
+
+	NSMutableAttributedString *combined = [[NSMutableAttributedString alloc] init];
+	NSUInteger cursor = 0;
+
+	for (NSTextCheckingResult *match in matches) {
+		if (match.range.location > cursor) {
+			NSString *htmlChunk = [string substringWithRange:NSMakeRange(cursor, match.range.location - cursor)];
+			NSMutableAttributedString *chunkText = nil;
+			NSString *wrappedChunk = MoyuReaderWrapOverlayHTMLFragment(htmlChunk) ?: @"";
+			NSData *chunkData = [wrappedChunk dataUsingEncoding:NSUTF8StringEncoding];
+			if (chunkData != nil && chunkData.length > 0) {
+				chunkText = [[NSMutableAttributedString alloc] initWithAttributedString:[[NSAttributedString alloc] initWithData:chunkData
+				                                                                                                              options:@{
+				                                                                                                                  NSDocumentTypeDocumentOption: NSHTMLTextDocumentType,
+				                                                                                                                  NSCharacterEncodingDocumentOption: @(NSUTF8StringEncoding),
+				                                                                                                              }
+				                                                                                                   documentAttributes:nil
+				                                                                                                                error:nil]];
+			}
+			if (chunkText != nil && chunkText.length > 0) {
+				[combined appendAttributedString:chunkText];
+			}
+		}
+
+		NSString *dataURL = [string substringWithRange:[match rangeAtIndex:1]];
+		NSString *altText = @"";
+		if (match.numberOfRanges > 2) {
+			NSRange altRange = [match rangeAtIndex:2];
+			if (altRange.location != NSNotFound) {
+				altText = [string substringWithRange:altRange] ?: @"";
+			}
+		}
+
+		NSImage *image = MoyuReaderCreateOverlayImageFromDataURL(dataURL);
+		if (image != nil) {
+			NSTextAttachment *attachment = [[NSTextAttachment alloc] init];
+			attachment.image = image;
+			NSAttributedString *attachmentString = [NSAttributedString attributedStringWithAttachment:attachment];
+			if (combined.length > 0) {
+				[combined appendAttributedString:[[NSAttributedString alloc] initWithString:@"\n"]];
+			}
+			[combined appendAttributedString:attachmentString];
+			if (altText.length > 0) {
+				[combined appendAttributedString:[[NSAttributedString alloc] initWithString:[NSString stringWithFormat:@"\n%@\n", altText]]];
+			} else {
+				[combined appendAttributedString:[[NSAttributedString alloc] initWithString:@"\n"]];
+			}
+		}
+
+		cursor = NSMaxRange(match.range);
+	}
+
+	if (cursor < string.length) {
+		NSString *tailChunk = [string substringFromIndex:cursor];
+		NSString *wrappedTail = MoyuReaderWrapOverlayHTMLFragment(tailChunk) ?: @"";
+		NSData *tailData = [wrappedTail dataUsingEncoding:NSUTF8StringEncoding];
+		if (tailData != nil && tailData.length > 0) {
+			NSAttributedString *tailText = [[NSAttributedString alloc] initWithData:tailData
+			                                                                options:@{
+			                                                                    NSDocumentTypeDocumentOption: NSHTMLTextDocumentType,
+			                                                                    NSCharacterEncodingDocumentOption: @(NSUTF8StringEncoding),
+			                                                                }
+			                                                     documentAttributes:nil
+			                                                                  error:nil];
+			if (tailText != nil && tailText.length > 0) {
+				[combined appendAttributedString:tailText];
+			}
+		}
+	}
+
+	return combined.length > 0 ? combined : nil;
 }
 
 static NSMutableAttributedString *MoyuReaderCreateOverlayAttributedString(NSString *string, NSArray<NSNumber *> **chapterIndicesOut, NSArray<NSValue *> **chapterRangesOut) {

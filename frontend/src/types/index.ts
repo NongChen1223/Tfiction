@@ -7,6 +7,7 @@ export interface Novel {
   format: string
   size: number
   content: string
+  contentLength: number
   chapters: Chapter[]
   currentChapter: number
   readProgress: number
@@ -28,6 +29,18 @@ export interface SearchResult {
   line: number
   context: string
   keyword: string
+}
+
+export interface ReaderContentBlock {
+  type: 'text' | 'html'
+  content: string
+  estimatedHeight: number
+}
+
+export interface ChapterContentPayload {
+  content: string
+  isRichContent: boolean
+  blocks: ReaderContentBlock[]
 }
 
 export interface CamouflageWidgetPosition {

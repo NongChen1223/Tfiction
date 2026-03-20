@@ -413,6 +413,8 @@
 
 .chapterSection {
   position: relative;
+  content-visibility: auto;
+  contain-intrinsic-size: 1200px;
 
   & + & {
     margin-top: clamp(56px, 8vh, 88px);
@@ -464,6 +466,12 @@
     padding: 0 2px;
     border-radius: 4px;
   }
+}
+
+:global(.reader-content-chunk) {
+  contain: layout paint style;
+  content-visibility: auto;
+  contain-intrinsic-size: 900px;
 }
 
 .epubText {

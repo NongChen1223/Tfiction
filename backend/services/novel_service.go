@@ -2,6 +2,7 @@ package services
 
 import (
 	"archive/zip"
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/xml"
@@ -31,6 +32,25 @@ type NovelService struct {
 	pdfChapterHTML  map[string][]string      // 图片型 PDF 页面富文本缓存
 	currentNovel    *models.Novel            // 当前打开的小说
 	progressService *ProgressService
+}
+
+const (
+	plainTextBlockParagraphSize = 18
+	richContentBlockNodeSize    = 16
+)
+
+func cloneNovelForClient(novel *models.Novel) *models.Novel {
+	if novel == nil {
+		return nil
+	}
+
+	cloned := *novel
+	cloned.Content = ""
+	if novel.Chapters != nil {
+		cloned.Chapters = append([]models.Chapter(nil), novel.Chapters...)
+	}
+
+	return &cloned
 }
 
 // NewNovelService 创建小说服务实例
@@ -89,7 +109,7 @@ func (s *NovelService) OpenNovel(filePath string) (*models.Novel, error) {
 	if novel, exists := s.novels[filePath]; exists {
 		s.applySavedProgress(novel)
 		s.currentNovel = novel
-		return novel, nil
+		return cloneNovelForClient(novel), nil
 	}
 
 	// 读取文件内容
@@ -104,11 +124,12 @@ func (s *NovelService) OpenNovel(filePath string) (*models.Novel, error) {
 
 	// 创建小说对象
 	novel := &models.Novel{
-		Title:    strings.TrimSuffix(filepath.Base(filePath), filepath.Ext(filePath)),
-		FilePath: filePath,
-		Format:   ext,
-		Size:     fileInfo.Size(),
-		Content:  string(content),
+		Title:         strings.TrimSuffix(filepath.Base(filePath), filepath.Ext(filePath)),
+		FilePath:      filePath,
+		Format:        ext,
+		Size:          fileInfo.Size(),
+		Content:       string(content),
+		ContentLength: runeLen(string(content)),
 	}
 
 	// 根据格式解析内容
@@ -122,12 +143,12 @@ func (s *NovelService) OpenNovel(filePath string) (*models.Novel, error) {
 	s.novels[filePath] = novel
 	s.currentNovel = novel
 
-	return novel, nil
+	return cloneNovelForClient(novel), nil
 }
 
 // GetCurrentNovel 获取当前打开的小说
 func (s *NovelService) GetCurrentNovel() *models.Novel {
-	return s.currentNovel
+	return cloneNovelForClient(s.currentNovel)
 }
 
 // CloseNovel 关闭小说
@@ -147,6 +168,16 @@ func (s *NovelService) GetNovelChapters(filePath string) ([]models.Chapter, erro
 		return nil, fmt.Errorf("小说未打开")
 	}
 	return novel.Chapters, nil
+}
+
+// SearchNovel 在指定小说中搜索关键字
+func (s *NovelService) SearchNovel(filePath, keyword string, caseSensitive bool) []models.SearchResult {
+	novel, exists := s.novels[filePath]
+	if !exists || novel == nil {
+		return []models.SearchResult{}
+	}
+
+	return searchInText(novel.Content, keyword, caseSensitive)
 }
 
 // GetChapterContent 获取指定章节内容
@@ -176,6 +207,30 @@ func (s *NovelService) GetChapterContent(filePath string, chapterIndex int) (str
 
 	chapter := novel.Chapters[chapterIndex]
 	return sliceByRuneRange(novel.Content, chapter.StartPos, chapter.EndPos), nil
+}
+
+// GetChapterContentPayload 获取指定章节的完整内容和分块内容
+func (s *NovelService) GetChapterContentPayload(
+	filePath string,
+	chapterIndex int,
+) (*models.ChapterContentPayload, error) {
+	chapterContent, err := s.GetChapterContent(filePath, chapterIndex)
+	if err != nil {
+		return nil, err
+	}
+
+	novel, exists := s.novels[filePath]
+	if !exists {
+		return nil, fmt.Errorf("小说未打开")
+	}
+
+	isRichContent := novel.Format == ".epub" || novel.Format == ".pdf"
+
+	return &models.ChapterContentPayload{
+		Content:       chapterContent,
+		IsRichContent: isRichContent,
+		Blocks:        buildReaderContentBlocks(chapterContent, isRichContent),
+	}, nil
 }
 
 // SetCurrentChapter 设置当前章节
@@ -325,6 +380,7 @@ func (s *NovelService) parseTxtNovel(novel *models.Novel) error {
 	}
 
 	novel.Chapters = chapters
+	novel.ContentLength = runeLen(novel.Content)
 	return nil
 }
 
@@ -468,6 +524,7 @@ func (s *NovelService) parseEpubNovel(novel *models.Novel) error {
 	}
 
 	novel.Content = contentBuilder.String()
+	novel.ContentLength = runeLen(novel.Content)
 	novel.Chapters = chapters
 	s.epubChapterHTML[novel.FilePath] = chapterHTMLs
 	return nil
@@ -509,6 +566,7 @@ func (s *NovelService) parsePdfNovel(novel *models.Novel) error {
 	}
 
 	novel.Content = content
+	novel.ContentLength = runeLen(content)
 	return s.parseTxtNovel(novel)
 }
 
@@ -530,6 +588,7 @@ func (s *NovelService) parseImageBasedPDFNovel(novel *models.Novel) error {
 
 	content, chapters := buildImagePDFStructure(pageCount)
 	novel.Content = content
+	novel.ContentLength = runeLen(content)
 	novel.Chapters = chapters
 	s.pdfChapterHTML[novel.FilePath] = chapterHTMLs
 	return nil
@@ -761,6 +820,106 @@ func sliceByRuneRange(content string, start, end int) string {
 		start = end
 	}
 	return string(runes[start:end])
+}
+
+func buildReaderContentBlocks(content string, isRichContent bool) []models.ReaderContentBlock {
+	if strings.TrimSpace(content) == "" {
+		return []models.ReaderContentBlock{}
+	}
+
+	if isRichContent {
+		return buildRichReaderContentBlocks(content)
+	}
+
+	return buildPlainReaderContentBlocks(content)
+}
+
+func buildPlainReaderContentBlocks(content string) []models.ReaderContentBlock {
+	paragraphs := strings.Split(strings.TrimSpace(content), "\n\n")
+	blocks := make([]models.ReaderContentBlock, 0, (len(paragraphs)/plainTextBlockParagraphSize)+1)
+
+	for index := 0; index < len(paragraphs); index += plainTextBlockParagraphSize {
+		end := minInt(index+plainTextBlockParagraphSize, len(paragraphs))
+		blockContent := strings.Join(paragraphs[index:end], "\n\n")
+		blockContent = strings.TrimSpace(blockContent)
+		if blockContent == "" {
+			continue
+		}
+
+		blocks = append(blocks, models.ReaderContentBlock{
+			Type:            "text",
+			Content:         blockContent,
+			EstimatedHeight: 420,
+		})
+	}
+
+	return blocks
+}
+
+func buildRichReaderContentBlocks(content string) []models.ReaderContentBlock {
+	doc, err := xhtml.Parse(strings.NewReader("<body>" + content + "</body>"))
+	if err != nil {
+		return []models.ReaderContentBlock{{
+			Type:            "html",
+			Content:         content,
+			EstimatedHeight: 720,
+		}}
+	}
+
+	body := findEpubBodyNode(doc)
+	if body == nil {
+		return []models.ReaderContentBlock{{
+			Type:            "html",
+			Content:         content,
+			EstimatedHeight: 720,
+		}}
+	}
+
+	nodes := make([]string, 0, richContentBlockNodeSize)
+	blocks := make([]models.ReaderContentBlock, 0, 8)
+	for child := body.FirstChild; child != nil; child = child.NextSibling {
+		rendered := renderHTMLNodeString(child)
+		if strings.TrimSpace(rendered) == "" {
+			continue
+		}
+
+		nodes = append(nodes, rendered)
+		if len(nodes) >= richContentBlockNodeSize {
+			blocks = append(blocks, models.ReaderContentBlock{
+				Type:            "html",
+				Content:         strings.Join(nodes, ""),
+				EstimatedHeight: 720,
+			})
+			nodes = nodes[:0]
+		}
+	}
+
+	if len(nodes) > 0 {
+		blocks = append(blocks, models.ReaderContentBlock{
+			Type:            "html",
+			Content:         strings.Join(nodes, ""),
+			EstimatedHeight: 720,
+		})
+	}
+
+	if len(blocks) == 0 {
+		return []models.ReaderContentBlock{{
+			Type:            "html",
+			Content:         content,
+			EstimatedHeight: 720,
+		}}
+	}
+
+	return blocks
+}
+
+func renderHTMLNodeString(node *xhtml.Node) string {
+	var buffer bytes.Buffer
+	if err := xhtml.Render(&buffer, node); err != nil {
+		return ""
+	}
+
+	return buffer.String()
 }
 
 func runeLen(content string) int {

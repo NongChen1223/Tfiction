@@ -22,22 +22,7 @@ func NewSearchService() *SearchService {
 	}
 }
 
-// Init 初始化服务
-func (s *SearchService) Init(ctx context.Context) {
-	s.ctx = ctx
-}
-
-// Cleanup 清理资源
-func (s *SearchService) Cleanup() {
-	s.searchResults = []models.SearchResult{}
-}
-
-// SearchInNovel 在小说中搜索关键字
-// @param content 小说内容
-// @param keyword 搜索关键字
-// @param caseSensitive 是否区分大小写
-// @return 搜索结果列表
-func (s *SearchService) SearchInNovel(content, keyword string, caseSensitive bool) []models.SearchResult {
+func searchInText(content, keyword string, caseSensitive bool) []models.SearchResult {
 	if keyword == "" {
 		return []models.SearchResult{}
 	}
@@ -46,7 +31,6 @@ func (s *SearchService) SearchInNovel(content, keyword string, caseSensitive boo
 	searchContent := content
 	searchKeyword := keyword
 
-	// 不区分大小写时转换为小写
 	if !caseSensitive {
 		searchContent = strings.ToLower(content)
 		searchKeyword = strings.ToLower(keyword)
@@ -66,17 +50,36 @@ func (s *SearchService) SearchInNovel(content, keyword string, caseSensitive boo
 		contextStart := maxInt(actualPosition-50, 0)
 		contextEnd := minInt(actualPosition+keywordLength+50, utf8.RuneCountInString(content))
 
-		result := models.SearchResult{
+		results = append(results, models.SearchResult{
 			Position: actualPosition,
 			Context:  sliceByRuneRange(content, contextStart, contextEnd),
 			Keyword:  keyword,
-			Line:     s.getLineNumber(content, actualPosition),
-		}
-		results = append(results, result)
+			Line:     getLineNumber(content, actualPosition),
+		})
 
 		position = actualBytePosition + len(searchKeyword)
 	}
 
+	return results
+}
+
+// Init 初始化服务
+func (s *SearchService) Init(ctx context.Context) {
+	s.ctx = ctx
+}
+
+// Cleanup 清理资源
+func (s *SearchService) Cleanup() {
+	s.searchResults = []models.SearchResult{}
+}
+
+// SearchInNovel 在小说中搜索关键字
+// @param content 小说内容
+// @param keyword 搜索关键字
+// @param caseSensitive 是否区分大小写
+// @return 搜索结果列表
+func (s *SearchService) SearchInNovel(content, keyword string, caseSensitive bool) []models.SearchResult {
+	results := searchInText(content, keyword, caseSensitive)
 	s.searchResults = results
 	return results
 }
@@ -113,6 +116,10 @@ func (s *SearchService) HighlightKeyword(content, keyword, highlightTag string) 
 
 // getLineNumber 获取指定位置的行号
 func (s *SearchService) getLineNumber(content string, position int) int {
+	return getLineNumber(content, position)
+}
+
+func getLineNumber(content string, position int) int {
 	runes := []rune(content)
 	if position > len(runes) {
 		position = len(runes)
