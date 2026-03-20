@@ -386,6 +386,10 @@ function selectDesktopOverlayChapters(
 }
 
 function buildDesktopOverlayChapterPreview(chapter: LoadedChapter, format: string) {
+  if (chapter.isRichContent || format === '.epub' || format === '.pdf') {
+    return chapter.content
+  }
+
   const { maxChars, maxImages } = getDesktopOverlayRenderLimits(format)
   const previewSegments: string[] = []
   let remainingChars = maxChars
@@ -568,6 +572,7 @@ export default function Reader() {
   const chapterWindowRangeRef = useRef<ChapterWindowRange | null>(null)
   const pendingChapterScrollRef = useRef<PendingChapterScroll | null>(null)
   const overlayReadingLocationRef = useRef<PendingChapterScroll | null>(null)
+  const overlayReadingSaveTimerRef = useRef<number | null>(null)
   const overlayActionPollingRef = useRef(false)
   const camouflageTimerRef = useRef<number | null>(null)
   const camouflageDragCleanupRef = useRef<(() => void) | null>(null)
@@ -621,15 +626,15 @@ export default function Reader() {
     if (!currentNovel || desktopOverlayChapters.length === 0) {
       return buildDesktopOverlayMarkup(
         currentChapter?.title,
-        buildDesktopOverlayPreviewMarkup(
+        Boolean(isRichContent) ? currentChapterContent : buildDesktopOverlayPreviewMarkup(
           currentChapterContent,
-          Boolean(isRichContent),
+          false,
           {
             maxLength: getDesktopOverlayRenderLimits(currentNovel?.format || '').maxChars,
             maxImages: getDesktopOverlayRenderLimits(currentNovel?.format || '').maxImages,
           }
         ),
-        true
+        Boolean(isRichContent)
       )
     }
 
@@ -644,7 +649,7 @@ export default function Reader() {
   }, [
     currentChapter?.title,
     currentChapterContent,
-    currentNovel,
+    currentNovel?.filePath,
     desktopOverlayChapters,
     isRichContent,
   ])
@@ -694,15 +699,17 @@ const camouflageWidgetClassName = `${styles.camouflageWidget} ${
   const currentChapterOverlayMarkup = currentNovel
     ? buildDesktopOverlayMarkup(
         currentChapter?.title,
-        buildDesktopOverlayPreviewMarkup(
-          currentChapterContent,
-          Boolean(isRichContent),
-          {
-            maxLength: getDesktopOverlayRenderLimits(currentNovel.format).maxChars,
-            maxImages: getDesktopOverlayRenderLimits(currentNovel.format).maxImages,
-          }
-        ),
-        true
+        Boolean(isRichContent)
+          ? currentChapterContent
+          : buildDesktopOverlayPreviewMarkup(
+              currentChapterContent,
+              false,
+              {
+                maxLength: getDesktopOverlayRenderLimits(currentNovel.format).maxChars,
+                maxImages: getDesktopOverlayRenderLimits(currentNovel.format).maxImages,
+              }
+            ),
+        Boolean(isRichContent)
       )
     : buildDesktopOverlayMarkup(null, '', false)
 
@@ -803,6 +810,15 @@ const camouflageWidgetClassName = `${styles.camouflageWidget} ${
 
     window.clearTimeout(chapterWindowMaintainTimerRef.current)
     chapterWindowMaintainTimerRef.current = null
+  }
+
+  const clearOverlayReadingSaveTimer = () => {
+    if (overlayReadingSaveTimerRef.current === null) {
+      return
+    }
+
+    window.clearTimeout(overlayReadingSaveTimerRef.current)
+    overlayReadingSaveTimerRef.current = null
   }
 
   const resetDesktopOverlayOpacitySync = () => {
@@ -1338,6 +1354,13 @@ const camouflageWidgetClassName = `${styles.camouflageWidget} ${
         applyReadingProgressState(chapterIndex, chapterScrollProgress)
       }
     }
+
+    clearOverlayReadingSaveTimer()
+    overlayReadingSaveTimerRef.current = window.setTimeout(() => {
+      overlayReadingSaveTimerRef.current = null
+      void persistReadingProgress(chapterIndex, chapterScrollProgress)
+    }, 260)
+
     scheduleChapterWindowMaintenance(chapterIndex, { preserveLocation: true })
   }
 
@@ -1347,6 +1370,7 @@ const camouflageWidgetClassName = `${styles.camouflageWidget} ${
       return
     }
 
+    clearOverlayReadingSaveTimer()
     overlayReadingLocationRef.current = null
 
     logDesktopOverlayDebug('flush position', {
@@ -2100,6 +2124,7 @@ useEffect(() => {
   useEffect(() => {
     return () => {
       setReaderStealthRoot(false)
+      clearOverlayReadingSaveTimer()
 
       const windowState = useWindowStore.getState()
       if (!windowState.isStealthMode && windowState.opacity === 1) {
@@ -2401,6 +2426,7 @@ useEffect(() => {
     return () => {
       contentElement.removeEventListener('scroll', handleScroll)
       scrollTickingRef.current = false
+      clearOverlayReadingSaveTimer()
       if (saveTimerRef.current) {
         window.clearTimeout(saveTimerRef.current)
       }
