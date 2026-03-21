@@ -338,6 +338,31 @@ function selectDesktopOverlayChapters(
     0,
     orderedChapters.findIndex((chapter) => chapter.index === focusChapterIndex)
   )
+
+  // 富文本模式（epub/pdf）优先保证“当前章 + 下一章”始终都在，
+  // 避免滚到章末时因为章节集合缺失下一章而无法继续下滚。
+  if (format === '.epub' || format === '.pdf') {
+    const selected: LoadedChapter[] = []
+
+    const currentChapter = orderedChapters[focusIndex]
+    if (currentChapter) {
+      selected.push(currentChapter)
+    }
+
+    const nextChapter = orderedChapters[focusIndex + 1]
+    if (nextChapter) {
+      selected.push(nextChapter)
+    }
+
+    const { maxChapters } = getDesktopOverlayRenderLimits(format)
+    const previousChapter = orderedChapters[focusIndex - 1]
+    if (previousChapter && selected.length < maxChapters) {
+      selected.unshift(previousChapter)
+    }
+
+    return selected.sort((left, right) => left.index - right.index)
+  }
+
   const { maxBlocks, maxChapters } = getDesktopOverlayRenderLimits(format)
   const selectedChapters: LoadedChapter[] = []
   let totalBlocks = 0
