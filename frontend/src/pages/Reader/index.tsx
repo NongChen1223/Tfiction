@@ -760,6 +760,13 @@ const camouflageWidgetClassName = `${styles.camouflageWidget} ${
     })
 
     const { red, green, blue } = parseHexColor(textColor)
+    const readingLocation =
+      overlayReadingLocationRef.current && isStealthMode
+        ? {
+            chapterIndex: overlayReadingLocationRef.current.chapterIndex,
+            chapterScrollProgress: overlayReadingLocationRef.current.chapterScrollProgress,
+          }
+        : resolveReaderReadingLocation()
 
     await UpdateDesktopReaderOverlay(
       overlayChapterMarkup,
@@ -772,8 +779,17 @@ const camouflageWidgetClassName = `${styles.camouflageWidget} ${
     )
     overlayOpacityLastSentRef.current = nextOpacity
 
-    const readingLocation = resolveReaderReadingLocation()
-    if (readingLocation) {
+    // 仅当本次正文集合不包含当前阅读章时才做位置校准，
+    // 避免用户在摸鱼浮窗手动滚动时被主阅读区位置“拉回”。
+    if (!readingLocation) {
+      return
+    }
+
+    const hasReadingChapter = desktopOverlayChapters.some(
+      (chapter) => chapter.index === readingLocation.chapterIndex
+    )
+
+    if (!hasReadingChapter) {
       await syncDesktopOverlayReadingLocation(readingLocation)
     }
   }
