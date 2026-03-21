@@ -1944,18 +1944,19 @@ static void MoyuReaderApplyOverlayContentAlpha(double opacity) {
 	double clampedOpacity = MoyuReaderClampOverlayOpacity(opacity);
 	if (moyureaderOverlayScrollView != nil) {
 		if (moyureaderOverlayScrollView.layer != nil) {
-			moyureaderOverlayScrollView.layer.opacity = (float)clampedOpacity;
+			moyureaderOverlayScrollView.layer.opacity = 1.0f;
 		} else {
-			[moyureaderOverlayScrollView setAlphaValue:clampedOpacity];
+			[moyureaderOverlayScrollView setAlphaValue:1.0];
 		}
 	}
 
 	MoyuReaderOverlayTextView *textView = (MoyuReaderOverlayTextView *)[moyureaderOverlayScrollView documentView];
 	if (textView != nil) {
 		if (textView.layer != nil) {
-			textView.layer.opacity = 1.0f;
+			textView.layer.opacity = (float)clampedOpacity;
+		} else {
+			[textView setAlphaValue:clampedOpacity];
 		}
-		[textView setAlphaValue:1.0];
 	}
 }
 
